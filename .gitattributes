@@ -1,0 +1,11 @@
+# directories
+/.git export-ignore
+/.github export-ignore
+/docs export-ignore
+
+# files
+.gitignore export-ignore
+.gitattributes export-ignore
+
+# This project solely written in Go 
+*.* linguist-language=Go

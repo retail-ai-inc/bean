@@ -1,2 +1,2 @@
-# bean
-A defacto API framework written in GO to unite all SSC backend.
+# bean (豆)
+A web framework written in GO on-top of `echo` to ease your development.
