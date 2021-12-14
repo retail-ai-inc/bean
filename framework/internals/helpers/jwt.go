@@ -8,7 +8,7 @@ package helpers
 import (
 	"errors"
 
-	ejwt "bean/externals/jwt"
+	ejwt "bean/packages/jwt"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/labstack/echo/v4"

@@ -10,7 +10,7 @@ import (
 	"encoding/binary"
 	"time"
 
-	"bean/internals/global"
+	"bean/framework/internals/global"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/labstack/echo/v4"

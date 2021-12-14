@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"bean/internals/aes"
+	"bean/framework/internals/aes"
 
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"

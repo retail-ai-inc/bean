@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"strings"
 
-	"bean/internals/sentry"
-	"bean/internals/validator"
+	"bean/framework/internals/sentry"
+	"bean/framework/internals/validator"
 
 	"github.com/labstack/echo/v4"
 )

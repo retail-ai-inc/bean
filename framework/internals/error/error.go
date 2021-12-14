@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"io"
 
-	"bean/internals/stacktrace"
+	"bean/framework/internals/stacktrace"
 )
 
 var (

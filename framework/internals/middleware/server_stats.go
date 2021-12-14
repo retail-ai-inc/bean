@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	ierror "bean/internals/error"
-	"bean/internals/latency"
+	ierror "bean/framework/internals/error"
+	"bean/framework/internals/latency"
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"

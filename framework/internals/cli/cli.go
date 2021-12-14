@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"os"
 
-	"bean/internals/chalk"
-	"bean/internals/global"
-	"bean/internals/sentry"
+	"bean/framework/internals/chalk"
+	"bean/framework/internals/global"
+	"bean/framework/internals/sentry"
 
 	"github.com/labstack/echo/v4"
 )

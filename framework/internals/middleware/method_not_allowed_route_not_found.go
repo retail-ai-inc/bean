@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	ierror "bean/internals/error"
+	ierror "bean/framework/internals/error"
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"

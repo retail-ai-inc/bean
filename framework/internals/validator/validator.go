@@ -21,7 +21,7 @@ package validator
 import (
 	"strings"
 
-	cv "bean/externals/validator"
+	cv "bean/packages/validator"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
