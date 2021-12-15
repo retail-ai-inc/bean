@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"bean/internals/aes"
+	"bean/framework/internals/aes"
 
 	"github.com/spf13/viper"
 	"gorm.io/datatypes"

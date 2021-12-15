@@ -6,9 +6,9 @@
 package routers
 
 import (
+	"bean/framework/internals/global"
 	"bean/handlers"
 	"bean/interfaces"
-	"bean/internals/global"
 	"bean/repositories"
 	"bean/services"
 

@@ -8,7 +8,7 @@
 package repositories
 
 import (
-	"bean/internals/global"
+	"bean/framework/internals/global"
 )
 
 /*

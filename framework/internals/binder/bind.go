@@ -13,8 +13,8 @@ import (
 	"net/http"
 	"strings"
 
-	"bean/internals/helpers"
-	structure "bean/internals/struct"
+	"bean/framework/internals/helpers"
+	structure "bean/framework/internals/struct"
 
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"

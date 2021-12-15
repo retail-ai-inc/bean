@@ -8,7 +8,7 @@ package dbdrivers
 import (
 	"encoding/json"
 
-	"bean/internals/aes"
+	"bean/framework/internals/aes"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/spf13/viper"

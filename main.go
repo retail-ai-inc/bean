@@ -6,8 +6,8 @@
 package main
 
 import (
-	"bean/bootstrap"
 	_ "bean/commands"
+	"bean/framework/bootstrap"
 	"net/http"
 
 	"github.com/spf13/viper"

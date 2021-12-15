@@ -8,8 +8,8 @@
 package gopher
 
 import (
-	"bean/internals/cli"
-	"bean/internals/helpers"
+	"bean/framework/internals/cli"
+	"bean/framework/internals/helpers"
 	"os"
 
 	"github.com/labstack/echo/v4"

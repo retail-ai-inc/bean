@@ -12,16 +12,16 @@ import (
 	"os"
 	"time"
 
-	"bean/dbdrivers"
-	emiddleware "bean/externals/middleware"
-	"bean/internals/binder"
-	ierror "bean/internals/error"
-	"bean/internals/global"
-	"bean/internals/helpers"
-	imiddleware "bean/internals/middleware"
-	str "bean/internals/string"
-	"bean/internals/template"
-	"bean/internals/validator"
+	"bean/framework/dbdrivers"
+	"bean/framework/internals/binder"
+	ierror "bean/framework/internals/error"
+	"bean/framework/internals/global"
+	"bean/framework/internals/helpers"
+	imiddleware "bean/framework/internals/middleware"
+	str "bean/framework/internals/string"
+	"bean/framework/internals/template"
+	"bean/framework/internals/validator"
+	emiddleware "bean/middlewares"
 
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
@@ -51,10 +51,18 @@ func New() *echo.Echo {
 	// Hide default `Echo` banner during startup.
 	e.HideBanner = true
 
+	// XXX: - IMPORTANT
+
+	// !!! Do not use the original echo context in the goroutine since it will be released after the handler returned.
+	// !!! https://github.com/labstack/echo/issues/1633
+
 	// Set viper path and read configuration. You must keep `env.json` file in the root of your project.
 	viper.AddConfigPath(".")
 	viper.SetConfigType("json")
 	viper.SetConfigName("env")
+
+	// !!! Do not use the original echo context in the goroutine since it will be released after the handler returned.
+	// !!! https://github.com/labstack/echo/issues/1633
 
 	err := viper.ReadInConfig()
 	if err != nil {
@@ -64,6 +72,12 @@ func New() *echo.Echo {
 		// To exit with a non-zero status we should use os.Exit.
 		os.Exit(1)
 	}
+
+	// IMPORTANT:
+	// DEBUG:
+
+	// !!! Do not use the original echo context in the goroutine since it will be released after the handler returned.
+	// !!! https://github.com/labstack/echo/issues/1633
 
 	// XXX: IMPORTANT - Time out middleware. It has to be the first middleware to initialize.
 	e.Use(imiddleware.RequestTimeout(viper.GetDuration("http.timeout") * time.Second))

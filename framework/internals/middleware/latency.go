@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"time"
 
-	"bean/internals/async"
-	"bean/internals/latency"
+	"bean/framework/internals/async"
+	"bean/framework/internals/latency"
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"

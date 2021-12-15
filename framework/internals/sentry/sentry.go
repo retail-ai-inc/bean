@@ -9,7 +9,7 @@ import (
 	"errors"
 	"reflect"
 
-	"bean/internals/global"
+	"bean/framework/internals/global"
 
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"

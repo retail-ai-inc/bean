@@ -12,9 +12,9 @@ import (
 	"os"
 	"time"
 
-	"bean/dbdrivers"
-	"bean/internals/global"
-	str "bean/internals/string"
+	"bean/framework/dbdrivers"
+	"bean/framework/internals/global"
+	str "bean/framework/internals/string"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/go-redis/redis/v8"
