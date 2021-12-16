@@ -11,6 +11,10 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+type MyTestRepository interface {
+	GetMasterSQLTableList(c echo.Context) (map[string]interface{}, error)
+}
+
 func NewMyTestRepository(dbDeps *global.DBDeps) *DbInfra {
 	return &DbInfra{dbDeps}
 }

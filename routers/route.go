@@ -8,7 +8,6 @@ package routers
 import (
 	"bean/framework/internals/global"
 	"bean/handlers"
-	"bean/interfaces"
 	"bean/repositories"
 	"bean/services"
 
@@ -16,15 +15,15 @@ import (
 )
 
 type Repositories struct {
-	MyTestRepo interfaces.MyTestRepository
+	MyTestRepo repositories.MyTestRepository
 }
 
 type Services struct {
-	MyTestSvc interfaces.MyTestService
+	MyTestSvc services.MyTestService
 }
 
 type Handlers struct {
-	MyTestHdlr interfaces.MyTestHandler
+	MyTestHdlr handlers.MyTestHandler
 }
 
 func Init(e *echo.Echo) {
