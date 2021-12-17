@@ -7,25 +7,17 @@ package main
 
 import (
 	_ "bean/commands"
-	"bean/framework/bootstrap"
-	"net/http"
-
-	"github.com/spf13/viper"
+	"bean/framework"
+	"bean/framework/internals/validator"
+	"bean/routers"
 )
 
 func main() {
 
-	// Create a new echo instance
-	e := bootstrap.New()
+	bean := new(framework.Bean)
+	bean.Router = routers.Init
+	bean.MiddlewareInitializer = nil
+	bean.Validate = validator.User4ubarcodeid
 
-	projectName := viper.GetString("name")
-
-	e.Logger.Info(`Starting ` + projectName + ` server...🚀`)
-
-	listenAt := viper.GetString("http.host") + ":" + viper.GetString("http.port")
-
-	// Start the server
-	if err := e.Start(listenAt); err != nil && err != http.ErrServerClosed {
-		e.Logger.Fatal(err)
-	}
+	bean.Bootstrap()
 }

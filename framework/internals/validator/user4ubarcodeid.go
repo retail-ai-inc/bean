@@ -10,7 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func user4ubarcodeid(c echo.Context, vd *validator.Validate) {
+func User4ubarcodeid(c echo.Context, vd *validator.Validate) {
 
 	// XXX: Register a custom validation for TRIAL user's barcode id.
 	_ = validate.RegisterValidation("user4ubarcodeid", func(fl validator.FieldLevel) bool {

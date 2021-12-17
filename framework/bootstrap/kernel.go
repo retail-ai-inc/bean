@@ -20,9 +20,6 @@ import (
 	imiddleware "bean/framework/internals/middleware"
 	str "bean/framework/internals/string"
 	"bean/framework/internals/template"
-	"bean/framework/internals/validator"
-	emiddleware "bean/middlewares"
-
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	"github.com/go-redis/redis/v8"
@@ -211,9 +208,6 @@ func New() *echo.Echo {
 	// `/ping` uri to response a `pong`.
 	e.Use(imiddleware.Heartbeat())
 
-	// Initialize external middleware package which should implement by user in `externals/middleware` directory.
-	emiddleware.Init(e)
-
 	// Initialize all database driver.
 	var masterMySQLDB *gorm.DB
 	var masterMySQLDBName string
@@ -262,13 +256,6 @@ func New() *echo.Echo {
 
 	// Set custom request binder
 	e.Binder = &binder.CustomBinder{}
-
-	// Initialize and set the validator.
-	// XXX: IMPORTANT - only do it after the e.logger has been properly set.
-	e.Validator = validator.New(e)
-
-	// Initialize the router via `bootstrap/router.go`.
-	InitRouter(e)
 
 	return e
 }

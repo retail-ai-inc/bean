@@ -8,8 +8,6 @@ package helpers
 import (
 	"errors"
 
-	ejwt "bean/packages/jwt"
-
 	"github.com/golang-jwt/jwt"
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
@@ -18,35 +16,35 @@ import (
 /*
  * ExtractUserInfoFromJWT extracts user info from JWT. It is faster than calling redis to get those info.
  */
-func ExtractUserInfoFromJWT(c echo.Context) (*ejwt.UserJWTTokenData, error) {
+func ExtractUserInfoFromJWT(c echo.Context, claims jwt.Claims) error {
 
 	tokenString := ExtractJWTFromHeader(c)
-	token, err := jwt.ParseWithClaims(tokenString, &ejwt.UserJWTTokenData{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(viper.GetString("jwt.secret")), nil
 	})
 
 	if err != nil {
-		return nil, errors.New("invalid user token")
+		return errors.New("invalid user token")
 	}
 
-	if claims, ok := token.Claims.(*ejwt.UserJWTTokenData); ok && token.Valid {
+	if token.Valid {
 
-		return claims, nil
+		return nil
 
 	} else if ve, ok := err.(*jwt.ValidationError); ok {
 
 		if ve.Errors&jwt.ValidationErrorMalformed != 0 {
-			return nil, errors.New("invalid user token")
+			return errors.New("invalid user token")
 
 		} else if ve.Errors&(jwt.ValidationErrorExpired|jwt.ValidationErrorNotValidYet) != 0 {
-			return nil, errors.New("token is expired")
+			return errors.New("token is expired")
 
 		} else {
-			return nil, errors.New("invalid user token")
+			return errors.New("invalid user token")
 		}
 
 	} else {
-		return nil, errors.New("invalid user token")
+		return errors.New("invalid user token")
 	}
 }
 
@@ -66,4 +64,11 @@ func ExtractJWTFromHeader(c echo.Context) string {
 	}
 
 	return tokenString
+}
+
+func EncodeJWT(claims jwt.Claims) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// Generate encoded token and send it as response.
+	return token.SignedString([]byte(viper.GetString("jwt.secret")))
 }
