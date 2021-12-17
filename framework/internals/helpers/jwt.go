@@ -13,6 +13,11 @@ import (
 	"github.com/spf13/viper"
 )
 
+var (
+	errorMessageInvalidToken = "token is invalid"
+	errorMessageExpiredToken = "token is expired"
+)
+
 /*
  * ExtractUserInfoFromJWT extracts user info from JWT. It is faster than calling redis to get those info.
  */
@@ -24,28 +29,29 @@ func DecodeJWT(c echo.Context, claims jwt.Claims) error {
 	})
 
 	if err != nil {
-		return errors.New("invalid user token")
-	}
 
-	if token.Valid {
+		if ve, ok := err.(*jwt.ValidationError); ok {
 
-		return nil
+			if ve.Errors&jwt.ValidationErrorMalformed != 0 {
+				return errors.New(errorMessageInvalidToken)
 
-	} else if ve, ok := err.(*jwt.ValidationError); ok {
+			} else if ve.Errors&(jwt.ValidationErrorExpired|jwt.ValidationErrorNotValidYet) != 0 {
+				return errors.New(errorMessageExpiredToken)
 
-		if ve.Errors&jwt.ValidationErrorMalformed != 0 {
-			return errors.New("invalid user token")
-
-		} else if ve.Errors&(jwt.ValidationErrorExpired|jwt.ValidationErrorNotValidYet) != 0 {
-			return errors.New("token is expired")
-
-		} else {
-			return errors.New("invalid user token")
+			} else {
+				return errors.New(errorMessageInvalidToken)
+			}
 		}
 
-	} else {
-		return errors.New("invalid user token")
+		return errors.New(errorMessageInvalidToken)
 	}
+
+	if !token.Valid {
+
+		return errors.New(errorMessageInvalidToken)
+	}
+
+	return nil
 }
 
 // ExtractJWTFromHeader returns the JWT token string from authorization header.
