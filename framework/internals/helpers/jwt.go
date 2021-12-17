@@ -16,7 +16,7 @@ import (
 /*
  * ExtractUserInfoFromJWT extracts user info from JWT. It is faster than calling redis to get those info.
  */
-func ExtractUserInfoFromJWT(c echo.Context, claims jwt.Claims) error {
+func DecodeJWT(c echo.Context, claims jwt.Claims) error {
 
 	tokenString := ExtractJWTFromHeader(c)
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
