@@ -21,8 +21,6 @@ package validator
 import (
 	"strings"
 
-	cv "bean/packages/validator"
-
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 )
@@ -39,7 +37,7 @@ type CustomValidator struct {
 	validate *validator.Validate
 }
 
-func Init(e *echo.Echo) {
+func BindCustomValidator(e *echo.Echo, initializer func(c echo.Context, vd *validator.Validate)) {
 
 	c := e.AcquireContext()
 	c.Reset(nil, nil)
@@ -47,15 +45,11 @@ func Init(e *echo.Echo) {
 	validate = validator.New()
 
 	// XXX: IMPORTANT - Add your customize validation functions.
-	cv.Init(c, validate)
-}
+	if initializer != nil {
+		initializer(c, validate)
+	}
 
-// New returns a CustomValidator
-func New(e *echo.Echo) *CustomValidator {
-
-	Init(e)
-
-	return &CustomValidator{validate: validate}
+	e.Validator = &CustomValidator{validate: validate}
 }
 
 // Validate implements the `Echo#Validator.Validate` function.
