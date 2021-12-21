@@ -6,29 +6,35 @@
 package jwt_test
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"bean/framework/internals/helpers"
+
 	"github.com/golang-jwt/jwt"
 	"github.com/labstack/echo/v4"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_jwt(t *testing.T) {
+type jwtData struct {
+	Name    string
+	Age     uint
+	Hobbies []string
+	jwt.StandardClaims
+}
+
+func Test_DecodeJWTWithJsonUnmarshalStyle(t *testing.T) {
 	e := echo.New()
 	c := e.AcquireContext()
 	defer e.ReleaseContext(c)
 
-	type JWTData struct {
-		Name    string
-		Age     uint
-		Hobbies []string
-		jwt.StandardClaims
-	}
-
 	jwtSecret := "123456"
 
-	data := &JWTData{
+	data := &jwtData{
 		Name:    "raicart",
 		Age:     uint(18),
 		Hobbies: []string{"football", "basketball"},
@@ -43,7 +49,7 @@ func Test_jwt(t *testing.T) {
 	tokenString, err := token.SignedString([]byte(jwtSecret))
 	assert.NoError(t, err)
 
-	extractedData := new(JWTData)
+	extractedData := new(jwtData)
 	token, err = jwt.ParseWithClaims(tokenString, extractedData, func(token *jwt.Token) (interface{}, error) {
 		return []byte(jwtSecret), nil
 	})
@@ -51,4 +57,49 @@ func Test_jwt(t *testing.T) {
 
 	assert.Equal(t, *data, *extractedData)
 	assert.Equal(t, extractedData, token.Claims)
+}
+
+func Test_DecodeJWTWhenInvalidToken(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(""))
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	jwtSecret := "testSecret"
+
+	c.Request().Header.Set("Authorization", "Bearer "+"token")
+
+	viper.Set("jwt.secret", jwtSecret)
+	extractedData := new(jwtData)
+	err := helpers.DecodeJWT(c, extractedData)
+	assert.Equal(t, "token is invalid", err.Error())
+}
+
+func Test_DecodeJWTWhenExpiredToken(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(""))
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	jwtSecret := "testSecret"
+
+	viper.Set("jwt.secret", jwtSecret)
+
+	data := &jwtData{
+		Name:    "raicart",
+		Age:     uint(18),
+		Hobbies: []string{"football", "basketball"},
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(1 * time.Second).Unix(),
+		},
+	}
+	token, err := helpers.EncodeJWT(data)
+	assert.NoError(t, err)
+
+	c.Request().Header.Set("Authorization", "Bearer "+token)
+
+	time.Sleep(2 * time.Second)
+	extractedData := new(jwtData)
+	err = helpers.DecodeJWT(c, extractedData)
+	assert.Equal(t, "token is expired", err.Error())
 }
