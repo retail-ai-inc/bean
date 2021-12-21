@@ -52,8 +52,7 @@ func init() {
 	}
 
 	Version = bi.Main.Version
-	ModulePath = "/Users/user/workspace/bean"
-	// ModulePath = gopath + "/pkg/mod/" + bi.Main.Path + "@" + bi.Main.Version
+	ModulePath = gopath + "/pkg/mod/" + bi.Main.Path + "@" + bi.Main.Version
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

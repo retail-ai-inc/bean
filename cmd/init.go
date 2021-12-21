@@ -47,6 +47,7 @@ directory. the suffix of the packagename should match the current directory.`,
 		Run: func(cmd *cobra.Command, args []string) {
 
 			pkgName := args[0]
+			// TODO: validate(pkgName)
 			s := strings.Split(pkgName, "/")
 			prjName := s[len(s)-1]
 			wd, err := os.Getwd()
