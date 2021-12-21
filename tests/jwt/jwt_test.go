@@ -6,16 +6,17 @@
 package jwt_test
 
 import (
-	"bean/framework/internals/helpers"
-	"github.com/spf13/viper"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"bean/framework/internals/helpers"
+
 	"github.com/golang-jwt/jwt"
 	"github.com/labstack/echo/v4"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
 
