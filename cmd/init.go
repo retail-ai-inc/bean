@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -26,6 +25,8 @@ type Project struct {
 	PrjName string
 	// AbsolutePath is the current working directory path when executing the bean command.
 	AbsolutePath string
+	//
+	InternalFS fs.FS
 	// BeanVersion is the current bean version.
 	BeanVersion string
 }
@@ -55,21 +56,27 @@ directory. the suffix of the packagename should match the current directory.`,
 				log.Fatalln(err)
 			}
 
-			project := &Project{
-				Copyright:    "// Copyright The RAI Inc." + "/n" + "// The RAI Authors",
-				PkgName:      pkgName,
-				AbsolutePath: wd,
-				PrjName:      prjName,
-				BeanVersion:  Version,
+			root, err := fs.Sub(InternalFS, "internal")
+			if err != nil {
+				log.Fatalln(err)
 			}
 
-			fmt.Println("initializing " + prjName + "...")
-			if err := filepath.WalkDir(ModulePath+"/internal", project.generateFiles); err != nil {
+			p := &Project{
+				Copyright:    "// Copyright The RAI Inc." + "/n" + "// The RAI Authors",
+				PkgName:      pkgName,
+				PrjName:      prjName,
+				AbsolutePath: wd,
+				InternalFS:   root,
+				BeanVersion:  rootCmd.Version,
+			}
+
+			fmt.Println("initializing " + p.PrjName + "...")
+			if err := fs.WalkDir(p.InternalFS, ".", p.generateFiles); err != nil {
 				log.Fatalln(err)
 			}
 
 			fmt.Println("initializing go mod...")
-			if err := exec.Command("go", "mod", "init", pkgName).Run(); err != nil {
+			if err := exec.Command("go", "mod", "init", p.PkgName).Run(); err != nil {
 				log.Fatalln(err)
 			}
 
@@ -77,7 +84,6 @@ directory. the suffix of the packagename should match the current directory.`,
 			if err := exec.Command("go", "mod", "tidy").Run(); err != nil {
 				log.Fatalln(err)
 			}
-
 		},
 	}
 )
@@ -100,35 +106,35 @@ func (p *Project) generateFiles(path string, d fs.DirEntry, err error) error {
 		return err
 	}
 
-	// skip creating the root directory
+	fmt.Println(path)
+
+	// skip creating the internal directory
 	if d.IsDir() && d.Name() == "internal" {
 		return nil
 	}
 
 	if d.IsDir() {
 		// Create the same directory under current directory.
-		relativePath := strings.TrimPrefix(path, ModulePath+"/internal")
-		if err := os.Mkdir(p.AbsolutePath+relativePath, 0754); err != nil {
+		if err := os.Mkdir(p.AbsolutePath+"/"+path, 0754); err != nil {
 			return err
 		}
 	} else {
 		// Create the files.
-		relativePath := strings.TrimPrefix(path, ModulePath+"/internal")
-		fileName := strings.TrimSuffix(relativePath, ".tpl")
-		file, err := os.Create(p.AbsolutePath + fileName)
+		fileName := strings.TrimSuffix(path, ".tpl")
+		file, err := os.Create(p.AbsolutePath + "/" + fileName)
 		if err != nil {
 			return err
 		}
 		defer file.Close()
 
-		if fileName == "/bean.sh" {
+		if fileName == "bean.sh" {
 			if err := file.Chmod(0755); err != nil {
 				return err
 			}
 		}
 
 		// Parse the template and write to the files.
-		fileTemplate := template.Must(template.ParseFiles(path))
+		fileTemplate := template.Must(template.ParseFS(p.InternalFS, path))
 		err = fileTemplate.Execute(file, p)
 		if err != nil {
 			return err

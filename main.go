@@ -2,8 +2,16 @@
 // The RAI Authors
 package main
 
-import "github.com/retail-ai-inc/bean/cmd"
+import (
+	"embed"
+
+	"github.com/retail-ai-inc/bean/cmd"
+)
+
+// Diretory of template files.
+//go:embed internal/*
+var internalFS embed.FS
 
 func main() {
-	cmd.Execute()
+	cmd.Execute(internalFS)
 }
