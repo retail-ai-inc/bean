@@ -25,7 +25,7 @@ type Project struct {
 	PrjName string
 	// AbsolutePath is the current working directory path when executing the bean command.
 	AbsolutePath string
-	//
+	// InternalFS contains the `/internal` directory.
 	InternalFS fs.FS
 	// BeanVersion is the current bean version.
 	BeanVersion string
