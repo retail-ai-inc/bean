@@ -75,6 +75,13 @@ func New() *echo.Echo {
 
 	} else {
 		// IMPORTANT: Set log output into file (console.log) instead `stdout`.
+		if _, err := os.Stat(logFile); os.IsNotExist(err) {
+			if err := os.MkdirAll(filepath.Dir(logFile), 0754); err != nil {
+				fmt.Printf("Unable to create log file: %v Server 🚀  crash landed. Exiting...\n", err)
+				os.Exit(1)
+			}
+		}
+
 		logfp, err := os.OpenFile(logFile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0664)
 		if err != nil {
 			fmt.Printf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)

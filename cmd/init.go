@@ -106,8 +106,6 @@ func (p *Project) generateFiles(path string, d fs.DirEntry, err error) error {
 		return err
 	}
 
-	fmt.Println(path)
-
 	// skip creating the internal directory
 	if d.IsDir() && d.Name() == "internal" {
 		return nil
@@ -120,6 +118,7 @@ func (p *Project) generateFiles(path string, d fs.DirEntry, err error) error {
 		}
 	} else {
 		// Create the files.
+		fmt.Println(path)
 		fileName := strings.TrimSuffix(path, ".tpl")
 		file, err := os.Create(p.AbsolutePath + "/" + fileName)
 		if err != nil {

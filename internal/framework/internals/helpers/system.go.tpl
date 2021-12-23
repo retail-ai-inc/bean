@@ -66,17 +66,6 @@ func ParseBeanSystemFilesAndDirectorires() {
 		os.Exit(0)
 	}
 
-	// Check `logs/` directory exist or not.
-	if pathAbs, err := filepath.Abs("logs/"); err == nil {
-		if fileInfo, err := os.Stat(pathAbs); os.IsNotExist(err) || !fileInfo.IsDir() {
-			fmt.Printf("Bean `logs/` directory not exist. Please create one and set the right permissions. Bean 🚀  crash landed. Exiting...\n")
-
-			// Go does not use an integer return value from main to indicate exit status.
-			// To exit with a non-zero status we should use os.Exit.
-			os.Exit(0)
-		}
-	}
-
 	// Check `env.json` exist or nor.
 	if _, err := os.Stat("env.json"); errors.Is(err, os.ErrNotExist) {
 		fmt.Printf("Bean `env.json` does not exist. Bean 🚀  crash landed. Exiting...\n")
