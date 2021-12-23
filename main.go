@@ -1,23 +1,17 @@
-/*
- * Copyright The RAI Inc.
- * The RAI Authors
- */
-
+// Copyright The RAI Inc.
+// The RAI Authors
 package main
 
 import (
-	_ "bean/commands"
-	"bean/framework"
-	"bean/framework/internals/validator"
-	"bean/routers"
+	"embed"
+
+	"github.com/retail-ai-inc/bean/cmd"
 )
 
+// Diretory of template files.
+//go:embed internal/*
+var internalFS embed.FS
+
 func main() {
-
-	bean := new(framework.Bean)
-	bean.Router = routers.Init
-	bean.MiddlewareInitializer = nil
-	bean.Validate = validator.User4ubarcodeid
-
-	bean.Bootstrap()
+	cmd.Execute(internalFS)
 }
