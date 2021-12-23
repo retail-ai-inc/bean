@@ -42,7 +42,7 @@ var (
 		Use:   "init package_name",
 		Short: "Initialize a project in current directory",
 		Long: `Init generates all the directories and files structures needed in the current
-directory. the suffix of the packagename should match the current directory.`,
+directory. the suffix of the package_name should match the current directory.`,
 		Example: `bean init github.com/retail-ai-inc/bean`,
 		Args:    cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
@@ -62,7 +62,8 @@ directory. the suffix of the packagename should match the current directory.`,
 			}
 
 			p := &Project{
-				Copyright:    "// Copyright The RAI Inc." + "/n" + "// The RAI Authors",
+				Copyright: `// Copyright The RAI Inc.
+// The RAI Authors`,
 				PkgName:      pkgName,
 				PrjName:      prjName,
 				AbsolutePath: wd,

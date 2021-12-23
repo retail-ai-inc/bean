@@ -1,5 +1,5 @@
 {{ .Copyright }}
-package jwt_test
+package helpers
 
 import (
 	"net/http"
@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"bean/framework/internals/helpers"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/labstack/echo/v4"
@@ -67,7 +65,7 @@ func Test_DecodeJWTWhenInvalidToken(t *testing.T) {
 
 	viper.Set("jwt.secret", jwtSecret)
 	extractedData := new(jwtData)
-	err := helpers.DecodeJWT(c, extractedData)
+	err := DecodeJWT(c, extractedData)
 	assert.Equal(t, "token is invalid", err.Error())
 }
 
@@ -89,13 +87,13 @@ func Test_DecodeJWTWhenExpiredToken(t *testing.T) {
 			ExpiresAt: time.Now().Add(1 * time.Second).Unix(),
 		},
 	}
-	token, err := helpers.EncodeJWT(data)
+	token, err := EncodeJWT(data)
 	assert.NoError(t, err)
 
 	c.Request().Header.Set("Authorization", "Bearer "+token)
 
 	time.Sleep(2 * time.Second)
 	extractedData := new(jwtData)
-	err = helpers.DecodeJWT(c, extractedData)
+	err = DecodeJWT(c, extractedData)
 	assert.Equal(t, "token is expired", err.Error())
 }
