@@ -75,13 +75,19 @@ directory. the suffix of the packagename should match the current directory.`,
 				log.Fatalln(err)
 			}
 
-			fmt.Println("initializing go mod...")
-			if err := exec.Command("go", "mod", "init", p.PkgName).Run(); err != nil {
+			fmt.Println("\ninitializing go mod...")
+			goModInitCmd := exec.Command("go", "mod", "init", p.PkgName)
+			goModInitCmd.Stdout = os.Stdout
+			goModInitCmd.Stderr = os.Stderr
+			if err := goModInitCmd.Run(); err != nil {
 				log.Fatalln(err)
 			}
 
-			fmt.Println("tidying go mod...")
-			if err := exec.Command("go", "mod", "tidy").Run(); err != nil {
+			fmt.Println("\ntidying go mod...")
+			goModTidyCmd := exec.Command("go", "mod", "tidy")
+			goModTidyCmd.Stdout = os.Stdout
+			goModTidyCmd.Stderr = os.Stderr
+			if err := goModTidyCmd.Run(); err != nil {
 				log.Fatalln(err)
 			}
 		},

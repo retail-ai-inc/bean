@@ -5,6 +5,7 @@ package bootstrap
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"{{ .PkgName }}/framework/dbdrivers"
