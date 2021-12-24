@@ -2,7 +2,7 @@
 ARGS="$@"
 GOBIN=$(shell pwd)/
 GOFILES=$(wildcard *.go)
-GONAME=bean
+GONAME=bin/{{ .PrjName }}
 PID_FILE=/var/run/$(GONAME)/$(GONAME).pid
 ROOT_DIR=$(shell echo $(cd $(dirname $0);pwd))
 GOLANG=$(shell which go)
