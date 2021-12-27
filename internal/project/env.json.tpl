@@ -1,6 +1,7 @@
 {
     "beanVersion": "{{ .BeanVersion }}",
     "projectName": "{{ .PrjName }}",
+    "packageName": "{{ .PkgName }}",
     "projectVersion": "1.0",
     "environment": "local",
     "isLogStdout": false,
