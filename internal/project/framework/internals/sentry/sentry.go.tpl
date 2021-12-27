@@ -1,5 +1,4 @@
-// Copyright The RAI Inc.
-// The RAI Authors
+{{ .Copyright }}
 package sentry
 
 import (

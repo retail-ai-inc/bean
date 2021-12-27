@@ -15,22 +15,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Project contains name, license and paths to projects.
-type Project struct {
-	// Copyright is the copyright text on the top of every files.
-	Copyright string
-	// PkgName is the full string of the generated package (example: github.com/retail-ai-inc/bean).
-	PkgName string
-	// PrjName is the suffix of the package name, it should match the current directory name.
-	PrjName string
-	// AbsolutePath is the current working directory path when executing the bean command.
-	AbsolutePath string
-	// InternalFS contains the `/internal` directory.
-	InternalFS fs.FS
-	// BeanVersion is the current bean version.
-	BeanVersion string
-}
-
 var (
 	validationRule = `1. lowercase-letters (a-z0-9) (that may separated by underscores _). Names may not contain spaces or any other special characters.
 2. A project name can not start with 0-9 or underscore
@@ -56,23 +40,22 @@ directory. the suffix of the package_name should match the current directory.`,
 				log.Fatalln(err)
 			}
 
-			root, err := fs.Sub(InternalFS, "internal")
-			if err != nil {
-				log.Fatalln(err)
-			}
-
 			p := &Project{
 				Copyright: `// Copyright The RAI Inc.
 // The RAI Authors`,
-				PkgName:      pkgName,
-				PrjName:      prjName,
-				AbsolutePath: wd,
-				InternalFS:   root,
-				BeanVersion:  rootCmd.Version,
+				PkgName:     pkgName,
+				PrjName:     prjName,
+				RootDir:     wd,
+				BeanVersion: rootCmd.Version,
+			}
+
+			// Set the relative root path of the internal FS.
+			if p.RootFS, err = fs.Sub(InternalFS, "internal/project"); err != nil {
+				log.Fatalln(err)
 			}
 
 			fmt.Println("initializing " + p.PrjName + "...")
-			if err := fs.WalkDir(p.InternalFS, ".", p.generateFiles); err != nil {
+			if err := fs.WalkDir(p.RootFS, ".", p.generateProjectFiles); err != nil {
 				log.Fatalln(err)
 			}
 
@@ -108,26 +91,21 @@ func validate(projName string) {
 	}
 }
 
-func (p *Project) generateFiles(path string, d fs.DirEntry, err error) error {
+func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) error {
 	if err != nil {
 		return err
 	}
 
-	// skip creating the internal directory
-	if d.IsDir() && d.Name() == "internal" {
-		return nil
-	}
-
 	if d.IsDir() {
 		// Create the same directory under current directory.
-		if err := os.Mkdir(p.AbsolutePath+"/"+path, 0754); err != nil {
+		if err := os.Mkdir(p.RootDir+"/"+path, 0754); err != nil && d.Name() != "project" {
 			return err
 		}
 	} else {
 		// Create the files.
-		fmt.Println(path)
 		fileName := strings.TrimSuffix(path, ".tpl")
-		file, err := os.Create(p.AbsolutePath + "/" + fileName)
+		fmt.Println(fileName)
+		file, err := os.Create(p.RootDir + "/" + fileName)
 		if err != nil {
 			return err
 		}
@@ -140,7 +118,7 @@ func (p *Project) generateFiles(path string, d fs.DirEntry, err error) error {
 		}
 
 		// Parse the template and write to the files.
-		fileTemplate := template.Must(template.ParseFS(p.InternalFS, path))
+		fileTemplate := template.Must(template.ParseFS(p.RootFS, path))
 		err = fileTemplate.Execute(file, p)
 		if err != nil {
 			return err
