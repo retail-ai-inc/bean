@@ -16,10 +16,12 @@ import (
 )
 
 var (
-	validationRule = `The package should follows the following rule (excluding URL part):
-	1. Max length: 100 code points.
-	2. ASCII alphanumeric code point including hyphen (-), underscore (_), period (.).
-	3. Not start with hyphen (-), an underscore (_), a period (.).`
+	validationRule = `A module path must satisfy the following requirements:
+
+	1. The path must consist of one or more path elements separated by slashes (/, U+002F). It must not begin or end with a slash.
+	2. Each path element is a non-empty string made of up ASCII letters, ASCII digits, and limited ASCII punctuation (-, ., _).
+	3. A path element may not begin or end with a dot (., U+002E).
+	4. The leading path element (up to the first slash, if any), by convention a domain name, must contain only lower-case ASCII letters, ASCII digits, dots (., U+002E), and dashes (-, U+002D); it must contain at least one dot and cannot start with a dash.`
 
 	// initCmd represents the init command
 	initCmd = &cobra.Command{
@@ -88,24 +90,34 @@ func init() {
 func getProjectName(pkgPath string) (string, error) {
 	validate := validator.New()
 
-	errs := validate.Var(pkgPath, "required,max=100,printascii,excludesall=!\"#$%&'()*+0x2C:;<=>?@[\\]^`{0x7C~},startsnotwith=/,startsnotwith=-,startsnotwith=_,startsnotwith=.endsnotwith=/,endsnotwith=-,endsnotwith=_,endsnotwith=.")
-	if errs != nil {
+	if errs := validate.Var(pkgPath, "required,max=100,startsnotwith=/,endsnotwith=/"); errs != nil {
 		if errs, ok := errs.(validator.ValidationErrors); ok {
 			return "", errs
 		}
 		log.Fatalln(errs)
 	}
 
-	s := strings.Split(pkgPath, "/")
-	pkgName := s[len(s)-1]
-
-	errs = validate.Var(pkgName, "required,max=100,startsnotwith=-,startsnotwith=_,startsnotwith=.,endsnotwith=-,endsnotwith=_,endsnotwith=.")
-	if errs != nil {
-		if errs, ok := errs.(validator.ValidationErrors); ok {
-			return "", errs
+	pathElements := strings.Split(pkgPath, "/")
+	for _, element := range pathElements {
+		if errs := validate.Var(element, "required,printascii,excludesall=!\"#$%&'()*+0x2C:;<=>?@[\\]^`{0x7C~},startsnotwith=.,endsnotwith=."); errs != nil {
+			if errs, ok := errs.(validator.ValidationErrors); ok {
+				return "", errs
+			}
+			log.Fatalln(errs)
 		}
-		log.Fatalln(errs)
 	}
+
+	if len(pathElements) > 1 {
+		domain := pathElements[0]
+		if errs := validate.Var(domain, "required,max=100,fqdn"); errs != nil {
+			if errs, ok := errs.(validator.ValidationErrors); ok {
+				return "", errs
+			}
+			log.Fatalln(errs)
+		}
+	}
+
+	pkgName := pathElements[len(pathElements)-1]
 
 	return pkgName, nil
 }

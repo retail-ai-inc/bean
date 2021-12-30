@@ -15,26 +15,20 @@ func Test_getProjectName(t *testing.T) {
 		wantErr bool
 	}{
 		{
+			name:    "bean",
+			args:    args{"bean"},
+			want:    "bean",
+			wantErr: false,
+		},
+		{
 			name:    "",
 			args:    args{""},
 			want:    "",
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name:    "/bean",
 			args:    args{"/bean"},
-			want:    "",
-			wantErr: true,
-		},
-		{
-			name:    "_bean",
-			args:    args{"_bean"},
-			want:    "",
-			wantErr: true,
-		},
-		{
-			name:    "bean-",
-			args:    args{"bean-"},
 			want:    "",
 			wantErr: true,
 		},
@@ -45,14 +39,20 @@ func Test_getProjectName(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "github.com/retail-ai-inc/_test-bean",
-			args:    args{"github.com/retail-ai-inc/_test-bean"},
+			name:    "github.com/.retail-ai-inc/test-bean",
+			args:    args{"github.com/.retail-ai-inc/test-bean"},
 			want:    "",
 			wantErr: true,
 		},
 		{
-			name:    "github.com/retail-ai-inc/test-bean-",
-			args:    args{"github.com/retail-ai-inc/test-bean-"},
+			name:    "github.com/retail-ai-inc/test-bean.",
+			args:    args{"github.com/retail-ai-inc/test-bean."},
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:    "EXAMPL~1.COM/test-bean",
+			args:    args{"EXAMPL~1.COM/test-bean"},
 			want:    "",
 			wantErr: true,
 		},
