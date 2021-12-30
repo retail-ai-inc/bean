@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"{{ .PkgName }}/framework/internals/global"
+	"{{ .PkgPath }}/framework/internals/global"
 
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
@@ -47,7 +47,7 @@ func recoverPanic(c echo.Context) {
 }
 
 // This function is only use in this package/file to avoid import cycle.
-// For normal sentry usage, please refer to the `{{ .PkgName }}/internals/sentry` package.
+// For normal sentry usage, please refer to the `{{ .PkgPath }}/internals/sentry` package.
 func sendErrorToSentry(c echo.Context, err error) {
 
 	isSentry := viper.GetBool("sentry.isSentry")

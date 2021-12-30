@@ -2,7 +2,7 @@
 package services
 
 import (
-	"{{ .PkgName }}/repositories"
+	"{{ .PkgPath }}/repositories"
 
 	"github.com/labstack/echo/v4"
 )

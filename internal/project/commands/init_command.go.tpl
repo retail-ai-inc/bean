@@ -3,8 +3,8 @@
 package gopher
 
 import (
-	"{{ .PkgName }}/framework/internals/cli"
-	"{{ .PkgName }}/framework/internals/helpers"
+	"{{ .PkgPath }}/framework/internals/cli"
+	"{{ .PkgPath }}/framework/internals/helpers"
 	"os"
 
 	"github.com/labstack/echo/v4"

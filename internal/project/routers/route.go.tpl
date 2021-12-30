@@ -2,10 +2,10 @@
 package routers
 
 import (
-	"{{ .PkgName }}/framework/internals/global"
-	"{{ .PkgName }}/handlers"
-	"{{ .PkgName }}/repositories"
-	"{{ .PkgName }}/services"
+	"{{ .PkgPath }}/framework/internals/global"
+	"{{ .PkgPath }}/handlers"
+	"{{ .PkgPath }}/repositories"
+	"{{ .PkgPath }}/services"
 
 	"github.com/labstack/echo/v4"
 )

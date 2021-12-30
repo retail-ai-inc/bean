@@ -31,8 +31,8 @@ directory. the suffix of the package_name should match the current directory.`,
 		Args:    cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 
-			pkgName := args[0]
-			prjName, err := getProjectName(pkgName)
+			pkgPath := args[0]
+			pkgName, err := getProjectName(pkgPath)
 			if err != nil {
 				log.Fatalln(validationRule)
 			}
@@ -45,8 +45,8 @@ directory. the suffix of the package_name should match the current directory.`,
 			p := &Project{
 				Copyright: `// Copyright The RAI Inc.
 // The RAI Authors`,
+				PkgPath:     pkgPath,
 				PkgName:     pkgName,
-				PrjName:     prjName,
 				RootDir:     wd,
 				BeanVersion: rootCmd.Version,
 			}
@@ -56,13 +56,13 @@ directory. the suffix of the package_name should match the current directory.`,
 				log.Fatalln(err)
 			}
 
-			fmt.Println("initializing " + p.PrjName + "...")
+			fmt.Println("initializing " + p.PkgName + "...")
 			if err := fs.WalkDir(p.RootFS, ".", p.generateProjectFiles); err != nil {
 				log.Fatalln(err)
 			}
 
 			fmt.Println("\ninitializing go mod...")
-			goModInitCmd := exec.Command("go", "mod", "init", p.PkgName)
+			goModInitCmd := exec.Command("go", "mod", "init", p.PkgPath)
 			goModInitCmd.Stdout = os.Stdout
 			goModInitCmd.Stderr = os.Stderr
 			if err := goModInitCmd.Run(); err != nil {
@@ -85,10 +85,10 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 }
 
-func getProjectName(pkgName string) (string, error) {
+func getProjectName(pkgPath string) (string, error) {
 	validate := validator.New()
 
-	errs := validate.Var(pkgName, "max=100,printascii,excludesall=!\"#$%&'()*+0x2C:;<=>?@[\\]^`{0x7C~},startsnotwith=/,startsnotwith=-,startsnotwith=_,startsnotwith=.endsnotwith=/,endsnotwith=-,endsnotwith=_,endsnotwith=.")
+	errs := validate.Var(pkgPath, "required,max=100,printascii,excludesall=!\"#$%&'()*+0x2C:;<=>?@[\\]^`{0x7C~},startsnotwith=/,startsnotwith=-,startsnotwith=_,startsnotwith=.endsnotwith=/,endsnotwith=-,endsnotwith=_,endsnotwith=.")
 	if errs != nil {
 		if errs, ok := errs.(validator.ValidationErrors); ok {
 			return "", errs
@@ -96,10 +96,10 @@ func getProjectName(pkgName string) (string, error) {
 		log.Fatalln(errs)
 	}
 
-	s := strings.Split(pkgName, "/")
-	prjName := s[len(s)-1]
+	s := strings.Split(pkgPath, "/")
+	pkgName := s[len(s)-1]
 
-	errs = validate.Var(prjName, "max=100,startsnotwith=-,startsnotwith=_,startsnotwith=.,endsnotwith=-,endsnotwith=_,endsnotwith=.")
+	errs = validate.Var(pkgName, "required,max=100,startsnotwith=-,startsnotwith=_,startsnotwith=.,endsnotwith=-,endsnotwith=_,endsnotwith=.")
 	if errs != nil {
 		if errs, ok := errs.(validator.ValidationErrors); ok {
 			return "", errs
@@ -107,7 +107,7 @@ func getProjectName(pkgName string) (string, error) {
 		log.Fatalln(errs)
 	}
 
-	return prjName, nil
+	return pkgName, nil
 }
 
 func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) error {

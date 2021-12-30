@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"{{ .PkgName }}/framework/internals/chalk"
-	"{{ .PkgName }}/framework/internals/global"
-	"{{ .PkgName }}/framework/internals/sentry"
+	"{{ .PkgPath }}/framework/internals/chalk"
+	"{{ .PkgPath }}/framework/internals/global"
+	"{{ .PkgPath }}/framework/internals/sentry"
 
 	"github.com/labstack/echo/v4"
 )

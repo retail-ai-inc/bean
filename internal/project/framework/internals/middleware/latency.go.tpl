@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"{{ .PkgName }}/framework/internals/async"
-	"{{ .PkgName }}/framework/internals/latency"
+	"{{ .PkgPath }}/framework/internals/async"
+	"{{ .PkgPath }}/framework/internals/latency"
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"

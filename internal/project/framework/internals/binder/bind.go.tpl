@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"strings"
 
-	"{{ .PkgName }}/framework/internals/helpers"
-	structure "{{ .PkgName }}/framework/internals/struct"
+	"{{ .PkgPath }}/framework/internals/helpers"
+	structure "{{ .PkgPath }}/framework/internals/struct"
 
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"

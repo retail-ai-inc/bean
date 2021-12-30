@@ -2,7 +2,7 @@
 package repositories
 
 import (
-	"{{ .PkgName }}/framework/internals/global"
+	"{{ .PkgPath }}/framework/internals/global"
 
 	"github.com/labstack/echo/v4"
 )

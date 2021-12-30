@@ -15,9 +15,9 @@ func Test_getProjectName(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "bean",
-			args:    args{"bean"},
-			want:    "bean",
+			name:    "",
+			args:    args{""},
+			want:    "",
 			wantErr: false,
 		},
 		{

@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	ierror "{{ .PkgName }}/framework/internals/error"
-	"{{ .PkgName }}/framework/internals/latency"
+	ierror "{{ .PkgPath }}/framework/internals/error"
+	"{{ .PkgPath }}/framework/internals/latency"
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"

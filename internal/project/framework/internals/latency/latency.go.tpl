@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"time"
 
-	"{{ .PkgName }}/framework/internals/global"
+	"{{ .PkgPath }}/framework/internals/global"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/labstack/echo/v4"

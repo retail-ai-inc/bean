@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"{{ .PkgName }}/framework/internals/sentry"
-	"{{ .PkgName }}/framework/internals/validator"
+	"{{ .PkgPath }}/framework/internals/sentry"
+	"{{ .PkgPath }}/framework/internals/validator"
 
 	"github.com/labstack/echo/v4"
 )

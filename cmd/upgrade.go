@@ -48,8 +48,8 @@ not found. Please run "go install github.com/retail-ai-inc/bean@latest" before u
 		if err := viper.ReadInConfig(); err != nil {
 			log.Fatalln(err)
 		}
-		p.PrjName = viper.GetString("projectName")
-		p.PkgName = viper.GetString("packageName")
+		p.PkgPath = viper.GetString("packageName")
+		p.PkgName = viper.GetString("projectName")
 
 		fmt.Println("\nupdating framework files...")
 		if err := fs.WalkDir(p.RootFS, ".", p.updateFrameworkFiles); err != nil {
