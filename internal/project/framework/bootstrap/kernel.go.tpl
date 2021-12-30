@@ -1,4 +1,5 @@
 {{ .Copyright }}
+
 // IMPORTANT: PLEASE DO NOT UPDATE THIS FILE.
 package bootstrap
 
