@@ -16,5 +16,6 @@
 .idea
 golangci-lint
 bean
+main
 
 /vendor
