@@ -16,10 +16,12 @@ import (
 )
 
 var (
-	validationRule = `1. lowercase-letters (a-z0-9) (that may separated by underscores _). Names may not contain spaces or any other special characters.
-2. A project name can not start with 0-9 or underscore
-3. Cannot use these reserved keywords: break, default, func, interface, select, case, defer, go, map, struct, chan, else, goto, package, switch, const, fallthrough, if, range, type, continue, for, import, return, var.
-4. Cannot use these reserved keywords either: append, bool, byte, cap, close, complex, complex64, complex128, uint16, copy, false, float32, float64, imag, int, int8, int16, uint32, int32, int64, iota, len, make, new, nil, panic, uint64, print, println, real, recover, string, true, uint, uint8, uintptr,`
+	validationRule = `A module path must satisfy the following requirements:
+
+	1. The path must consist of one or more path elements separated by slashes (/, U+002F). It must not begin or end with a slash.
+	2. Each path element is a non-empty string made of up ASCII letters, ASCII digits, and limited ASCII punctuation (-, ., _).
+	3. A path element may not begin or end with a dot (., U+002E).
+	4. The leading path element (up to the first slash, if any), by convention a domain name, must contain only lower-case ASCII letters, ASCII digits, dots (., U+002E), and dashes (-, U+002D); it must contain at least one dot and cannot start with a dash.`
 
 	// initCmd represents the init command
 	initCmd = &cobra.Command{
@@ -27,14 +29,16 @@ var (
 		Short: "Initialize a project in current directory",
 		Long: `Init generates all the directories and files structures needed in the current
 directory. the suffix of the package_name should match the current directory.`,
-		Example: `bean init github.com/retail-ai-inc/bean`,
+		Example: "bean init github.com/retail-ai-inc/bean",
 		Args:    cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 
-			pkgName := args[0]
-			// TODO: validate(pkgName)
-			s := strings.Split(pkgName, "/")
-			prjName := s[len(s)-1]
+			pkgPath := args[0]
+			pkgName, err := getProjectName(pkgPath)
+			if err != nil {
+				log.Fatalln(validationRule)
+			}
+
 			wd, err := os.Getwd()
 			if err != nil {
 				log.Fatalln(err)
@@ -43,8 +47,8 @@ directory. the suffix of the package_name should match the current directory.`,
 			p := &Project{
 				Copyright: `// Copyright The RAI Inc.
 // The RAI Authors`,
+				PkgPath:     pkgPath,
 				PkgName:     pkgName,
-				PrjName:     prjName,
 				RootDir:     wd,
 				BeanVersion: rootCmd.Version,
 			}
@@ -54,13 +58,13 @@ directory. the suffix of the package_name should match the current directory.`,
 				log.Fatalln(err)
 			}
 
-			fmt.Println("initializing " + p.PrjName + "...")
+			fmt.Println("initializing " + p.PkgName + "...")
 			if err := fs.WalkDir(p.RootFS, ".", p.generateProjectFiles); err != nil {
 				log.Fatalln(err)
 			}
 
 			fmt.Println("\ninitializing go mod...")
-			goModInitCmd := exec.Command("go", "mod", "init", p.PkgName)
+			goModInitCmd := exec.Command("go", "mod", "init", p.PkgPath)
 			goModInitCmd.Stdout = os.Stdout
 			goModInitCmd.Stderr = os.Stderr
 			if err := goModInitCmd.Run(); err != nil {
@@ -83,12 +87,39 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 }
 
-func validate(projName string) {
+func getProjectName(pkgPath string) (string, error) {
 	validate := validator.New()
-	errs := validate.Var(projName, "required,alphanum")
-	if errs != nil {
-		log.Fatalln(validationRule)
+
+	if errs := validate.Var(pkgPath, "required,max=100,startsnotwith=/,endsnotwith=/"); errs != nil {
+		if errs, ok := errs.(validator.ValidationErrors); ok {
+			return "", errs
+		}
+		log.Fatalln(errs)
 	}
+
+	pathElements := strings.Split(pkgPath, "/")
+	for _, element := range pathElements {
+		if errs := validate.Var(element, "required,printascii,excludesall=!\"#$%&'()*+0x2C:;<=>?@[\\]^`{0x7C~},startsnotwith=.,endsnotwith=."); errs != nil {
+			if errs, ok := errs.(validator.ValidationErrors); ok {
+				return "", errs
+			}
+			log.Fatalln(errs)
+		}
+	}
+
+	if len(pathElements) > 1 {
+		domain := pathElements[0]
+		if errs := validate.Var(domain, "required,max=100,fqdn"); errs != nil {
+			if errs, ok := errs.(validator.ValidationErrors); ok {
+				return "", errs
+			}
+			log.Fatalln(errs)
+		}
+	}
+
+	pkgName := pathElements[len(pathElements)-1]
+
+	return pkgName, nil
 }
 
 func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) error {

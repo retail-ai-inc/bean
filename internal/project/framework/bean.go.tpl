@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"os"
 
-	"{{ .PkgName }}/framework/bootstrap"
-	validate "{{ .PkgName }}/framework/internals/validator"
+	"{{ .PkgPath }}/framework/bootstrap"
+	validate "{{ .PkgPath }}/framework/internals/validator"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"

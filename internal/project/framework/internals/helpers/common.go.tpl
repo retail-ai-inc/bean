@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	"{{ .PkgName }}/framework/dbdrivers"
-	"{{ .PkgName }}/framework/internals/global"
-	str "{{ .PkgName }}/framework/internals/string"
+	"{{ .PkgPath }}/framework/dbdrivers"
+	"{{ .PkgPath }}/framework/internals/global"
+	str "{{ .PkgPath }}/framework/internals/string"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/go-redis/redis/v8"

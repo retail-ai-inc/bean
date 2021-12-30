@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"{{ .PkgName }}/framework/internals/aes"
+	"{{ .PkgPath }}/framework/internals/aes"
 
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"

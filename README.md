@@ -73,6 +73,9 @@ Do not use `c.Get` and `c.Set` in `Service` and `Repository` layer to avoid conf
 
 ### Pointer
 ```
-As in all languages in the C family, everything in Go is passed by value. That is, a function always gets a copy of the thing being passed, as if there were an assignment statement assigning the value to the parameter. For instance, passing an int value to a function makes a copy of the int, and passing a pointer value makes a copy of the pointer, but not the data it points to.
+As in all languages in the C family, everything in Go is passed by value. That is, a function
+always gets a copy of the thing being passed, as if there were an assignment statement assigning
+the value to the parameter. For instance, passing an int value to a function makes a copy of the
+int, and passing a pointer value makes a copy of the pointer, but not the data it points to.
 ```
 For complicated object, pointer should be used as parameter instead of values to reduce the usage of copying the whole object. ref: [https://go.dev/doc/faq#pass_by_value](https://go.dev/doc/faq#pass_by_value)

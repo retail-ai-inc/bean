@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"{{ .PkgName }}/framework/internals/stacktrace"
+	"{{ .PkgPath }}/framework/internals/stacktrace"
 )
 
 var (

@@ -4,7 +4,7 @@ package handlers
 import (
 	"net/http"
 
-	"{{ .PkgName }}/services"
+	"{{ .PkgPath }}/services"
 
 	"github.com/labstack/echo/v4"
 )

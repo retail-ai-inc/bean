@@ -19,10 +19,10 @@ var InternalFS fs.FS
 type Project struct {
 	// Copyright is the copyright text on the top of every files.
 	Copyright string
-	// PkgName is the full string of the generated package. (example: github.com/retail-ai-inc/bean)
+	// PkgPath is the full string of the generated package. (example: github.com/retail-ai-inc/bean)
+	PkgPath string
+	// PkgName is the suffix of the package path, it should match the current directory name.
 	PkgName string
-	// PrjName is the suffix of the package name, it should match the current directory name.
-	PrjName string
 	// RootDir is the project root directory or current directory when executing the bean command.
 	RootDir string
 	// SubDir is the sub directory under project root using for some commands. (example: upgrade need ./framework)
@@ -49,7 +49,15 @@ a bean structured application.`,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute(internalFS fs.FS) {
+	// Set up global FS variable.
 	InternalFS = internalFS
+
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		rootCmd.Version = bi.Main.Version
+	} else {
+		log.Fatalln("Failed to read build info")
+	}
+
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
@@ -60,13 +68,6 @@ func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
-
-	bi, ok := debug.ReadBuildInfo()
-	if !ok {
-		log.Fatalln("Failed to read build info")
-	}
-
-	rootCmd.Version = bi.Main.Version
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

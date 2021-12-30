@@ -2,9 +2,9 @@
 package main
 
 import (
-	"{{ .PkgName }}/framework"
-	"{{ .PkgName }}/framework/internals/validator"
-	"{{ .PkgName }}/routers"
+	"{{ .PkgPath }}/framework"
+	"{{ .PkgPath }}/framework/internals/validator"
+	"{{ .PkgPath }}/routers"
 )
 
 func main() {

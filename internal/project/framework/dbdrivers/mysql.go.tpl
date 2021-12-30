@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"{{ .PkgName }}/framework/internals/aes"
+	"{{ .PkgPath }}/framework/internals/aes"
 
 	"github.com/spf13/viper"
 	"gorm.io/datatypes"

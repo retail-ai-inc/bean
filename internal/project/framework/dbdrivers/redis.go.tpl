@@ -4,7 +4,7 @@ package dbdrivers
 import (
 	"encoding/json"
 
-	"{{ .PkgName }}/framework/internals/aes"
+	"{{ .PkgPath }}/framework/internals/aes"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/spf13/viper"

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"reflect"
 
-	"{{ .PkgName }}/framework/internals/global"
+	"{{ .PkgPath }}/framework/internals/global"
 
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	ierror "{{ .PkgName }}/framework/internals/error"
+	ierror "{{ .PkgPath }}/framework/internals/error"
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
