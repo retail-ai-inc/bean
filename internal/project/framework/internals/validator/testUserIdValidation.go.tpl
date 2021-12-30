@@ -8,15 +8,15 @@ import (
 
 func TestUserIdValidation(c echo.Context, vd *validator.Validate) {
 
-	// Register a custom validation for TRIAL user's barcode id.
+	// This is sample validation function to show how you should write your custom validation functon.
 	_ = validate.RegisterValidation("testUserIdValidation", func(fl validator.FieldLevel) bool {
 
-		// TRIAL has 2 sets of barcode id starting with `296` or `299`.
+		// Check first 3 digits starting with `296` or `299`.
 		if fl.Field().String()[0:3] == "296" {
 
 			return true
 
-		} else if fl.Field().String()[0:3] == "299" { // Test TRIAL barcode id
+		} else if fl.Field().String()[0:3] == "299" {
 
 			return true
 
