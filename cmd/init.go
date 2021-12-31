@@ -5,9 +5,12 @@ package cmd
 import (
 	"fmt"
 	"io/fs"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
+	fpath "path"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -70,6 +73,15 @@ directory. the suffix of the package_name should match the current directory.`,
 				PkgName:     pkgName,
 				RootDir:     wd,
 				BeanVersion: rootCmd.Version,
+			}
+
+			if _, err := os.Stat(p.RootDir); err != nil {
+				if os.IsNotExist(err) {
+					if err := os.Mkdir(p.RootDir, 0754); err != nil {
+						fmt.Printf("error: %s\n", err.Error())
+						os.Exit(1)
+					}
+				}
 			}
 
 			// Set the relative root path of the internal FS.
@@ -152,23 +164,60 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 			return err
 		}
 	} else {
+		var temp *template.Template = nil
 		// Create the files.
-		fileName := strings.TrimSuffix(path, ".tpl")
-		fmt.Println(fileName)
+		if strings.HasSuffix(path, ".go") {
+			// for .go file
+			file, err := p.RootFS.Open(path)
+			if err != nil {
+				return err
+			}
+
+			content, err := ioutil.ReadAll(file)
+			if err != nil {
+				return err
+			}
+
+			result, err := PreprocessBeanDirective(string(content))
+			if err != nil {
+				return err
+			}
+
+			temp, err = template.New(path).Parse(result)
+			if err != nil {
+				return err
+			}
+
+		} else {
+			// for other file
+			temp, err = template.ParseFS(p.RootFS, path)
+			if err != nil {
+				return err
+			}
+		}
+
+		// for files which start with `.`, for example `.gitignore`
+		fileName := path
+		fileNameWithoutPath := fpath.Base(path)
+		if strings.HasPrefix(fileNameWithoutPath, "bean-dot") {
+			parentPath := strings.TrimSuffix(path, fileNameWithoutPath)
+			fileName = parentPath + strings.TrimPrefix(fileNameWithoutPath, "bean-dot")
+		}
+
 		file, err := os.Create(p.RootDir + "/" + fileName)
 		if err != nil {
 			return err
 		}
 		defer file.Close()
 
-		if fileName == "bean.sh" {
+		if strings.HasSuffix(fileName, ".sh") {
 			if err := file.Chmod(0755); err != nil {
 				return err
 			}
 		}
 
 		// Parse the template and write to the files.
-		fileTemplate := template.Must(template.ParseFS(p.RootFS, path))
+		fileTemplate := template.Must(temp, err)
 		err = fileTemplate.Execute(file, p)
 		if err != nil {
 			return err
@@ -176,4 +225,11 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 	}
 
 	return nil
+}
+
+func PreprocessBeanDirective(content string) (string, error) {
+	re := regexp.MustCompile(`/\*\*#bean\*/.*/\*#bean\.replace\((.*)\)\*\*/`)
+	bs := re.ReplaceAll([]byte(content), []byte("${1}"))
+	result := string(bs)
+	return result, nil
 }
