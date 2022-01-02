@@ -40,7 +40,7 @@
         },
         "redis": {
             "master": {},
-            "prefix": "bean_cache",
+            "prefix": "{{ .PkgName }}_cache",
             "maxretries": 2
         },
         "badger": {
@@ -54,7 +54,7 @@
             "host": "127.0.0.1",
             "port": 6379,
             "name": 3,
-            "prefix": "bean_queue",
+            "prefix": "{{ .PkgName }}_queue",
             "poolsize": 100,
             "maxidle": 2
         },
@@ -65,7 +65,7 @@
     },
     "jwt": {
         "expirationSeconds": 86400,
-        "secret": "ScV5nHaw2fKUZzDsgXHmS35d"
+        "secret": "set_your_own_secret"
     },
     "sentry": {
         "isSentry": false,
