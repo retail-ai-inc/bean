@@ -69,7 +69,9 @@
     },
     "sentry": {
         "isSentry": false,
-        "dsn": ""
+        "dsn": "",
+        "attachStacktrace": true,
+        "apmTracesSampleRate": 0.0
     },
     "security": {
         "http": {
