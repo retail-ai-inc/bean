@@ -76,6 +76,10 @@
     "security": {
         "http": {
             "header": {
+                "xssProtection": "1; mode=block",
+                "contentTypeNosniff": "nosniff",
+                "xFrameOptions": "SAMEORIGIN",
+                "hstsMaxAge": 31536000,
                 "contentSecurityPolicy": ""
             }
         }

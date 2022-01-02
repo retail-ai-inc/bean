@@ -180,10 +180,10 @@ func New() *echo.Echo {
 
 	// ---------- HTTP headers security for XSS protection and alike ----------
 	e.Use(echomiddleware.SecureWithConfig(echomiddleware.SecureConfig{
-		XSSProtection:         "1; mode=block",                                               // Adds the X-XSS-Protection header with the value `1; mode=block`.
-		ContentTypeNosniff:    "nosniff",                                                     // Adds the X-Content-Type-Options header with the value `nosniff`.
-		XFrameOptions:         "SAMEORIGIN",                                                  // The X-Frame-Options header value to be set with a custom value.
-		HSTSMaxAge:            31536000,                                                      // STS header is only included when the connection is HTTPS.
+		XSSProtection:         viper.GetString("security.http.header.xssProtection"),         // Adds the X-XSS-Protection header with the value `1; mode=block`.
+		ContentTypeNosniff:    viper.GetString("security.http.header.contentTypeNosniff"),    // Adds the X-Content-Type-Options header with the value `nosniff`.
+		XFrameOptions:         viper.GetString("security.http.header.xFrameOptions"),         // The X-Frame-Options header value to be set with a custom value.
+		HSTSMaxAge:            viper.GetInt("security.http.header.hstsMaxAge"),               // HSTS header is only included when the connection is HTTPS.
 		ContentSecurityPolicy: viper.GetString("security.http.header.contentSecurityPolicy"), // Allows the Content-Security-Policy header value to be set with a custom value.
 	}))
 	// ---------- HTTP headers security for XSS protection and alike ----------
