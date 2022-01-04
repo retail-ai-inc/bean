@@ -94,6 +94,21 @@ Bean will generate:
 "{{ .PkgPath }}/framework/dbdrivers"
 ```
 
+`/**#bean*/` should in the head of line. Because `go fmt` will reorder it.
+for example
+before `go fmt`
+```text
+ierror /**#bean*/ "demo/framework/internals/error" /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
+```
+after `go fmt`
+```text
+ierror "demo/framework/internals/error" /**#bean*/  /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
+```
+In this situation, you should write it:
+```text
+/**#bean*/ ierror "demo/framework/internals/error" /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
+```
+
 ### Template File For Hidden File
 
 goembed don't support the file which start with `.`, so we can name it with prefix `bean-dot`
