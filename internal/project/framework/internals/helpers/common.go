@@ -11,7 +11,7 @@ import (
 	/**#bean*/
 	"demo/framework/dbdrivers" /*#bean.replace("{{ .PkgPath }}/framework/dbdrivers")**/
 	/**#bean*/ "demo/framework/internals/global" /*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
-	str "demo/framework/internals/string"        /**#bean*/ /*#bean.replace("{{ .PkgPath }}/framework/internals/string")**/
+	/**#bean*/ str "demo/framework/internals/string" /*#bean.replace(str "{{ .PkgPath }}/framework/internals/string")**/
 
 	"github.com/getsentry/sentry-go"
 	"github.com/go-redis/redis/v8"

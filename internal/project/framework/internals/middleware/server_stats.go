@@ -8,7 +8,8 @@ import (
 	"sync"
 	"time"
 
-	ierror "demo/framework/internals/error" /**#bean*/ /*#bean.replace("{{ .PkgPath }}/framework/internals/error")**/
+	/**#bean*/
+	ierror "demo/framework/internals/error" /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
 	/**#bean*/ "demo/framework/internals/latency" /*#bean.replace("{{ .PkgPath }}/framework/internals/latency")**/
 
 	"github.com/labstack/echo/v4"

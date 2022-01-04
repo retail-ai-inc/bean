@@ -6,7 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	ierror /**#bean*/ "demo/framework/internals/error" /*#bean.replace("{{ .PkgPath }}/framework/internals/error")**/
+	/**#bean*/
+	ierror "demo/framework/internals/error" /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"

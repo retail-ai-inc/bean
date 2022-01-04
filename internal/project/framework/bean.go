@@ -7,8 +7,8 @@ import (
 	"os"
 
 	/**#bean*/
-	"demo/framework/bootstrap"                    /*#bean.replace("{{ .PkgPath }}/framework/bootstrap")**/
-	validate "demo/framework/internals/validator" /**#bean*/ /*#bean.replace("{{ .PkgPath }}/framework/internals/validator")**/
+	"demo/framework/bootstrap" /*#bean.replace("{{ .PkgPath }}/framework/bootstrap")**/
+	/**#bean*/ validate "demo/framework/internals/validator" /*#bean.replace(validate "{{ .PkgPath }}/framework/internals/validator")**/
 
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"

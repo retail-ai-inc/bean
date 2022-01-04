@@ -2,8 +2,8 @@
 package main
 
 import (
-	/**#bean*/ "demo/framework"                        /*#bean.replace("{{ .PkgPath }}/framework")**/
-	beanValidator "demo/framework/internals/validator" /**#bean*/ /*#bean.replace("{{ .PkgPath }}/framework/internals/validator")**/
+	/**#bean*/ "demo/framework" /*#bean.replace("{{ .PkgPath }}/framework")**/
+	/**#bean*/ beanValidator "demo/framework/internals/validator" /*#bean.replace(beanValidator "{{ .PkgPath }}/framework/internals/validator")**/
 	/**#bean*/ "demo/routers" /*#bean.replace("{{ .PkgPath }}/routers")**/
 
 	"github.com/go-playground/validator/v10"

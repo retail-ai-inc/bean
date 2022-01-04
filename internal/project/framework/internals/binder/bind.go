@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	/**#bean*/
-	"demo/framework/internals/helpers"          /*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
-	structure "demo/framework/internals/struct" /**#bean*/ /*#bean.replace("{{ .PkgPath }}/framework/internals/struct")**/
+	"demo/framework/internals/helpers" /*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
+	/**#bean*/ structure "demo/framework/internals/struct" /*#bean.replace(structure "{{ .PkgPath }}/framework/internals/struct")**/
 
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"

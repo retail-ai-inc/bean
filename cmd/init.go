@@ -228,7 +228,7 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 }
 
 func PreprocessBeanDirective(content string) (string, error) {
-	re := regexp.MustCompile(`/\*\*#bean\*/.*/\*#bean\.replace\((.*)\)\*\*/`)
+	re := regexp.MustCompile(`(?sU)/\*\*#bean\*/.*/\*#bean\.replace\((.*)\)\*\*/`)
 	bs := re.ReplaceAll([]byte(content), []byte("${1}"))
 	result := string(bs)
 	return result, nil

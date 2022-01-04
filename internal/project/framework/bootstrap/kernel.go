@@ -12,11 +12,11 @@ import (
 	/**#bean*/
 	"demo/framework/dbdrivers" /*#bean.replace("{{ .PkgPath }}/framework/dbdrivers")**/
 	/**#bean*/ "demo/framework/internals/binder" /*#bean.replace("{{ .PkgPath }}/framework/internals/binder")**/
-	ierror "demo/framework/internals/error"      /**#bean*/ /*#bean.replace("{{ .PkgPath }}/framework/internals/error")**/
+	/**#bean*/ ierror "demo/framework/internals/error" /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
 	/**#bean*/ "demo/framework/internals/global" /*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
-	/**#bean*/ "demo/framework/internals/helpers"     /*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
-	imiddleware "demo/framework/internals/middleware" /**#bean*/ /*#bean.replace("{{ .PkgPath }}/framework/internals/middleware")**/
-	str "demo/framework/internals/string"             /**#bean*/ /*#bean.replace("{{ .PkgPath }}/framework/internals/string")**/
+	/**#bean*/ "demo/framework/internals/helpers" /*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
+	/**#bean*/ imiddleware "demo/framework/internals/middleware" /*#bean.replace(imiddleware "{{ .PkgPath }}/framework/internals/middleware")**/
+	/**#bean*/ str "demo/framework/internals/string" /*#bean.replace(str "{{ .PkgPath }}/framework/internals/string")**/
 	/**#bean*/ "demo/framework/internals/template" /*#bean.replace("{{ .PkgPath }}/framework/internals/template")**/
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
