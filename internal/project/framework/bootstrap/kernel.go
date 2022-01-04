@@ -127,13 +127,29 @@ func New() *echo.Echo {
 		AllowMethods: viper.GetStringSlice("http.allowedMethod"),
 	}))
 
-	// Sentry `panic`` error handler initialization if activated from `env.json`
+	// Sentry `panic` error handler and APM initialization if activated from `env.json`
 	isSentry := viper.GetBool("sentry.isSentry")
 	if isSentry {
+		sentryDsn := viper.GetString("sentry.dsn")
+		if isValidSentryDSN := str.IsValidUrl(sentryDsn); !isValidSentryDSN {
+			e.Logger.Fatal("Sentry invalid DSN: ", sentryDsn, ". Server 🚀  crash landed. Exiting...")
+			os.Exit(1)
+		}
+
+		sentryAttachStacktrace := viper.GetBool("sentry.attachStacktrace")
+		sentryapmTracesSampleRate := viper.GetFloat64("sentry.apmTracesSampleRate")
+
+		if sentryapmTracesSampleRate > 1.0 {
+			sentryapmTracesSampleRate = 1.0
+		} else if sentryapmTracesSampleRate < 0.0 {
+			sentryapmTracesSampleRate = 0.0
+		}
+
 		// To initialize Sentry's handler, we need to initialize sentry first.
 		err := sentry.Init(sentry.ClientOptions{
-			Dsn:              viper.GetString("sentry.dsn"),
-			AttachStacktrace: true,
+			Dsn:              sentryDsn,
+			AttachStacktrace: sentryAttachStacktrace,
+			TracesSampleRate: sentryapmTracesSampleRate,
 		})
 		if err != nil {
 			e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
@@ -165,10 +181,10 @@ func New() *echo.Echo {
 
 	// ---------- HTTP headers security for XSS protection and alike ----------
 	e.Use(echomiddleware.SecureWithConfig(echomiddleware.SecureConfig{
-		XSSProtection:         "1; mode=block",                                               // Adds the X-XSS-Protection header with the value `1; mode=block`.
-		ContentTypeNosniff:    "nosniff",                                                     // Adds the X-Content-Type-Options header with the value `nosniff`.
-		XFrameOptions:         "SAMEORIGIN",                                                  // The X-Frame-Options header value to be set with a custom value.
-		HSTSMaxAge:            31536000,                                                      // STS header is only included when the connection is HTTPS.
+		XSSProtection:         viper.GetString("security.http.header.xssProtection"),         // Adds the X-XSS-Protection header with the value `1; mode=block`.
+		ContentTypeNosniff:    viper.GetString("security.http.header.contentTypeNosniff"),    // Adds the X-Content-Type-Options header with the value `nosniff`.
+		XFrameOptions:         viper.GetString("security.http.header.xFrameOptions"),         // The X-Frame-Options header value to be set with a custom value.
+		HSTSMaxAge:            viper.GetInt("security.http.header.hstsMaxAge"),               // HSTS header is only included when the connection is HTTPS.
 		ContentSecurityPolicy: viper.GetString("security.http.header.contentSecurityPolicy"), // Allows the Content-Security-Policy header value to be set with a custom value.
 	}))
 	// ---------- HTTP headers security for XSS protection and alike ----------

@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"strings"
 	"unicode"
+	"net/url"
 )
 
 // IsBlank Checks if a string is whitespace, empty ("").
@@ -44,6 +45,22 @@ func IsEqualsAny(val string, vals ...string) bool {
 	}
 
 	return false
+}
+
+// IsValidUrl tests a string to determine if it is a well-structured url or not.
+func IsValidUrl(urlString string) bool {
+	
+	_, err := url.ParseRequestURI(urlString)
+	if err != nil {
+		return false
+	}
+
+	u, err := url.Parse(urlString)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return false
+	}
+
+	return true
 }
 
 // DefaultIfNil Returns either the passed in string, or if the string is
