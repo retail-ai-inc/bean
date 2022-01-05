@@ -15,7 +15,7 @@ ARGS="$@"
 ROOT_DIR=`echo $(cd $(dirname $0);pwd)`
 MASTER_PID_FILE=/var/run/bean/bean.pid
 KILL_OPTION=-SIGTERM
-DAEMON=bin/{{ .PkgName }}
+DAEMON={{ .PkgName }}
 TIME_OUT=60
 
 black='\e[0;30m'
