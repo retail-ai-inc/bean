@@ -19,10 +19,14 @@ import (
 func main() {
 
 	bean := new(framework.Bean)
-	bean.Router = routers.Init
 
-	// You can initialize your own middleware below.
-	bean.MiddlewareInitializer = nil
+	bean.BeforeBootstrap = func() {
+		// init global middleware if you need
+		// middlerwares.Init()
+
+		// init router
+		routers.Init()
+	}
 
 	// Below is an example of how you can initialize your own validator. Just create a new directory
 	// as `packages/validator` and create a validator package inside the directory. Then initialize your

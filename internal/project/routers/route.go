@@ -14,8 +14,6 @@ import (
 	/**#bean*/
 	"demo/services"
 	/*#bean.replace("{{ .PkgPath }}/services")**/
-
-	"github.com/labstack/echo/v4"
 )
 
 type Repositories struct {
@@ -30,7 +28,9 @@ type Handlers struct {
 	MyTestHdlr handlers.MyTestHandler
 }
 
-func Init(e *echo.Echo) {
+func Init() {
+
+	e := global.EchoInstance
 
 	repos := &Repositories{
 		MyTestRepo: repositories.NewMyTestRepository(global.DBConn),

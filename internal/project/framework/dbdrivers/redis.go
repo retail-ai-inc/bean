@@ -86,3 +86,7 @@ func connectRedisDB(password, host, port string, dbName int) (*redis.Client, int
 
 	return rdb, dbName
 }
+
+func GetRedisCachePrefix() string {
+	return cachePrefix
+}
