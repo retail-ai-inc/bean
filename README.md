@@ -79,3 +79,37 @@ the value to the parameter. For instance, passing an int value to a function mak
 int, and passing a pointer value makes a copy of the pointer, but not the data it points to.
 ```
 For complicated object, pointer should be used as parameter instead of values to reduce the usage of copying the whole object. ref: [https://go.dev/doc/faq#pass_by_value](https://go.dev/doc/faq#pass_by_value)
+
+## Template Development
+
+### Replacement Directive
+
+In `.go` file, you can wrap content with `/**#bean*/` and `/*#bean.replace(<Replacement>)**/`. Bean will replace the content with the replacement.
+for example, when content in template file is 
+```text
+/**#bean*/"demo/framework/dbdrivers"/*#bean.replace("{{ .PkgPath }}/framework/dbdrivers")**/
+```
+Bean will generate:
+```text
+"{{ .PkgPath }}/framework/dbdrivers"
+```
+
+`/**#bean*/` should in the head of line. Because `go fmt` will reorder it.
+for example
+before `go fmt`
+```text
+ierror /**#bean*/ "demo/framework/internals/error" /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
+```
+after `go fmt`
+```text
+ierror "demo/framework/internals/error" /**#bean*/  /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
+```
+In this situation, you should write it:
+```text
+/**#bean*/ ierror "demo/framework/internals/error" /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
+```
+
+### Template File For Hidden File
+
+goembed don't support the file which start with `.`, so we can name it with prefix `bean-dot`
+for example, we want to make `.gitignore` as template, we can name it as `bean-dot.gitignore`, Bean init command will rename `bean-dot.gitignore` to `.gitignore` 
