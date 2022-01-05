@@ -6,9 +6,14 @@ import (
 	"os"
 
 	/**#bean*/
-	"demo/framework/internals/chalk" /*#bean.replace("{{ .PkgPath }}/framework/internals/chalk")**/
-	/**#bean*/ "demo/framework/internals/global" /*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
-	/**#bean*/ "demo/framework/internals/sentry" /*#bean.replace("{{ .PkgPath }}/framework/internals/sentry")**/
+	"demo/framework/internals/chalk"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/chalk")**/
+	/**#bean*/
+	"demo/framework/internals/global"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
+	/**#bean*/
+	"demo/framework/internals/sentry"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/sentry")**/
 
 	"github.com/labstack/echo/v4"
 )

@@ -7,8 +7,11 @@ import (
 	"time"
 
 	/**#bean*/
-	"demo/framework/internals/async" /*#bean.replace("{{ .PkgPath }}/framework/internals/async")**/
-	/**#bean*/ "demo/framework/internals/latency" /*#bean.replace("{{ .PkgPath }}/framework/internals/latency")**/
+	"demo/framework/internals/async"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/async")**/
+	/**#bean*/
+	"demo/framework/internals/latency"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/latency")**/
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"

@@ -75,15 +75,6 @@ directory. the suffix of the package_name should match the current directory.`,
 				BeanVersion: rootCmd.Version,
 			}
 
-			if _, err := os.Stat(p.RootDir); err != nil {
-				if os.IsNotExist(err) {
-					if err := os.Mkdir(p.RootDir, 0754); err != nil {
-						fmt.Printf("error: %s\n", err.Error())
-						os.Exit(1)
-					}
-				}
-			}
-
 			// Set the relative root path of the internal FS.
 			if p.RootFS, err = fs.Sub(InternalFS, "internal/project"); err != nil {
 				log.Fatalln(err)

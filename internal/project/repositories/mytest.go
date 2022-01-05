@@ -2,7 +2,9 @@
 package repositories
 
 import (
-	/**#bean*/ "demo/framework/internals/global" /*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
+	/**#bean*/
+	"demo/framework/internals/global"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
 
 	"github.com/labstack/echo/v4"
 )

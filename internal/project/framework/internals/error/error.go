@@ -8,8 +8,8 @@ import (
 	"io"
 
 	/**#bean*/
-	"demo/framework/internals/stacktrace" /*#bean.replace("{{ .PkgPath }}/framework/internals/stacktrace")**/
-)
+	"demo/framework/internals/stacktrace"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/stacktrace")**/)
 
 var (
 	ErrInternalServer      = errors.New("internal server error")

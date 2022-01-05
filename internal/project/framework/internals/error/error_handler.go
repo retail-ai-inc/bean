@@ -6,8 +6,11 @@ import (
 	"strings"
 
 	/**#bean*/
-	"demo/framework/internals/sentry" /*#bean.replace("{{ .PkgPath }}/framework/internals/sentry")**/
-	/**#bean*/ "demo/framework/internals/validator" /*#bean.replace("{{ .PkgPath }}/framework/internals/validator")**/
+	"demo/framework/internals/sentry"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/sentry")**/
+	/**#bean*/
+	"demo/framework/internals/validator"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/validator")**/
 
 	"github.com/labstack/echo/v4"
 )

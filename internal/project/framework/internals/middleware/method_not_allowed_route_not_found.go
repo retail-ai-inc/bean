@@ -7,7 +7,8 @@ import (
 	"strings"
 
 	/**#bean*/
-	ierror "demo/framework/internals/error" /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
+	ierror "demo/framework/internals/error"
+	/*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
 
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"

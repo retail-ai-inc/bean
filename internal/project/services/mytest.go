@@ -2,7 +2,9 @@
 package services
 
 import (
-	/**#bean*/ "demo/repositories" /*#bean.replace("{{ .PkgPath }}/repositories")**/
+	/**#bean*/
+	"demo/repositories"
+	/*#bean.replace("{{ .PkgPath }}/repositories")**/
 
 	"github.com/labstack/echo/v4"
 )

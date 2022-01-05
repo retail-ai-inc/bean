@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 
 	/**#bean*/
-	"demo/framework/internals/aes" /*#bean.replace("{{ .PkgPath }}/framework/internals/aes")**/
+	"demo/framework/internals/aes"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/aes")**/
 
 	"github.com/go-redis/redis/v8"
 	"github.com/spf13/viper"

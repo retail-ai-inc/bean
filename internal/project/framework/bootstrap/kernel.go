@@ -10,14 +10,29 @@ import (
 	"time"
 
 	/**#bean*/
-	"demo/framework/dbdrivers" /*#bean.replace("{{ .PkgPath }}/framework/dbdrivers")**/
-	/**#bean*/ "demo/framework/internals/binder" /*#bean.replace("{{ .PkgPath }}/framework/internals/binder")**/
-	/**#bean*/ ierror "demo/framework/internals/error" /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
-	/**#bean*/ "demo/framework/internals/global" /*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
-	/**#bean*/ "demo/framework/internals/helpers" /*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
-	/**#bean*/ imiddleware "demo/framework/internals/middleware" /*#bean.replace(imiddleware "{{ .PkgPath }}/framework/internals/middleware")**/
-	/**#bean*/ str "demo/framework/internals/string" /*#bean.replace(str "{{ .PkgPath }}/framework/internals/string")**/
-	/**#bean*/ "demo/framework/internals/template" /*#bean.replace("{{ .PkgPath }}/framework/internals/template")**/
+	"demo/framework/dbdrivers"
+	/*#bean.replace("{{ .PkgPath }}/framework/dbdrivers")**/
+	/**#bean*/
+	"demo/framework/internals/binder"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/binder")**/
+	/**#bean*/
+	ierror "demo/framework/internals/error"
+	/*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
+	/**#bean*/
+	"demo/framework/internals/global"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
+	/**#bean*/
+	"demo/framework/internals/helpers"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
+	/**#bean*/
+	imiddleware "demo/framework/internals/middleware"
+	/*#bean.replace(imiddleware "{{ .PkgPath }}/framework/internals/middleware")**/
+	/**#bean*/
+	str "demo/framework/internals/string"
+	/*#bean.replace(str "{{ .PkgPath }}/framework/internals/string")**/
+	/**#bean*/
+	"demo/framework/internals/template"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/template")**/
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	"github.com/go-redis/redis/v8"

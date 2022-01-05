@@ -7,7 +7,8 @@ import (
 	"reflect"
 
 	/**#bean*/
-	"demo/framework/internals/global" /*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
+	"demo/framework/internals/global"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
 
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"

@@ -2,9 +2,15 @@
 package main
 
 import (
-	/**#bean*/ "demo/framework" /*#bean.replace("{{ .PkgPath }}/framework")**/
-	/**#bean*/ beanValidator "demo/framework/internals/validator" /*#bean.replace(beanValidator "{{ .PkgPath }}/framework/internals/validator")**/
-	/**#bean*/ "demo/routers" /*#bean.replace("{{ .PkgPath }}/routers")**/
+	/**#bean*/
+	"demo/framework"
+	/*#bean.replace("{{ .PkgPath }}/framework")**/
+	/**#bean*/
+	beanValidator "demo/framework/internals/validator"
+	/*#bean.replace(beanValidator "{{ .PkgPath }}/framework/internals/validator")**/
+	/**#bean*/
+	"demo/routers"
+	/*#bean.replace("{{ .PkgPath }}/routers")**/
 
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"

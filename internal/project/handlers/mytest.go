@@ -5,7 +5,8 @@ import (
 	"net/http"
 
 	/**#bean*/
-	"demo/services" /*#bean.replace("{{ .PkgPath }}/services")**/
+	"demo/services"
+	/*#bean.replace("{{ .PkgPath }}/services")**/
 
 	"github.com/labstack/echo/v4"
 )

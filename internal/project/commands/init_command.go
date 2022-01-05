@@ -4,9 +4,11 @@ package gopher
 
 import (
 	/**#bean*/
-	"demo/framework/internals/cli" /*#bean.replace("{{ .PkgPath }}/framework/internals/cli")**/
+	"demo/framework/internals/cli"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/cli")**/
 	/**#bean*/
-	"demo/framework/internals/helpers" /*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
+	"demo/framework/internals/helpers"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
 	"os"
 
 	"github.com/labstack/echo/v4"
