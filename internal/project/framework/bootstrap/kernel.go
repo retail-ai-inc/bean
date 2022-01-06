@@ -33,6 +33,8 @@ import (
 	/**#bean*/
 	"demo/framework/internals/template"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/template")**/
+	"github.com/foolin/goview"
+	"github.com/foolin/goview/supports/echoview-v4"
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	"github.com/go-redis/redis/v8"
@@ -132,8 +134,18 @@ func New() *echo.Echo {
 		p.Use(e)
 	}
 
-	// Setup basic echo view template.
-	e.Renderer = template.New(e)
+	// Setup HTML view templating engine.
+	viewsTemplateCache := viper.GetBool("html.viewsTemplateCache")
+
+	e.Renderer = echoview.New(goview.Config{
+		Root:         "views",
+		Extension:    ".html",
+		Master:       "layouts/master",
+		Partials:     []string{},
+		Funcs:        make(template.FuncMap),
+		DisableCache: !viewsTemplateCache,
+		Delims:       goview.Delims{Left: "{{", Right: "}}"},
+	})
 
 	// CORS initialization and support only HTTP methods which are configured under `http.allowedMethod`
 	// parameters in `env.json`.
