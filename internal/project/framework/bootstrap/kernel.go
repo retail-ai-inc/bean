@@ -16,9 +16,6 @@ import (
 	"demo/framework/internals/binder"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/binder")**/
 	/**#bean*/
-	ierror "demo/framework/internals/error"
-	/*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
-	/**#bean*/
 	"demo/framework/internals/global"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
 	/**#bean*/
@@ -54,9 +51,6 @@ func New() *echo.Echo {
 
 	// Initialize the global echo instance. This is useful to print log from `internals` packages.
 	global.EchoInstance = e
-
-	// This will handle invalid JSON and other errors.
-	e.HTTPErrorHandler = ierror.HTTPErrorHandler
 
 	// Hide default `Echo` banner during startup.
 	e.HideBanner = true

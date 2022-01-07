@@ -37,5 +37,11 @@ func main() {
 		// Add your own validation function here.
 	}
 
+	// Below is an example of how you can set custom error handler middleware
+	// bean can call `UseErrorHandlerMiddleware` multiple times
+	bean.UseErrorHandlerMiddleware(func(e error, c echo.Context) (bool, error) {
+		return false, nil
+	})
+
 	bean.Bootstrap()
 }
