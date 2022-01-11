@@ -65,8 +65,7 @@ func concatErrorHandlerMiddlewares(middlewares []berror.ErrorHandlerMiddleware, 
 	if middlewares == nil {
 		middlewares = []berror.ErrorHandlerMiddleware{}
 	}
-	for _, m := range frameworkMiddlewares {
-		middlewares = append(middlewares, m)
-	}
+
+	middlewares = append(middlewares, frameworkMiddlewares...)
 	return middlewares
 }
