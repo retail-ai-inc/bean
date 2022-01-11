@@ -28,12 +28,14 @@ func (b *Bean) Bootstrap() {
 	// Create a new echo instance
 	e := bootstrap.New()
 
-	errorHandlerMiddlewares := concatErrorHandlerMiddlewares(b.errorHandlerMiddlewares,
+	b.UseErrorHandlerMiddleware(
 		berror.ValidationErrorHanderMiddleware,
 		berror.APIErrorHanderMiddleware,
 		berror.HTTPErrorHanderMiddleware,
-		berror.DefaultErrorHanderMiddleware)
-	e.HTTPErrorHandler = berror.ErrorHandlerChain(errorHandlerMiddlewares...)
+		berror.DefaultErrorHanderMiddleware,
+	)
+
+	e.HTTPErrorHandler = berror.ErrorHandlerChain(b.errorHandlerMiddlewares...)
 	// before bean bootstrap
 	if b.BeforeBootstrap != nil {
 		b.BeforeBootstrap()
@@ -54,18 +56,9 @@ func (b *Bean) Bootstrap() {
 	}
 }
 
-func (b *Bean) UseErrorHandlerMiddleware(errorHandlerMiddleware berror.ErrorHandlerMiddleware) {
+func (b *Bean) UseErrorHandlerMiddleware(errorHandlerMiddleware ...berror.ErrorHandlerMiddleware) {
 	if b.errorHandlerMiddlewares == nil {
 		b.errorHandlerMiddlewares = []berror.ErrorHandlerMiddleware{}
 	}
-	b.errorHandlerMiddlewares = append(b.errorHandlerMiddlewares, errorHandlerMiddleware)
-}
-
-func concatErrorHandlerMiddlewares(middlewares []berror.ErrorHandlerMiddleware, frameworkMiddlewares ...berror.ErrorHandlerMiddleware) []berror.ErrorHandlerMiddleware {
-	if middlewares == nil {
-		middlewares = []berror.ErrorHandlerMiddleware{}
-	}
-
-	middlewares = append(middlewares, frameworkMiddlewares...)
-	return middlewares
+	b.errorHandlerMiddlewares = append(b.errorHandlerMiddlewares, errorHandlerMiddleware...)
 }
