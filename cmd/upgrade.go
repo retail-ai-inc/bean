@@ -5,8 +5,10 @@ package cmd
 import (
 	"fmt"
 	"io/fs"
+	"io/ioutil"
 	"log"
 	"os"
+	fpath "path"
 	"strings"
 	"text/template"
 
@@ -15,6 +17,7 @@ import (
 )
 
 // upgradeCmd represents the upgrade command
+// It will replace the files inside the ./framework with the latest version files.
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
 	Short: "Upgrade the framework files in the current project",
@@ -29,8 +32,27 @@ not found. Please run "go install github.com/retail-ai-inc/bean@latest" before u
 		}
 
 		p := &Project{
-			Copyright: `// Copyright The RAI Inc.
-// The RAI Authors`,
+			Copyright: `// MIT License
+
+// Copyright (c) The RAI Authors
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.`,
 			RootDir: wd,
 			SubDir:  "/framework",
 		}
@@ -41,7 +63,7 @@ not found. Please run "go install github.com/retail-ai-inc/bean@latest" before u
 		}
 
 		// Read env.json to set proper project obejct.
-		fmt.Println("\nloading env.json...")
+		fmt.Println("loading env.json...")
 		viper.SetConfigName("env")  // name of config file (without extension)
 		viper.SetConfigType("json") // REQUIRED if the config file does not have the extension in the name
 		viper.AddConfigPath(".")    // path to look for the config file in
@@ -67,32 +89,67 @@ func (p *Project) updateFrameworkFiles(path string, d fs.DirEntry, err error) er
 		return err
 	}
 
-	fmt.Println(path)
-
 	if d.IsDir() {
 		// Create the same directory under current directory, skip if it already exists.
 		if err := os.Mkdir(p.RootDir+p.SubDir+"/"+path, 0754); err != nil && !os.IsExist(err) {
 			return err
 		}
 	} else {
-		// Overwrite exisiting framework files.
-		fileName := strings.TrimSuffix(path, ".tpl")
-		fmt.Println(fileName)
+		// Create templates from the files.
+		var temp *template.Template = nil
+		fmt.Println(p.RootDir + p.SubDir + "/" + path)
+
+		if strings.HasSuffix(path, ".go") {
+			// Preprocess bean directive for .go files.
+			file, err := p.RootFS.Open(path)
+			if err != nil {
+				return err
+			}
+
+			content, err := ioutil.ReadAll(file)
+			if err != nil {
+				return err
+			}
+
+			result, err := PreprocessBeanDirective(string(content))
+			if err != nil {
+				return err
+			}
+
+			temp, err = template.New(path).Parse(result)
+			if err != nil {
+				return err
+			}
+		} else {
+			// No preprocess for other files
+			temp, err = template.ParseFS(p.RootFS, path)
+			if err != nil {
+				return err
+			}
+		}
+
+		// For files which start with `.`, for example `.gitignore`.
+		fileName := path
+		fileNameWithoutPath := fpath.Base(path)
+		if strings.HasPrefix(fileNameWithoutPath, "bean-dot") {
+			parentPath := strings.TrimSuffix(path, fileNameWithoutPath)
+			fileName = parentPath + strings.TrimPrefix(fileNameWithoutPath, "bean-dot")
+		}
+
 		file, err := os.Create(p.RootDir + p.SubDir + "/" + fileName)
 		if err != nil {
 			return err
 		}
 		defer file.Close()
 
-		// Add executable permission to shell script.
-		if fileName == "bean.sh" {
+		if strings.HasSuffix(fileName, ".sh") {
 			if err := file.Chmod(0755); err != nil {
 				return err
 			}
 		}
 
 		// Parse the template and write to the files.
-		fileTemplate := template.Must(template.ParseFS(p.RootFS, path))
+		fileTemplate := template.Must(temp, err)
 		err = fileTemplate.Execute(file, p)
 		if err != nil {
 			return err
