@@ -4,7 +4,7 @@ package cmd
 import (
 	/**#bean*/
 	"demo/framework/bean"
-	/*#bean.replace(beanValidator "{{ .PkgPath }}/framework/bean")**/
+	/*#bean.replace("{{ .PkgPath }}/framework/bean")**/
 	/**#bean*/
 	beanValidator "demo/framework/internals/validator"
 	/*#bean.replace(beanValidator "{{ .PkgPath }}/framework/internals/validator")**/
