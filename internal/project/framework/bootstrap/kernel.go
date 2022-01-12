@@ -9,9 +9,6 @@ import (
 	"time"
 
 	/**#bean*/
-
-	/*#bean.replace("{{ .PkgPath }}/framework/dbdrivers")**/
-	/**#bean*/
 	"demo/framework/internals/binder"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/binder")**/
 	/**#bean*/

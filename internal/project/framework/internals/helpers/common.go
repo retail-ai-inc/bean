@@ -126,7 +126,7 @@ func GetContextInstanceEnvironmentAndConfig() (*echo.Echo, echo.Context, string)
 		masterRedisDB, masterRedisDBName = dbdrivers.InitRedisMasterConn()
 	}
 
-	masterBadgerDB := dbdrivers.InitBadgerConn(e)
+	masterBadgerDB := dbdrivers.InitBadgerConn()
 
 	global.DBConn = &global.DBDeps{
 		MasterMySQLDB:      masterMySQLDB,
