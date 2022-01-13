@@ -1,5 +1,5 @@
 /**#bean*/ /*#bean.replace({{ .Copyright }})**/
-package cmd
+package commands
 
 import (
 	/**#bean*/
