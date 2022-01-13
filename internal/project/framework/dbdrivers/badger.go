@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger/v3"
-	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
 )
 
@@ -20,12 +19,12 @@ var badgerConn *badger.DB
 var badgerOnce sync.Once
 
 // Initialize the Badger database.
-func InitBadgerConn(e *echo.Echo) *badger.DB {
-	return connectBadgerDB(e)
+func InitBadgerConn() *badger.DB {
+	return connectBadgerDB()
 }
 
 // connectBadgerDB returns the singleton badger connection
-func connectBadgerDB(e *echo.Echo) *badger.DB {
+func connectBadgerDB() *badger.DB {
 
 	badgerOnce.Do(func() {
 
@@ -51,8 +50,6 @@ func connectBadgerDB(e *echo.Echo) *badger.DB {
 
 		badgerConn, err = badger.Open(opt)
 		if err != nil {
-			e.Logger.Error(err)
-			// Panic will be captured by `sentry` in staging and production.
 			panic(err)
 		}
 	})
