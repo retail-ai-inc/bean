@@ -1,5 +1,5 @@
 /**#bean*/ /*#bean.replace({{ .Copyright }})**/
-package cmd
+package commands
 
 import (
 	"log"
@@ -12,10 +12,10 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "/**#bean*/ /*#bean.replace({{ .PkgName }})**/ command [args...]",
-	Short: "The CLI of /**#bean*/ /*#bean.replace({{ .PkgName }})**/",
-	Long: `The starting point of /**#bean*/ /*#bean.replace({{ .PkgName }})**/, contains some
-useful command like start...`,
+	Use:   "{{ .PkgName }} command [args...]",
+	Short: "The CLI of {{ .PkgName }}",
+	Long: `The starting point of {{ .PkgName }}, contains some useful commands.
+For example: start...`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

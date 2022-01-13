@@ -3,9 +3,9 @@ package main
 
 import (
 	/**#bean*/
-	"demo/cmd"
-	/*#bean.replace("{{ .PkgName }}/cmd")**/)
+	"demo/commands"
+	/*#bean.replace("{{ .PkgName }}/commands")**/)
 
 func main() {
-	cmd.Execute()
+	commands.Execute()
 }
