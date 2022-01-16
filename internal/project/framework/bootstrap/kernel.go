@@ -4,20 +4,13 @@
 package bootstrap
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
 	/**#bean*/
-	"demo/framework/dbdrivers"
-	/*#bean.replace("{{ .PkgPath }}/framework/dbdrivers")**/
-	/**#bean*/
 	"demo/framework/internals/binder"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/binder")**/
-	/**#bean*/
-	ierror "demo/framework/internals/error"
-	/*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
 	/**#bean*/
 	"demo/framework/internals/global"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
@@ -37,14 +30,11 @@ import (
 	"github.com/foolin/goview/supports/echoview-v4"
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
-	"github.com/go-redis/redis/v8"
 	"github.com/labstack/echo-contrib/prometheus"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
 	"github.com/spf13/viper"
-	"go.mongodb.org/mongo-driver/mongo"
-	"gorm.io/gorm"
 )
 
 func New() *echo.Echo {
@@ -57,24 +47,11 @@ func New() *echo.Echo {
 	// Initialize the global echo instance. This is useful to print log from `internals` packages.
 	global.EchoInstance = e
 
-	// This will handle invalid JSON and other errors.
-	e.HTTPErrorHandler = ierror.HTTPErrorHandler
-
 	// Hide default `Echo` banner during startup.
 	e.HideBanner = true
 
-	// Set viper path and read configuration. You must keep `env.json` file in the root of your project.
-	viper.AddConfigPath(".")
-	viper.SetConfigType("json")
-	viper.SetConfigName("env")
-
-	err := viper.ReadInConfig()
-	if err != nil {
-		fmt.Printf("Configuration file error: %v Server 🚀  crash landed. Exiting...\n", err)
-
-		// Go does not use an integer return value from main to indicate exit status.
-		// To exit with a non-zero status we should use os.Exit.
-		os.Exit(1)
+	if err := viper.ReadInConfig(); err != nil {
+		log.Fatalf("Configuration file error: %v Server 🚀  crash landed. Exiting...\n", err)
 	}
 
 	// IMPORTANT: Time out middleware. It has to be the first middleware to initialize.
@@ -97,15 +74,13 @@ func New() *echo.Echo {
 		// IMPORTANT: Set log output into file (console.log) instead `stdout`.
 		if _, err := os.Stat(logFile); os.IsNotExist(err) {
 			if err := os.MkdirAll(filepath.Dir(logFile), 0754); err != nil {
-				fmt.Printf("Unable to create log file: %v Server 🚀  crash landed. Exiting...\n", err)
-				os.Exit(1)
+				log.Fatalf("Unable to create log file: %v Server 🚀  crash landed. Exiting...\n", err)
 			}
 		}
 
 		logfp, err := os.OpenFile(logFile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0664)
 		if err != nil {
-			fmt.Printf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
-			os.Exit(1)
+			log.Printf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
 		}
 
 		e.Logger.SetOutput(logfp)
@@ -160,7 +135,6 @@ func New() *echo.Echo {
 		sentryDsn := viper.GetString("sentry.dsn")
 		if isValidSentryDSN := str.IsValidUrl(sentryDsn); !isValidSentryDSN {
 			e.Logger.Fatal("Sentry invalid DSN: ", sentryDsn, ". Server 🚀  crash landed. Exiting...")
-			os.Exit(1)
 		}
 
 		sentryAttachStacktrace := viper.GetBool("sentry.attachStacktrace")
@@ -173,17 +147,12 @@ func New() *echo.Echo {
 		}
 
 		// To initialize Sentry's handler, we need to initialize sentry first.
-		err := sentry.Init(sentry.ClientOptions{
+		if err := sentry.Init(sentry.ClientOptions{
 			Dsn:              sentryDsn,
 			AttachStacktrace: sentryAttachStacktrace,
 			TracesSampleRate: sentryapmTracesSampleRate,
-		})
-		if err != nil {
+		}); err != nil {
 			e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
-
-			// Go does not use an integer return value from main to indicate exit status.
-			// To exit with a non-zero status we should use os.Exit.
-			os.Exit(1)
 		}
 
 		// Once it's done, let's attach the handler as one of our middleware.
@@ -241,53 +210,6 @@ func New() *echo.Echo {
 
 	// `/ping` uri to response a `pong`.
 	e.Use(imiddleware.Heartbeat())
-
-	// Initialize all database driver.
-	var masterMySQLDB *gorm.DB
-	var masterMySQLDBName string
-	var masterMongoDB *mongo.Client
-	var masterMongoDBName string
-	var masterRedisDB *redis.Client
-	var masterRedisDBName int
-
-	var tenantMySQLDBs map[uint64]*gorm.DB
-	var tenantMySQLDBNames map[uint64]string
-	var tenantMongoDBs map[uint64]*mongo.Client
-	var tenantMongoDBNames map[uint64]string
-	var tenantRedisDBs map[uint64]*redis.Client
-	var tenantRedisDBNames map[uint64]int
-
-	isTenant := viper.GetBool("database.mysql.isTenant")
-	if isTenant {
-		dbdrivers.InitTenantIdMutexMap()
-		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn()
-		tenantMySQLDBs, tenantMySQLDBNames = dbdrivers.InitMysqlTenantConns(masterMySQLDB)
-		tenantMongoDBs, tenantMongoDBNames = dbdrivers.InitMongoTenantConns(masterMySQLDB)
-		tenantRedisDBs, tenantRedisDBNames = dbdrivers.InitRedisTenantConns(masterMySQLDB)
-
-	} else {
-		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn()
-		masterMongoDB, masterMongoDBName = dbdrivers.InitMongoMasterConn()
-		masterRedisDB, masterRedisDBName = dbdrivers.InitRedisMasterConn()
-	}
-
-	masterBadgerDB := dbdrivers.InitBadgerConn(e)
-
-	global.DBConn = &global.DBDeps{
-		MasterMySQLDB:      masterMySQLDB,
-		MasterMySQLDBName:  masterMySQLDBName,
-		TenantMySQLDBs:     tenantMySQLDBs,
-		TenantMySQLDBNames: tenantMySQLDBNames,
-		MasterMongoDB:      masterMongoDB,
-		MasterMongoDBName:  masterMongoDBName,
-		TenantMongoDBs:     tenantMongoDBs,
-		TenantMongoDBNames: tenantMongoDBNames,
-		MasterRedisDB:      masterRedisDB,
-		MasterRedisDBName:  masterRedisDBName,
-		TenantRedisDBs:     tenantRedisDBs,
-		TenantRedisDBNames: tenantRedisDBNames,
-		BadgerDB:           masterBadgerDB,
-	}
 
 	// Set custom request binder
 	e.Binder = &binder.CustomBinder{}

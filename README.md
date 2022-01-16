@@ -11,6 +11,9 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [Do’s and Don’ts](#dos-and-donts)
     - [Context](#context)
     - [Pointer](#pointer)
+  - [Template Development](#template-development)
+    - [Replacement Directive](#replacement-directive)
+    - [Template File For Hidden File](#template-file-for-hidden-file)
 
 ## How to use
 ### Initialize a project
@@ -87,26 +90,13 @@ For complicated object, pointer should be used as parameter instead of values to
 In `.go` file, you can wrap content with `/**#bean*/` and `/*#bean.replace(<Replacement>)**/`. Bean will replace the content with the replacement.
 for example, when content in template file is 
 ```text
-/**#bean*/"demo/framework/dbdrivers"/*#bean.replace("{{ .PkgPath }}/framework/dbdrivers")**/
+/**#bean*/
+"demo/framework/dbdrivers"
+/*#bean.replace("{{ .PkgPath }}/framework/dbdrivers")**/
 ```
 Bean will generate:
 ```text
 "{{ .PkgPath }}/framework/dbdrivers"
-```
-
-`/**#bean*/` should in the head of line. Because `go fmt` will reorder it.
-for example
-before `go fmt`
-```text
-ierror /**#bean*/ "demo/framework/internals/error" /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
-```
-after `go fmt`
-```text
-ierror "demo/framework/internals/error" /**#bean*/  /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
-```
-In this situation, you should write it:
-```text
-/**#bean*/ ierror "demo/framework/internals/error" /*#bean.replace(ierror "{{ .PkgPath }}/framework/internals/error")**/
 ```
 
 ### Template File For Hidden File

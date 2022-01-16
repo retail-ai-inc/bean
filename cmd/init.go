@@ -155,10 +155,12 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 			return err
 		}
 	} else {
+		// Create templates from the files.
 		var temp *template.Template = nil
-		// Create the files.
+		fmt.Println(p.RootDir + "/" + path)
+
 		if strings.HasSuffix(path, ".go") {
-			// for .go file
+			// Preprocess bean directive for .go files.
 			file, err := p.RootFS.Open(path)
 			if err != nil {
 				return err
@@ -178,16 +180,15 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 			if err != nil {
 				return err
 			}
-
 		} else {
-			// for other file
+			// No preprocess for other files.
 			temp, err = template.ParseFS(p.RootFS, path)
 			if err != nil {
 				return err
 			}
 		}
 
-		// for files which start with `.`, for example `.gitignore`
+		// For files which start with `.`, for example `.gitignore`.
 		fileName := path
 		fileNameWithoutPath := fpath.Base(path)
 		if strings.HasPrefix(fileNameWithoutPath, "bean-dot") {
