@@ -50,11 +50,12 @@ func init() {
 }
 
 func start(cmd *cobra.Command, args []string) {
-	b := new(bean.Bean)
+	// Create a bean object
+	b := bean.New()
 
 	b.InitDB()
 
-	b.BeforeBootstrap = func() {
+	b.BeforeServe = func() {
 		// init global middleware if you need
 		// middlerwares.Init()
 
