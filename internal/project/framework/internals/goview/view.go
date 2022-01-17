@@ -119,7 +119,8 @@ func (e *ViewEngine) RenderWriter(w io.Writer, name string, data interface{}) er
 
 func (e *ViewEngine) executeRender(out io.Writer, name string, data interface{}) error {
 
-	useMaster := true
+	// If user doesn't set the template then useMaster = false means no template.
+	var useMaster bool
 	var dataMap map[string]interface{}
 
 	switch v := data.(type) {
@@ -131,6 +132,7 @@ func (e *ViewEngine) executeRender(out io.Writer, name string, data interface{})
 		return fmt.Errorf("ViewEngine invalid data type in `Render` function: %v", v)
 	}
 
+	// If user provide a template layout then use that instead `templates/master.html`
 	if template, ok := dataMap["template"].(string); ok {
 		if template != "" {
 			useMaster = true
@@ -144,9 +146,6 @@ func (e *ViewEngine) executeRender(out io.Writer, name string, data interface{})
 				useMaster = true
 			}
 		}
-	} else {
-		// If user doesn't set the template then useMaster = false means no template.
-		useMaster = false
 	}
 
 	return e.executeTemplate(out, name, data, useMaster)
@@ -158,7 +157,7 @@ func (e *ViewEngine) executeTemplate(out io.Writer, name string, data interface{
 	var err error
 	var ok bool
 
-	allFuncs := make(template.FuncMap, 0)
+	allFuncs := make(template.FuncMap)
 	allFuncs["include"] = func(inclTmpl string) (template.HTML, error) {
 		buf := new(bytes.Buffer)
 		err := e.executeTemplate(buf, inclTmpl, data, false)

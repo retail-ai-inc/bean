@@ -122,6 +122,10 @@ func connectMysqlDB(userName, password, host, port, dbName string) (*gorm.DB, st
 	}
 
 	sqlDB, err := db.DB()
+	if err != nil {
+		panic(err)
+	}
+
 	sqlDB.SetMaxIdleConns(viper.GetInt("database.mysql.maxIdleConnections"))
 	sqlDB.SetMaxOpenConns(viper.GetInt("database.mysql.maxOpenConnections"))
 
