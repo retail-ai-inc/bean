@@ -4,6 +4,7 @@
 package bootstrap
 
 import (
+	"html/template"
 	"os"
 	"path/filepath"
 	"time"
@@ -24,10 +25,12 @@ import (
 	str "demo/framework/internals/string"
 	/*#bean.replace(str "{{ .PkgPath }}/framework/internals/string")**/
 	/**#bean*/
-	"demo/framework/internals/template"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/template")**/
-	"github.com/foolin/goview"
-	"github.com/foolin/goview/supports/echoview-v4"
+	"demo/framework/internals/echoview"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/echoview")**/
+	/**#bean*/
+	"demo/framework/internals/goview"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/goview")**/
+
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	"github.com/labstack/echo-contrib/prometheus"
@@ -115,7 +118,7 @@ func New() *echo.Echo {
 	e.Renderer = echoview.New(goview.Config{
 		Root:         "views",
 		Extension:    ".html",
-		Master:       "layouts/master",
+		Master:       "templates/master",
 		Partials:     []string{},
 		Funcs:        make(template.FuncMap),
 		DisableCache: !viewsTemplateCache,
