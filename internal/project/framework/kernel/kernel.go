@@ -1,7 +1,7 @@
 /**#bean*/ /*#bean.replace({{ .Copyright }})**/
 
 // IMPORTANT: PLEASE DO NOT UPDATE THIS FILE.
-package bootstrap
+package kernel
 
 import (
 	"html/template"
@@ -12,9 +12,6 @@ import (
 	/**#bean*/
 	"demo/framework/internals/binder"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/binder")**/
-	/**#bean*/
-	"demo/framework/internals/global"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
 	/**#bean*/
 	"demo/framework/internals/helpers"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
@@ -40,65 +37,49 @@ import (
 	"github.com/spf13/viper"
 )
 
-func New() *echo.Echo {
-
-	// Parse bean system files and directories.
-	helpers.ParseBeanSystemFilesAndDirectorires()
+func NewEcho() *echo.Echo {
 
 	e := echo.New()
 
-	// Initialize the global echo instance. This is useful to print log from `internals` packages.
-	global.EchoInstance = e
-
 	// Hide default `Echo` banner during startup.
 	e.HideBanner = true
-
-	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("Configuration file error: %v Server 🚀  crash landed. Exiting...\n", err)
-	}
 
 	// IMPORTANT: Time out middleware. It has to be the first middleware to initialize.
 	e.Use(imiddleware.RequestTimeout(viper.GetDuration("http.timeout") * time.Second))
 
 	// Get log type (file or stdout) settings from config.
-	isLogStdout := viper.GetBool("isLogStdout")
-	logFile := viper.GetString("logFile")
+	debugLogLocation := viper.GetString("debugLog")
+	requestLogLocation := viper.GetString("requestLog")
+	// bodydumpLogLocation := viper.GetString("bodydumpLog")
 
-	e.Logger.SetLevel(log.DEBUG)
-
-	// Print logs on terminal a.k.a stdout instead console.log.
-	if isLogStdout {
-		logger := echomiddleware.LoggerWithConfig(echomiddleware.LoggerConfig{
-			Format: helpers.JsonLogFormat(), // we need additional access log parameter
-		})
-		e.Use(logger)
-
-	} else {
-		// IMPORTANT: Set log output into file (console.log) instead `stdout`.
-		if _, err := os.Stat(logFile); os.IsNotExist(err) {
-			if err := os.MkdirAll(filepath.Dir(logFile), 0754); err != nil {
-				log.Fatalf("Unable to create log file: %v Server 🚀  crash landed. Exiting...\n", err)
-			}
-		}
-
-		logfp, err := os.OpenFile(logFile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0664)
+	// IMPORTANT: Set debug log output location.
+	if debugLogLocation != "" {
+		file, err := os.OpenFile(debugLogLocation, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			log.Printf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
+			e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
 		}
-
-		e.Logger.SetOutput(logfp)
-
-		logger := echomiddleware.LoggerWithConfig(echomiddleware.LoggerConfig{
-			Format: helpers.JsonLogFormat(), // we need additional access log parameter
-			Output: logfp,
-		})
-
-		e.Use(logger)
+		e.Logger.SetOutput(file)
 	}
 
-	// Set the environment parameter in `global.Environment`
-	global.Environment = viper.GetString("environment")
-	e.Logger.Info("ENVIRONMENT: ", global.Environment)
+	reqLoggerConfig := echomiddleware.LoggerConfig{
+		Format: helpers.JsonLogFormat(), // we need additional access log parameter
+	}
+
+	// IMPORTANT: Set request log output location.
+	if requestLogLocation != "" {
+		file, err := os.OpenFile(debugLogLocation, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
+		}
+		reqLoggerConfig.Output = file
+	}
+
+	reqLogger := echomiddleware.LoggerWithConfig(reqLoggerConfig)
+
+	e.Use(reqLogger)
+
+	e.Logger.SetLevel(log.DEBUG)
+	e.Logger.Info("ENVIRONMENT: ", viper.GetString("environment"))
 
 	// Some pre-build middleware initialization.
 	e.Pre(echomiddleware.RemoveTrailingSlash())
@@ -201,8 +182,6 @@ func New() *echo.Echo {
 
 	// -------------- Special Middleware And Controller To Get Server Stats --------------
 	serverStats := imiddleware.NewServerStats()
-
-	e.Use(imiddleware.LatencyRecorder())
 	e.GET("/route/stats", serverStats.GetServerStats)
 	// -------------- Special Middleware And Controller To Get Server Stats --------------
 
@@ -227,4 +206,17 @@ func prometheusUrlSkipper(c echo.Context) bool {
 	_, matches := str.MatchAllSubstringsInAString(c.Path(), skipEndpoints...)
 
 	return matches > 0
+}
+
+// openFile opens and return the file, if doesn't exist, create it, or append to the file with the directory.
+func openFile(path string) (*os.File, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(path), 0754); err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, err
+	}
+
+	return os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0664)
 }
