@@ -13,9 +13,8 @@ import (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "{{ .PkgName }} command [args...]",
-	Short: "The CLI of {{ .PkgName }}",
-	Long: `The starting point of {{ .PkgName }}, contains some useful commands.
-For example: start...`,
+	Short: "",
+	Long:  "",
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
