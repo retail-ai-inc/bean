@@ -12,9 +12,6 @@ import (
 	"demo/framework/internals/binder"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/binder")**/
 	/**#bean*/
-
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
-	/**#bean*/
 	"demo/framework/internals/helpers"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
 	/**#bean*/

@@ -14,13 +14,11 @@ import (
 	/*#bean.replace(berror "{{ .PkgPath }}/framework/internals/error")**/
 	/**#bean*/
 	"demo/framework/internals/helpers"
-	/*#bean.replace(berror "{{ .PkgPath }}/framework/internals/helpers")**/
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
 	/**#bean*/
 	validate "demo/framework/internals/validator"
 	/*#bean.replace(validate "{{ .PkgPath }}/framework/internals/validator")**/
-	/**#bean*/
 
-	/*#bean.replace("{{ .PkgPath }}/repositories")**/
 	"github.com/dgraph-io/badger/v3"
 	"github.com/go-playground/validator/v10"
 	"github.com/go-redis/redis/v8"
