@@ -103,7 +103,7 @@ func NewEcho() *echo.Echo {
 		Partials:     []string{},
 		Funcs:        make(template.FuncMap),
 		DisableCache: !viewsTemplateCache,
-		Delims:       goview.Delims{Left: "{{", Right: "}}"},
+		Delims:       goview.Delims{Left: "{{`{{`}}", Right: "{{`}}`}}"},
 	})
 
 	// CORS initialization and support only HTTP methods which are configured under `http.allowedMethod`

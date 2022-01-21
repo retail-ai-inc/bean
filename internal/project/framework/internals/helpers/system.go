@@ -49,7 +49,7 @@ func ParseBeanSystemFilesAndDirectorires() {
 		}
 	}
 
-	isExist, err = IsFilesExistInDirectory("commands/", []string{"root.go", "start.go"})
+	isExist, err = IsFilesExistInDirectory("commands/", []string{"root.go"})
 	if err != nil {
 		fmt.Printf("Bean `commands/` directory parsing error: %v Server 🚀  crash landed. Exiting...\n", err)
 
@@ -59,7 +59,7 @@ func ParseBeanSystemFilesAndDirectorires() {
 	}
 
 	if !isExist {
-		fmt.Printf("Bean files (root.go or start.go) are not exist in `commands/` directory. Bean 🚀  crash landed. Exiting...\n")
+		fmt.Printf("Bean files (root.go) are not exist in `commands/` directory. Bean 🚀  crash landed. Exiting...\n")
 
 		// Go does not use an integer return value from main to indicate exit status.
 		// To exit with a non-zero status we should use os.Exit.
