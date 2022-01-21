@@ -4,6 +4,7 @@
 package kernel
 
 import (
+	"html/template"
 	"os"
 	"path/filepath"
 	"time"
@@ -21,8 +22,12 @@ import (
 	str "demo/framework/internals/string"
 	/*#bean.replace(str "{{ .PkgPath }}/framework/internals/string")**/
 	/**#bean*/
-	"demo/framework/internals/template"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/template")**/
+	"demo/framework/internals/echoview"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/echoview")**/
+	/**#bean*/
+	"demo/framework/internals/goview"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/goview")**/
+
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	"github.com/labstack/echo-contrib/prometheus"
@@ -88,8 +93,18 @@ func NewEcho() *echo.Echo {
 		p.Use(e)
 	}
 
-	// Setup basic echo view template.
-	e.Renderer = template.New(e)
+	// Setup HTML view templating engine.
+	viewsTemplateCache := viper.GetBool("html.viewsTemplateCache")
+
+	e.Renderer = echoview.New(goview.Config{
+		Root:         "views",
+		Extension:    ".html",
+		Master:       "templates/master",
+		Partials:     []string{},
+		Funcs:        make(template.FuncMap),
+		DisableCache: !viewsTemplateCache,
+		Delims:       goview.Delims{Left: "{{`{{`}}", Right: "{{`}}`}}"},
+	})
 
 	// CORS initialization and support only HTTP methods which are configured under `http.allowedMethod`
 	// parameters in `env.json`.
