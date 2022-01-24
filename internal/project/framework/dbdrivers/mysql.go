@@ -4,6 +4,7 @@ package dbdrivers
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	/**#bean*/
 	"demo/framework/internals/aes"
@@ -128,6 +129,11 @@ func connectMysqlDB(userName, password, host, port, dbName string) (*gorm.DB, st
 
 	sqlDB.SetMaxIdleConns(viper.GetInt("database.mysql.maxIdleConnections"))
 	sqlDB.SetMaxOpenConns(viper.GetInt("database.mysql.maxOpenConnections"))
+
+	maxConnectionLifeTime := viper.GetDuration("database.mysql.maxConnectionLifeTime")
+	if maxConnectionLifeTime > 0 {
+		sqlDB.SetConnMaxLifetime(maxConnectionLifeTime * time.Second)
+	}
 
 	return db, dbName
 }
