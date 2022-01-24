@@ -6,9 +6,6 @@ import (
 	"demo/framework/bean"
 	/*#bean.replace("{{ .PkgPath }}/framework/bean")**/
 	/**#bean*/
-	"demo/framework/internals/global"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
-	/**#bean*/
 	beanValidator "demo/framework/internals/validator"
 	/*#bean.replace(beanValidator "{{ .PkgPath }}/framework/internals/validator")**/
 	/**#bean*/
@@ -55,17 +52,16 @@ func init() {
 func start(cmd *cobra.Command, args []string) {
 	// Create a bean object
 	b := bean.New()
-	global.EchoInstance = b.Echo
-	global.DBConn = (*global.DBDeps)(b.DBConn)
-
-	b.InitDB()
 
 	b.BeforeServe = func() {
-		// init global middleware if you need
+		// Init global middleware if you need
 		// middlerwares.Init()
 
-		// init router
-		routers.Init()
+		// Init DB dependency.
+		b.InitDB()
+
+		// Init different routes.
+		routers.Init(b)
 	}
 
 	// Below is an example of how you can initialize your own validator. Just create a new directory

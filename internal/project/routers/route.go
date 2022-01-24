@@ -2,9 +2,11 @@
 package routers
 
 import (
+	"net/http"
+
 	/**#bean*/
-	"demo/framework/internals/global"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
+	"demo/framework/bean"
+	/*#bean.replace("{{ .PkgPath }}/framework/bean")**/
 	/**#bean*/
 	"demo/handlers"
 	/*#bean.replace("{{ .PkgPath }}/handlers")**/
@@ -14,6 +16,8 @@ import (
 	/**#bean*/
 	"demo/services"
 	/*#bean.replace("{{ .PkgPath }}/services")**/
+
+	"github.com/labstack/echo/v4"
 )
 
 type Repositories struct {
@@ -24,26 +28,27 @@ type Services struct {
 	MyTestSvc services.MyTestService
 }
 
-type Handlers struct {
-	MyTestHdlr handlers.MyTestHandler
-}
+func Init(b *bean.Bean) {
 
-func Init() {
-
-	e := global.EchoInstance
+	e := b.Echo
 
 	repos := &Repositories{
-		MyTestRepo: repositories.NewMyTestRepository(global.DBConn),
+		MyTestRepo: repositories.NewMyTestRepository(b.DBConn),
 	}
 
 	svcs := &Services{
 		MyTestSvc: services.NewMyTestService(repos.MyTestRepo),
 	}
 
-	hdlrs := &Handlers{
-		MyTestHdlr: handlers.NewMyTestHandler(svcs.MyTestSvc),
-	}
+	myTestHandler := handlers.NewMyTestHandler(svcs.MyTestSvc)
+
+	// TODO: Maybe don't need this neither.
+	e.GET("/ping", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"message": `{{ .PkgName }} 🚀  pong`,
+		})
+	})
 
 	// Just a index page.
-	e.GET("/", hdlrs.MyTestHdlr.MyTestIndex)
+	e.GET("/", myTestHandler.MyTestIndex)
 }

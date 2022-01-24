@@ -5,15 +5,14 @@ import (
 	"net/http"
 
 	/**#bean*/
+	"demo/framework/internals/async"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/async")**/
+	/**#bean*/
 	"demo/services"
 	/*#bean.replace("{{ .PkgPath }}/services")**/
 
 	"github.com/labstack/echo/v4"
 )
-
-type MyTestHandler interface {
-	MyTestIndex(c echo.Context) error
-}
 
 type myTestHandler struct {
 	myTestService services.MyTestService
@@ -25,11 +24,16 @@ func NewMyTestHandler(myTestSvc services.MyTestService) *myTestHandler {
 
 func (handler *myTestHandler) MyTestIndex(c echo.Context) error {
 
-	res, _ := handler.myTestService.GetMasterSQLTableList(c)
+	dbName, err := handler.myTestService.GetMasterSQLTableList(c)
+	if err != nil {
+		return err
+	}
 
-	c.Logger().Info(res["dbName"])
+	async.Execute(func(c echo.Context) {
+		c.Logger().Debug(dbName)
+	}, c.Echo())
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "Howdy! I am {{ .PkgName }} 🚀 ",
+	return c.JSON(http.StatusOK, map[string]string{
+		"dbName": dbName,
 	})
 }

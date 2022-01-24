@@ -12,9 +12,6 @@ import (
 	"demo/framework/internals/binder"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/binder")**/
 	/**#bean*/
-	"demo/framework/internals/helpers"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
-	/**#bean*/
 	imiddleware "demo/framework/internals/middleware"
 	/*#bean.replace(imiddleware "{{ .PkgPath }}/framework/internals/middleware")**/
 	/**#bean*/
@@ -23,8 +20,10 @@ import (
 	/**#bean*/
 	"demo/framework/internals/template"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/template")**/
+
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
+	"github.com/google/uuid"
 	"github.com/labstack/echo-contrib/prometheus"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
@@ -39,65 +38,99 @@ func NewEcho() *echo.Echo {
 	// Hide default `Echo` banner during startup.
 	e.HideBanner = true
 
-	// IMPORTANT: Time out middleware. It has to be the first middleware to initialize.
-	e.Use(imiddleware.RequestTimeout(viper.GetDuration("http.timeout") * time.Second))
+	// Setup basic echo view template.
+	e.Renderer = template.New(e)
+
+	// Set custom request binder
+	e.Binder = &binder.CustomBinder{}
 
 	// Get log type (file or stdout) settings from config.
 	debugLogLocation := viper.GetString("debugLog")
 	requestLogLocation := viper.GetString("requestLog")
-	// bodydumpLogLocation := viper.GetString("bodydumpLog")
+	bodydumpLogLocation := viper.GetString("bodydumpLog")
 
-	// IMPORTANT: Set debug log output location.
+	// IMPORTANT: Different types of Loggers
+	// Set debug log output location.
 	if debugLogLocation != "" {
-		file, err := os.OpenFile(debugLogLocation, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		file, err := openFile(debugLogLocation)
 		if err != nil {
 			e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
 		}
 		e.Logger.SetOutput(file)
 	}
-
-	reqLoggerConfig := echomiddleware.LoggerConfig{
-		Format: helpers.JsonLogFormat(), // we need additional access log parameter
-	}
-
-	// IMPORTANT: Set request log output location.
-	if requestLogLocation != "" {
-		file, err := os.OpenFile(debugLogLocation, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
-		}
-		reqLoggerConfig.Output = file
-	}
-
-	reqLogger := echomiddleware.LoggerWithConfig(reqLoggerConfig)
-
-	e.Use(reqLogger)
-
 	e.Logger.SetLevel(log.DEBUG)
 	e.Logger.Info("ENVIRONMENT: ", viper.GetString("environment"))
 
+	// Set request log output location. (request logger is using the same echo logger but with different config)
+	requestLoggerConfig := echomiddleware.LoggerConfig{}
+	if requestLogLocation != "" {
+		file, err := openFile(requestLogLocation)
+		if err != nil {
+			e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
+		}
+		requestLoggerConfig.Output = file
+	}
+	requestLogger := echomiddleware.LoggerWithConfig(requestLoggerConfig)
+	e.Use(requestLogger)
+
+	// Set bodydump log output location. (bodydumper using a custom logger to aovid overwriting the setting of the default logger)
+	bodydumpLogger := log.New("bodydump")
+	if bodydumpLogLocation != "" {
+		file, err := openFile(bodydumpLogLocation)
+		if err != nil {
+			if err != nil {
+				e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
+			}
+		}
+		bodydumpLogger.SetOutput(file)
+	}
+	bodydumper := echomiddleware.BodyDumpWithConfig(echomiddleware.BodyDumpConfig{
+		Handler: imiddleware.BodyDumpWithCustomLogger(bodydumpLogger),
+	})
+	e.Use(bodydumper)
+
 	// Some pre-build middleware initialization.
 	e.Pre(echomiddleware.RemoveTrailingSlash())
+	if viper.GetBool("http.isHttpsRedirect") {
+		e.Pre(echomiddleware.HTTPSRedirect())
+	}
 	e.Use(echomiddleware.Recover())
 
-	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
-	// This will help us to integrate `bean's` health into `k8s`.
-	isPrometheusMetrics := viper.GetBool("prometheus.isPrometheusMetrics")
-	if isPrometheusMetrics {
-		p := prometheus.NewPrometheus("echo", prometheusUrlSkipper)
-		p.Use(e)
-	}
+	// IMPORTANT: Request related middleware.
+	// Time out middleware.
+	e.Use(imiddleware.RequestTimeout(viper.GetDuration("http.timeout") * time.Second))
 
-	// Setup basic echo view template.
-	e.Renderer = template.New(e)
+	// Attach an random uuid id to every request.
+	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
+		Generator: uuid.NewString,
+	}))
 
-	// CORS initialization and support only HTTP methods which are configured under `http.allowedMethod`
-	// parameters in `env.json`.
+	// Adds a `Server` header to the response.
+	e.Use(imiddleware.ServerHeader(viper.GetString("name"), viper.GetString("version")))
+
+	// Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
+	e.Use(echomiddleware.BodyLimit(viper.GetString("http.bodyLimit")))
+
+	// CORS initialization and support only HTTP methods which are configured under `http.allowedMethod` parameters in `env.json`.
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowMethods: viper.GetStringSlice("http.allowedMethod"),
 	}))
 
+	// Basic HTTP headers security like XSS protection...
+	e.Use(echomiddleware.SecureWithConfig(echomiddleware.SecureConfig{
+		XSSProtection:         viper.GetString("security.http.header.xssProtection"),         // Adds the X-XSS-Protection header with the value `1; mode=block`.
+		ContentTypeNosniff:    viper.GetString("security.http.header.contentTypeNosniff"),    // Adds the X-Content-Type-Options header with the value `nosniff`.
+		XFrameOptions:         viper.GetString("security.http.header.xFrameOptions"),         // The X-Frame-Options header value to be set with a custom value.
+		HSTSMaxAge:            viper.GetInt("security.http.header.hstsMaxAge"),               // HSTS header is only included when the connection is HTTPS.
+		ContentSecurityPolicy: viper.GetString("security.http.header.contentSecurityPolicy"), // Allows the Content-Security-Policy header value to be set with a custom value.
+	}))
+
+	// Return `405 Method Not Allowed` if a wrong HTTP method been called for an API route.
+	// Return `404 Not Found` if a wrong API route been called.
+	e.Use(imiddleware.MethodNotAllowedAndRouteNotFound())
+
+	// IMPORTANT: Capturing error and send to sentry if needed.
 	// Sentry `panic` error handler and APM initialization if activated from `env.json`
 	isSentry := viper.GetBool("sentry.isSentry")
 	if isSentry {
@@ -130,56 +163,13 @@ func NewEcho() *echo.Echo {
 		}))
 	}
 
-	// Dump request body for logging purpose if activated from `env.json`
-	isBodyDump := viper.GetBool("isBodyDump")
-	if isBodyDump {
-		bodyDumper := echomiddleware.BodyDumpWithConfig(echomiddleware.BodyDumpConfig{
-			Handler: helpers.BodyDumpHandler,
-		})
-
-		e.Use(bodyDumper)
+	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
+	// This will help us to integrate `bean's` health into `k8s`.
+	isPrometheusMetrics := viper.GetBool("prometheus.isPrometheusMetrics")
+	if isPrometheusMetrics {
+		p := prometheus.NewPrometheus("echo", prometheusUrlSkipper)
+		p.Use(e)
 	}
-
-	// Body limit middleware sets the maximum allowed size for a request body,
-	// if the size exceeds the configured limit, it sends “413 - Request Entity Too Large” response.
-	e.Use(echomiddleware.BodyLimit(viper.GetString("http.bodyLimit")))
-
-	// ---------- HTTP headers security for XSS protection and alike ----------
-	e.Use(echomiddleware.SecureWithConfig(echomiddleware.SecureConfig{
-		XSSProtection:         viper.GetString("security.http.header.xssProtection"),         // Adds the X-XSS-Protection header with the value `1; mode=block`.
-		ContentTypeNosniff:    viper.GetString("security.http.header.contentTypeNosniff"),    // Adds the X-Content-Type-Options header with the value `nosniff`.
-		XFrameOptions:         viper.GetString("security.http.header.xFrameOptions"),         // The X-Frame-Options header value to be set with a custom value.
-		HSTSMaxAge:            viper.GetInt("security.http.header.hstsMaxAge"),               // HSTS header is only included when the connection is HTTPS.
-		ContentSecurityPolicy: viper.GetString("security.http.header.contentSecurityPolicy"), // Allows the Content-Security-Policy header value to be set with a custom value.
-	}))
-	// ---------- HTTP headers security for XSS protection and alike ----------
-
-	// ------ HTTPS redirect middleware redirects http requests to https ------
-	isHttpsRedirect := viper.GetBool("http.isHttpsRedirect")
-	if isHttpsRedirect {
-		e.Pre(echomiddleware.HTTPSRedirect())
-	}
-	// ------ HTTPS redirect middleware redirects http requests to https ------
-
-	// Return `405 Method Not Allowed` if a wrong HTTP method been called for an API route.
-	// Return `404 Not Found` if a wrong API route been called.
-	e.Use(imiddleware.MethodNotAllowedAndRouteNotFound())
-
-	// -------------- Special Middleware And Controller To Get Server Stats --------------
-	serverStats := imiddleware.NewServerStats()
-	e.GET("/route/stats", serverStats.GetServerStats)
-	// -------------- Special Middleware And Controller To Get Server Stats --------------
-
-	// Adds a `Server` header to the response.
-	name := viper.GetString("name")
-	version := viper.GetString("version")
-	e.Use(imiddleware.ServerHeader(name, version))
-
-	// `/ping` uri to response a `pong`.
-	e.Use(imiddleware.Heartbeat())
-
-	// Set custom request binder
-	e.Binder = &binder.CustomBinder{}
 
 	return e
 }
@@ -195,13 +185,14 @@ func prometheusUrlSkipper(c echo.Context) bool {
 
 // openFile opens and return the file, if doesn't exist, create it, or append to the file with the directory.
 func openFile(path string) (*os.File, error) {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(path), 0754); err != nil {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(filepath.Dir(path), 0764); err != nil {
+				return nil, err
+			}
+		} else {
 			return nil, err
 		}
-	} else {
-		return nil, err
 	}
-
 	return os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0664)
 }
