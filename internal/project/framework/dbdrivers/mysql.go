@@ -116,8 +116,15 @@ func connectMysqlDB(userName, password, host, port, dbName string) (*gorm.DB, st
 		userName, password, host, port, dbName,
 	)
 
-	// TODO: use default log mode for stg & prod env
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Info)})
+	var db *gorm.DB
+	var err error
+
+	debug := viper.GetBool("database.mysql.debug")
+	if debug {
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Info)})
+	} else {
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	}
 	if err != nil {
 		panic(err)
 	}
