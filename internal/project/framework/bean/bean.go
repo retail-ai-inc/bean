@@ -130,7 +130,6 @@ func (b *Bean) InitDB() {
 
 	isTenant := viper.GetBool("database.mysql.isTenant")
 	if isTenant {
-		dbdrivers.InitTenantIdMutexMap()
 		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn()
 		tenantMySQLDBs, tenantMySQLDBNames = dbdrivers.InitMysqlTenantConns(masterMySQLDB)
 		tenantMongoDBs, tenantMongoDBNames = dbdrivers.InitMongoTenantConns(masterMySQLDB)
