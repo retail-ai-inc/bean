@@ -27,7 +27,6 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
-	"github.com/google/uuid"
 	"github.com/labstack/echo-contrib/prometheus"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
@@ -113,7 +112,7 @@ func NewEcho() *echo.Echo {
 	// Time out middleware.
 	e.Use(imiddleware.RequestTimeout(viper.GetDuration("http.timeout") * time.Second))
 
-	// Attach an random uuid id to every request.
+	// Set the `X-Request-ID` header field if it doesn't exist.
 	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
 		Generator: uuid.NewString,
 	}))
