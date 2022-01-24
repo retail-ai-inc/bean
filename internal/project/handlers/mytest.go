@@ -6,6 +6,9 @@ import (
 	"time"
 
 	/**#bean*/
+	"demo/framework/internals/async"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/async")**/
+	/**#bean*/
 	"demo/services"
 	/*#bean.replace("{{ .PkgPath }}/services")**/
 
@@ -27,13 +30,17 @@ func NewMyTestHandler(myTestSvc services.MyTestService) *myTestHandler {
 
 func (handler *myTestHandler) MyTestJSONIndex(c echo.Context) error {
 
-	res, _ := handler.myTestService.GetMasterSQLTableList(c)
+	dbName, err := handler.myTestService.GetMasterSQLTableList(c)
+	if err != nil {
+		return err
+	}
 
-	// IMPORTANT: This is how you can log something.
-	c.Logger().Info(res["dbName"])
+	async.Execute(func(c echo.Context) {
+		c.Logger().Debug(dbName)
+	}, c.Echo())
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "Howdy! I am {{ .PkgName }} 🚀 ",
+	return c.JSON(http.StatusOK, map[string]string{
+		"dbName": dbName,
 	})
 }
 

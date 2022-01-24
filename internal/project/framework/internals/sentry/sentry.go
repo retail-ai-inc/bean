@@ -5,10 +5,6 @@ import (
 	"errors"
 	"reflect"
 
-	/**#bean*/
-	"demo/framework/internals/global"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
-
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	"github.com/labstack/echo/v4"
@@ -27,9 +23,9 @@ func PushData(c echo.Context, data interface{}, event *sentry.Event, isAsync boo
 	if !isSentry || sentryDSN == "" {
 
 		if data, ok := data.(error); ok {
-			global.EchoInstance.Logger.Error(data)
+			c.Echo().Logger.Error(data)
 		} else {
-			global.EchoInstance.Logger.Info(data)
+			c.Echo().Logger.Info(data)
 		}
 
 		return

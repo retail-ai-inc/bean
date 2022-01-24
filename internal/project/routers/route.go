@@ -2,9 +2,11 @@
 package routers
 
 import (
+	"net/http"
+
 	/**#bean*/
-	"demo/framework/internals/global"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
+	"demo/framework/bean"
+	/*#bean.replace("{{ .PkgPath }}/framework/bean")**/
 	/**#bean*/
 	"demo/handlers"
 	/*#bean.replace("{{ .PkgPath }}/handlers")**/
@@ -13,7 +15,10 @@ import (
 	/*#bean.replace("{{ .PkgPath }}/repositories")**/
 	/**#bean*/
 	"demo/services"
-	/*#bean.replace("{{ .PkgPath }}/services")**/)
+	/*#bean.replace("{{ .PkgPath }}/services")**/
+
+	"github.com/labstack/echo/v4"
+)
 
 type Repositories struct {
 	MyTestRepo repositories.MyTestRepository
@@ -27,12 +32,12 @@ type Handlers struct {
 	MyTestHdlr handlers.MyTestHandler
 }
 
-func Init() {
+func Init(b *bean.Bean) {
 
-	e := global.EchoInstance
+	e := b.Echo
 
 	repos := &Repositories{
-		MyTestRepo: repositories.NewMyTestRepository(global.DBConn),
+		MyTestRepo: repositories.NewMyTestRepository(b.DBConn),
 	}
 
 	svcs := &Services{
@@ -43,12 +48,19 @@ func Init() {
 		MyTestHdlr: handlers.NewMyTestHandler(svcs.MyTestSvc),
 	}
 
+	// Default index page goes to above JSON (/json) index page.
+	e.GET("/", hdlrs.MyTestHdlr.MyTestJSONIndex)
+
 	// IMPORTANT: Just a JSON response index page. Please change or update it if you want.
 	e.GET("/json", hdlrs.MyTestHdlr.MyTestJSONIndex)
 
 	// IMPORTANT: Just a HTML response index page. Please change or update it if you want.
 	e.GET("/html", hdlrs.MyTestHdlr.MyTestHTMLIndex)
 
-	// Default index page goes to above JSON (/json) index page.
-	e.GET("/", hdlrs.MyTestHdlr.MyTestJSONIndex)
+	// TODO: Maybe don't need this neither.
+	e.GET("/ping", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"message": `{{ .PkgName }} 🚀  pong`,
+		})
+	})
 }

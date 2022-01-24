@@ -3,25 +3,20 @@ package repositories
 
 import (
 	/**#bean*/
-	"demo/framework/internals/global"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/global")**/
+	"demo/framework/bean"
+	/*#bean.replace("{{ .PkgPath }}/framework/bean")**/
 
 	"github.com/labstack/echo/v4"
 )
 
 type MyTestRepository interface {
-	GetMasterSQLTableList(c echo.Context) (map[string]interface{}, error)
+	GetMasterSQLTableName(c echo.Context) (string, error)
 }
 
-func NewMyTestRepository(dbDeps *global.DBDeps) *DbInfra {
+func NewMyTestRepository(dbDeps *bean.DBDeps) *DbInfra {
 	return &DbInfra{dbDeps}
 }
 
-func (db *DbInfra) GetMasterSQLTableList(c echo.Context) (map[string]interface{}, error) {
-
-	mysqlDbName := db.Conn.MasterMySQLDBName
-
-	return map[string]interface{}{
-		"dbName": mysqlDbName,
-	}, nil
+func (db *DbInfra) GetMasterSQLTableName(c echo.Context) (string, error) {
+	return db.Conn.MasterMySQLDBName, nil
 }
