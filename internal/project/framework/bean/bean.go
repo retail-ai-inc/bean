@@ -90,8 +90,17 @@ func (b *Bean) ServeAt(host, port string) {
 
 	b.Echo.Logger.Info(`Starting ` + projectName + ` server...🚀`)
 
+	s := http.Server{
+		Addr:    host + ":" + port,
+		Handler: b.Echo,
+	}
+
+	// IMPORTANT: Keep-alive is default true but I kept this here to let you guys no that there is a settings
+	// for it :)
+	s.SetKeepAlivesEnabled(viper.GetBool("http.keepAlive"))
+
 	// Start the server
-	if err := b.Echo.Start(host + ":" + port); err != nil && err != http.ErrServerClosed {
+	if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		b.Echo.Logger.Fatal(err)
 	}
 }

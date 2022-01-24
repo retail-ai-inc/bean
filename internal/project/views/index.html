@@ -1,0 +1,21 @@
+{{define "head"}}
+    <style>
+        .hello{ color: red;}
+        hr{ border: 1px #ccc dashed;}
+    </style>
+{{end}}
+
+
+{{define "content"}}
+    <h1 class="hello">This is your content</h1>
+    <p>This is your first function call: 123 + 456 = {{call $.add 123 456}}</p>
+    <hr>
+    <p>
+        Here are some data by looping through an interface: <br/>
+        {{ range $key, $value := $.test }}
+        <li><strong>{{ $key }}</strong>: {{ $value }}</li>
+        {{ end }}
+    </p>
+
+    <p><a href="https://github.com/retail-ai-inc/bean" _target="blank">Bean</a></p>
+{{end}}

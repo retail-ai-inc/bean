@@ -4,6 +4,7 @@
 package kernel
 
 import (
+	"html/template"
 	"os"
 	"path/filepath"
 	"time"
@@ -18,8 +19,11 @@ import (
 	str "demo/framework/internals/string"
 	/*#bean.replace(str "{{ .PkgPath }}/framework/internals/string")**/
 	/**#bean*/
-	"demo/framework/internals/template"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/template")**/
+	"demo/framework/internals/echoview"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/echoview")**/
+	/**#bean*/
+	"demo/framework/internals/goview"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/goview")**/
 
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
@@ -38,11 +42,20 @@ func NewEcho() *echo.Echo {
 	// Hide default `Echo` banner during startup.
 	e.HideBanner = true
 
-	// Setup basic echo view template.
-	e.Renderer = template.New(e)
-
 	// Set custom request binder
 	e.Binder = &binder.CustomBinder{}
+
+	// Setup HTML view templating engine.
+	viewsTemplateCache := viper.GetBool("html.viewsTemplateCache")
+	e.Renderer = echoview.New(goview.Config{
+		Root:         "views",
+		Extension:    ".html",
+		Master:       "templates/master",
+		Partials:     []string{},
+		Funcs:        make(template.FuncMap),
+		DisableCache: !viewsTemplateCache,
+		Delims:       goview.Delims{Left: "{{`{{`}}", Right: "{{`}}`}}"},
+	})
 
 	// Get log type (file or stdout) settings from config.
 	debugLogLocation := viper.GetString("debugLog")

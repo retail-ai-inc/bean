@@ -180,6 +180,25 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 			if err != nil {
 				return err
 			}
+		} else if strings.HasSuffix(path, ".html") {
+			// Preprocess bean directive for .html files.
+			file, err := p.RootFS.Open(path)
+			if err != nil {
+				return err
+			}
+
+			content, err := ioutil.ReadAll(file)
+			if err != nil {
+				return err
+			}
+
+			err = ioutil.WriteFile(p.RootDir+"/"+path, content, 0664)
+			if err != nil {
+				return err
+			}
+
+			return nil
+
 		} else {
 			// No preprocess for other files.
 			temp, err = template.ParseFS(p.RootFS, path)

@@ -4,6 +4,7 @@ package dbdrivers
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	/**#bean*/
 	"demo/framework/internals/aes"
@@ -115,15 +116,31 @@ func connectMysqlDB(userName, password, host, port, dbName string) (*gorm.DB, st
 		userName, password, host, port, dbName,
 	)
 
-	// TODO: use default log mode for stg & prod env
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Info)})
+	var db *gorm.DB
+	var err error
+
+	debug := viper.GetBool("database.mysql.debug")
+	if debug {
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Info)})
+	} else {
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	}
 	if err != nil {
 		panic(err)
 	}
 
 	sqlDB, err := db.DB()
+	if err != nil {
+		panic(err)
+	}
+
 	sqlDB.SetMaxIdleConns(viper.GetInt("database.mysql.maxIdleConnections"))
 	sqlDB.SetMaxOpenConns(viper.GetInt("database.mysql.maxOpenConnections"))
+
+	maxConnectionLifeTime := viper.GetDuration("database.mysql.maxConnectionLifeTime")
+	if maxConnectionLifeTime > 0 {
+		sqlDB.SetConnMaxLifetime(maxConnectionLifeTime * time.Second)
+	}
 
 	return db, dbName
 }

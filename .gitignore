@@ -17,5 +17,6 @@
 golangci-lint
 bean
 main
-
+internal/project/go.mod
+internal/project/go.sum
 /vendor
