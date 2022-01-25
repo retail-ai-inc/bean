@@ -35,6 +35,7 @@ func (handler *myTestHandler) MyTestJSONIndex(c echo.Context) error {
 		return err
 	}
 
+	// IMPORTANT: This is how you can execute some asynchronous code instead `go routine`.
 	async.Execute(func(c echo.Context) {
 		c.Logger().Debug(dbName)
 	}, c.Echo())
