@@ -68,7 +68,7 @@ var (
 		`"host":"${host}","method":"${method}","uri":"${uri}","user_agent":"${user_agent}",` +
 		`"X-Forwarded-For":"${header:X-Forwarded-For}","bytes_in":${bytes_in}}` + "\n"
 
-	bodyDumpFormat = `{"time":"${time_rfc3339_nano}","level":"ACCESS","id":"${id}","status":${status},` +
+	bodyDumpFormat = `{"time":"${time_rfc3339_nano}","level":"DUMP","id":"${id}","status":${status},` +
 		`"error":"${error}","latency":${latency},"latency_human":"${latency_human}",` +
 		`"bytes_in":${bytes_in},"request_body":${request_body},` +
 		`"bytes_out":${bytes_out},"response_body":${response_body}}` + "\n"
