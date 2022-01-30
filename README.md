@@ -6,7 +6,8 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [How to use](#how-to-use)
     - [Initialize a project](#initialize-a-project)
     - [Upgrade the framework code inside a project](#upgrade-the-framework-code-inside-a-project)
-  - [Styling](#styling)
+  - [Service-Repository Pattern](#service-repository-pattern)
+  - [Code Styling](#code-styling)
     - [Comment](#comment)
   - [Do’s and Don’ts](#dos-and-donts)
     - [Context](#context)
@@ -47,21 +48,24 @@ cd my_project
 bean upgrade
 ```
 
-## Styling
+## Service-Repository Pattern
+Bean is using service repository pattern for any database, file or external transaction. The `repository` provides a collection of interfaces to access data stored in a database, file system or external services. Data is returned in the form of `structs` or `interface`. The main idea to use `Repository Pattern` is to create a bridge between models and handlers. Here is a simple pictorial map to understand the service-repository pattern in a simple manner:
+
+![Service_Repository_Pattern](docs/static/service_repository_pattern.png)
+
+## Code Styling
 ### Comment
-Please add the following header in every files.
-```
-// Copyright The RAI Inc.
-// The RAI Authors
-```
-Please use `//` for any comment.
+Please use `//` for any comment:
+
 ```
 // This is a single line comment.
 
 // This is a
 // multiline comment.
 ```
+
 For some special message, please add appropiate TAG at the beginning of the comment.
+
 ```
 // IMPORTANT: This is super important comment.
 // WARN:
