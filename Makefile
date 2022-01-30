@@ -19,9 +19,9 @@ build-slim: ## build without symbol and DWARF table, smaller binary but no debug
 lint: ## run all the lint tools, install golangci-lint if not exist
 ifeq (,$(wildcard $(GOPATH)/bin/golangci-lint))
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) > /dev/null
-	golangci-lint run
+	./golangci-lint run || exit 0
 else
-	golangci-lint run
+	./golangci-lint run || exit 0
 endif
 
 .PHONY: test
