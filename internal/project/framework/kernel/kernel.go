@@ -57,50 +57,32 @@ func NewEcho() *echo.Echo {
 		Delims:       goview.Delims{Left: "{{`{{`}}", Right: "{{`}}`}}"},
 	})
 
-	// Get log type (file or stdout) settings from config.
-	debugLogLocation := viper.GetString("debugLog")
-	requestLogLocation := viper.GetString("requestLog")
-	bodydumpLogLocation := viper.GetString("bodydumpLog")
-
-	// IMPORTANT: Different types of Loggers
-	// Set debug log output location.
-	if debugLogLocation != "" {
-		file, err := openFile(debugLogLocation)
-		if err != nil {
+	// IMPORTANT: Configure debug log.
+	debugLogPath := viper.GetString("debugLog")
+	if debugLogPath != "" {
+		if file, err := openFile(debugLogPath); err != nil {
 			e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
+		} else {
+			e.Logger.SetOutput(file)
 		}
-		e.Logger.SetOutput(file)
 	}
 	e.Logger.SetLevel(log.DEBUG)
 	e.Logger.Info("ENVIRONMENT: ", viper.GetString("environment"))
 
-	// Set request log output location. (request logger is using the same echo logger but with different config)
-	requestLoggerConfig := echomiddleware.LoggerConfig{}
-	if requestLogLocation != "" {
-		file, err := openFile(requestLogLocation)
-		if err != nil {
-			e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
-		}
-		requestLoggerConfig.Output = file
-	}
-	requestLogger := echomiddleware.LoggerWithConfig(requestLoggerConfig)
-	e.Use(requestLogger)
-
-	// Set bodydump log output location. (bodydumper using a custom logger to aovid overwriting the setting of the default logger)
-	bodydumpLogger := log.New("bodydump")
-	if bodydumpLogLocation != "" {
-		file, err := openFile(bodydumpLogLocation)
-		if err != nil {
-			if err != nil {
+	// IMPORTANT: Configure access log and body dumper. (can be turn off)
+	if viper.GetBool("accessLog.on") {
+		accessLogConfig := imiddleware.LoggerConfig{BodyDump: viper.GetBool("accessLog.bodyDump")}
+		accessLogPath := viper.GetString("accessLog.path")
+		if accessLogPath != "" {
+			if file, err := openFile(debugLogPath); err != nil {
 				e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
+			} else {
+				accessLogConfig.Output = file
 			}
 		}
-		bodydumpLogger.SetOutput(file)
+		accessLogger := imiddleware.AccessLoggerWithConfig(accessLogConfig)
+		e.Use(accessLogger)
 	}
-	bodydumper := echomiddleware.BodyDumpWithConfig(echomiddleware.BodyDumpConfig{
-		Handler: imiddleware.BodyDumpWithCustomLogger(bodydumpLogger),
-	})
-	e.Use(bodydumper)
 
 	// Some pre-build middleware initialization.
 	e.Pre(echomiddleware.RemoveTrailingSlash())
