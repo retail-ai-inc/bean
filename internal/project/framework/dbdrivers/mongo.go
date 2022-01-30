@@ -87,7 +87,15 @@ func connectMongoDB(userName, password, host, port, dbName string) (*mongo.Clien
 		AuthSource: dbName,
 	}
 
-	opts := options.Client().ApplyURI(connStr).SetAuth(credential).SetConnectTimeout(timeout)
+	maxConnectionPoolSize := viper.GetUint64("database.mongo.maxConnectionPoolSize")
+	maxConnectionLifeTime := viper.GetDuration("database.mongo.maxConnectionLifeTime") * time.Second
+
+	opts := options.Client().
+		ApplyURI(connStr).
+		SetAuth(credential).
+		SetConnectTimeout(timeout).
+		SetMaxPoolSize(maxConnectionPoolSize).
+		SetMaxConnIdleTime(maxConnectionLifeTime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
