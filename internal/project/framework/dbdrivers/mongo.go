@@ -27,13 +27,13 @@ func InitMongoTenantConns(master *gorm.DB) (map[uint64]*mongo.Client, map[uint64
 func InitMongoMasterConn() (*mongo.Client, string) {
 
 	masterCfg := viper.GetStringMap("database.mongo.master")
-
-	if len(masterCfg) > 0 {
+	database := masterCfg["database"].(string)
+	if len(masterCfg) > 0 && database != "" {
 		userName := masterCfg["username"].(string)
 		password := masterCfg["password"].(string)
 		host := masterCfg["host"].(string)
 		port := masterCfg["port"].(string)
-		dbName := masterCfg["database"].(string)
+		dbName := database
 
 		return connectMongoDB(userName, password, host, port, dbName)
 	}
@@ -81,24 +81,22 @@ func connectMongoDB(userName, password, host, port, dbName string) (*mongo.Clien
 
 	connStr := "mongodb://" + host + ":" + port
 	timeout := viper.GetDuration("database.mongo.connectTimeout") * time.Second
-	credential := options.Credential{
-		Username:   userName,
-		Password:   password,
-		AuthSource: dbName,
-	}
-
 	maxConnectionPoolSize := viper.GetUint64("database.mongo.maxConnectionPoolSize")
 	maxConnectionLifeTime := viper.GetDuration("database.mongo.maxConnectionLifeTime") * time.Second
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	opts := options.Client().
 		ApplyURI(connStr).
-		SetAuth(credential).
 		SetConnectTimeout(timeout).
 		SetMaxPoolSize(maxConnectionPoolSize).
 		SetMaxConnIdleTime(maxConnectionLifeTime)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	if userName != "" && password != "" {
+		credential := options.Credential{Username: userName, Password: password, AuthSource: dbName}
+		opts.SetAuth(credential)
+	}
 
 	mdb, err := mongo.Connect(ctx, opts)
 	if err != nil {
@@ -107,5 +105,3 @@ func connectMongoDB(userName, password, host, port, dbName string) (*mongo.Clien
 
 	return mdb, dbName
 }
-
-// TODO: call disconnect when the app close.
