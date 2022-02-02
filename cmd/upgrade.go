@@ -142,12 +142,6 @@ func (p *Project) updateFrameworkFiles(path string, d fs.DirEntry, err error) er
 		}
 		defer file.Close()
 
-		if strings.HasSuffix(fileName, ".sh") {
-			if err := file.Chmod(0755); err != nil {
-				return err
-			}
-		}
-
 		// Parse the template and write to the files.
 		fileTemplate := template.Must(temp, err)
 		err = fileTemplate.Execute(file, p)
