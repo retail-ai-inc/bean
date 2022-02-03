@@ -7,11 +7,13 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
-	"time"
 
 	/**#bean*/
 	"demo/framework/internals/binder"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/binder")**/
+	/**#bean*/
+	"demo/framework/internals/helpers"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
 	/**#bean*/
 	imiddleware "demo/framework/internals/middleware"
 	/*#bean.replace(imiddleware "{{ .PkgPath }}/framework/internals/middleware")**/
@@ -85,6 +87,7 @@ func NewEcho() *echo.Echo {
 	}
 
 	// Some pre-build middleware initialization.
+	e.Pre(imiddleware.Tracer())
 	e.Pre(echomiddleware.RemoveTrailingSlash())
 	if viper.GetBool("http.isHttpsRedirect") {
 		e.Pre(echomiddleware.HTTPSRedirect())
@@ -93,7 +96,7 @@ func NewEcho() *echo.Echo {
 
 	// IMPORTANT: Request related middleware.
 	// Time out middleware.
-	e.Use(imiddleware.RequestTimeout(viper.GetDuration("http.timeout") * time.Second))
+	e.Use(imiddleware.RequestTimeout(viper.GetDuration("http.timeout")))
 
 	// Set the `X-Request-ID` header field if it doesn't exist.
 	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
@@ -121,40 +124,22 @@ func NewEcho() *echo.Echo {
 		ContentSecurityPolicy: viper.GetString("security.http.header.contentSecurityPolicy"), // Allows the Content-Security-Policy header value to be set with a custom value.
 	}))
 
-	// Return `405 Method Not Allowed` if a wrong HTTP method been called for an API route.
-	// Return `404 Not Found` if a wrong API route been called.
-	e.Use(imiddleware.MethodNotAllowedAndRouteNotFound())
-
 	// IMPORTANT: Capturing error and send to sentry if needed.
 	// Sentry `panic` error handler and APM initialization if activated from `env.json`
-	isSentry := viper.GetBool("sentry.isSentry")
-	if isSentry {
-		sentryDsn := viper.GetString("sentry.dsn")
-		if isValidSentryDSN := str.IsValidUrl(sentryDsn); !isValidSentryDSN {
-			e.Logger.Fatal("Sentry invalid DSN: ", sentryDsn, ". Server 🚀  crash landed. Exiting...")
-		}
-
-		sentryAttachStacktrace := viper.GetBool("sentry.attachStacktrace")
-		sentryapmTracesSampleRate := viper.GetFloat64("sentry.apmTracesSampleRate")
-
-		if sentryapmTracesSampleRate > 1.0 {
-			sentryapmTracesSampleRate = 1.0
-		} else if sentryapmTracesSampleRate < 0.0 {
-			sentryapmTracesSampleRate = 0.0
-		}
-
+	if viper.GetBool("sentry.on") {
 		// To initialize Sentry's handler, we need to initialize sentry first.
 		if err := sentry.Init(sentry.ClientOptions{
-			Dsn:              sentryDsn,
-			AttachStacktrace: sentryAttachStacktrace,
-			TracesSampleRate: sentryapmTracesSampleRate,
+			Dsn:              viper.GetString("sentry.dsn"),
+			Debug:            true,
+			AttachStacktrace: viper.GetBool("sentry.attachStacktrace"),
+			TracesSampleRate: helpers.FloatInRange(viper.GetFloat64("sentry.tracesSampleRate"), 0.0, 1.0),
 		}); err != nil {
 			e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
 		}
-
 		// Once it's done, let's attach the handler as one of our middleware.
 		e.Use(sentryecho.New(sentryecho.Options{
 			Repanic: true,
+			Timeout: viper.GetDuration("sentry.timeout"),
 		}))
 	}
 
