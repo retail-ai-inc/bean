@@ -21,15 +21,15 @@ import (
 )
 
 type Repositories struct {
-	MyTestRepo repositories.MyTestRepository
+	exampleRepo repositories.ExampleRepository
 }
 
 type Services struct {
-	MyTestSvc services.MyTestService
+	exampleSvc services.ExampleService
 }
 
 type Handlers struct {
-	MyTestHdlr handlers.MyTestHandler
+	exampleHdlr handlers.ExampleHandler
 }
 
 func Init(b *bean.Bean) {
@@ -37,30 +37,27 @@ func Init(b *bean.Bean) {
 	e := b.Echo
 
 	repos := &Repositories{
-		MyTestRepo: repositories.NewMyTestRepository(b.DBConn),
+		exampleRepo: repositories.NewExampleRepository(b.DBConn),
 	}
 
 	svcs := &Services{
-		MyTestSvc: services.NewMyTestService(repos.MyTestRepo),
+		exampleSvc: services.NewExampleService(repos.exampleRepo),
 	}
 
 	hdlrs := &Handlers{
-		MyTestHdlr: handlers.NewMyTestHandler(svcs.MyTestSvc),
+		exampleHdlr: handlers.NewExampleHandler(svcs.exampleSvc),
 	}
 
 	// Default index page goes to above JSON (/json) index page.
-	e.GET("/", hdlrs.MyTestHdlr.MyTestJSONIndex)
-
-	// IMPORTANT: Just a JSON response index page. Please change or update it if you want.
-	e.GET("/json", hdlrs.MyTestHdlr.MyTestJSONIndex)
-
-	// IMPORTANT: Just a HTML response index page. Please change or update it if you want.
-	e.GET("/html", hdlrs.MyTestHdlr.MyTestHTMLIndex)
-
-	// TODO: Maybe don't need this neither.
-	e.GET("/ping", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"message": `{{ .PkgName }} 🚀  pong`,
+	e.GET("/", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{
+			"message": `{{ .PkgName }} 🚀`,
 		})
 	})
+
+	// IMPORTANT: Just a JSON response index page. Please change or update it if you want.
+	e.GET("/json", hdlrs.exampleHdlr.JSONIndex)
+
+	// IMPORTANT: Just a HTML response index page. Please change or update it if you want.
+	e.GET("/html", hdlrs.exampleHdlr.HTMLIndex)
 }
