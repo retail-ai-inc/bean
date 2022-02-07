@@ -12,9 +12,6 @@ import (
 	"demo/framework/internals/binder"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/binder")**/
 	/**#bean*/
-	"demo/framework/internals/helpers"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
-	/**#bean*/
 	imiddleware "demo/framework/internals/middleware"
 	/*#bean.replace(imiddleware "{{ .PkgPath }}/framework/internals/middleware")**/
 	/**#bean*/
@@ -26,6 +23,9 @@ import (
 	/**#bean*/
 	"demo/framework/internals/goview"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/goview")**/
+	/**#bean*/
+	"demo/packages/options"
+	/*#bean.replace("{{ .PkgPath }}/packages/options")**/
 
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
@@ -86,8 +86,28 @@ func NewEcho() *echo.Echo {
 		e.Use(accessLogger)
 	}
 
+	// IMPORTANT: Capturing error and send to sentry if needed.
+	// Sentry `panic` error handler and APM initialization if activated from `env.json`
+	if viper.GetBool("sentry.on") {
+		// To initialize Sentry's handler, we need to initialize sentry first.
+		if err := sentry.Init(options.DefaultSentryClientOptions); err != nil {
+			e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
+		}
+
+		// Configure custom scope
+		sentry.ConfigureScope(options.ConfigureScope)
+
+		e.Use(sentryecho.New(sentryecho.Options{
+			Repanic: true,
+			Timeout: viper.GetDuration("sentry.timeout"),
+		}))
+
+		if viper.GetFloat64("sentry.tracesSampleRate") > 0.0 {
+			e.Pre(imiddleware.Tracer())
+		}
+	}
+
 	// Some pre-build middleware initialization.
-	e.Pre(imiddleware.Tracer())
 	e.Pre(echomiddleware.RemoveTrailingSlash())
 	if viper.GetBool("http.isHttpsRedirect") {
 		e.Pre(echomiddleware.HTTPSRedirect())
@@ -123,25 +143,6 @@ func NewEcho() *echo.Echo {
 		HSTSMaxAge:            viper.GetInt("security.http.header.hstsMaxAge"),               // HSTS header is only included when the connection is HTTPS.
 		ContentSecurityPolicy: viper.GetString("security.http.header.contentSecurityPolicy"), // Allows the Content-Security-Policy header value to be set with a custom value.
 	}))
-
-	// IMPORTANT: Capturing error and send to sentry if needed.
-	// Sentry `panic` error handler and APM initialization if activated from `env.json`
-	if viper.GetBool("sentry.on") {
-		// To initialize Sentry's handler, we need to initialize sentry first.
-		if err := sentry.Init(sentry.ClientOptions{
-			Dsn:              viper.GetString("sentry.dsn"),
-			Debug:            true,
-			AttachStacktrace: viper.GetBool("sentry.attachStacktrace"),
-			TracesSampleRate: helpers.FloatInRange(viper.GetFloat64("sentry.tracesSampleRate"), 0.0, 1.0),
-		}); err != nil {
-			e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
-		}
-		// Once it's done, let's attach the handler as one of our middleware.
-		e.Use(sentryecho.New(sentryecho.Options{
-			Repanic: true,
-			Timeout: viper.GetDuration("sentry.timeout"),
-		}))
-	}
 
 	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
 	// This will help us to integrate `bean's` health into `k8s`.
