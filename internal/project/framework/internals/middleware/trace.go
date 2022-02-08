@@ -2,8 +2,7 @@
 package middleware
 
 import (
-	"context"
-	"time"
+	"fmt"
 
 	/**#bean*/
 	"demo/framework/internals/helpers"
@@ -13,17 +12,19 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// RequestTimeout attach a timeout context to the request.
-func RequestTimeout(timeout time.Duration) echo.MiddlewareFunc {
+// Tracer attach a root sentry span context to the request.
+func Tracer() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Start a sentry span for tracing.
-			span := sentry.StartSpan(c.Request().Context(), "middleware")
+			span := sentry.StartSpan(c.Request().Context(), "REST API",
+				sentry.TransactionName(fmt.Sprintf(c.Request().RequestURI)),
+				sentry.ContinueFromRequest(c.Request()),
+			)
 			span.Description = helpers.CurrFuncName()
 			defer span.Finish()
-			timeoutCtx, cancel := context.WithTimeout(c.Request().Context(), timeout)
-			c.SetRequest(c.Request().WithContext(timeoutCtx))
-			defer cancel()
+			r := c.Request().Clone(span.Context())
+			c.SetRequest(r)
 			return next(c)
 		}
 	}

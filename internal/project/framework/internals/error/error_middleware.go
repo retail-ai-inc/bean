@@ -9,9 +9,10 @@ import (
 	/**#bean*/
 	"demo/framework/internals/validator"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/validator")**/
-	"github.com/labstack/echo/v4"
 	"net/http"
 	"strings"
+
+	"github.com/labstack/echo/v4"
 )
 
 // return value: bool is true when HandlerMiddleware match the error,otherwise false
@@ -78,11 +79,27 @@ func HTTPErrorHanderMiddleware(e error, c echo.Context) (bool, error) {
 	}
 
 	// Just in case to capture this unused type error.
-	err := c.JSON(he.Code, errorResp{
-		ErrorCode: UNKNOWN_ERROR_CODE,
-		Errors:    nil,
-		ErrorMsg:  he.Message,
-	})
+	var err error
+	switch he.Code {
+	case http.StatusNotFound:
+		err = c.JSON(he.Code, errorResp{
+			ErrorCode: RESOURCE_NOT_FOUND,
+			Errors:    nil,
+			ErrorMsg:  he.Message,
+		})
+	case http.StatusMethodNotAllowed:
+		err = c.JSON(he.Code, errorResp{
+			ErrorCode: METHOD_NOT_ALLOWED,
+			Errors:    nil,
+			ErrorMsg:  he.Message,
+		})
+	default:
+		err = c.JSON(he.Code, errorResp{
+			ErrorCode: UNKNOWN_ERROR_CODE,
+			Errors:    nil,
+			ErrorMsg:  he.Message,
+		})
+	}
 
 	return ok, err
 }

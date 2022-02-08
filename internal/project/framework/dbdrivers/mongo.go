@@ -80,9 +80,9 @@ func getAllMongoTenantDB(tenantCfgs []*TenantCfg) (map[uint64]*mongo.Client, map
 func connectMongoDB(userName, password, host, port, dbName string) (*mongo.Client, string) {
 
 	connStr := "mongodb://" + host + ":" + port
-	timeout := viper.GetDuration("database.mongo.connectTimeout") * time.Second
+	timeout := viper.GetDuration("database.mongo.connectTimeout")
 	maxConnectionPoolSize := viper.GetUint64("database.mongo.maxConnectionPoolSize")
-	maxConnectionLifeTime := viper.GetDuration("database.mongo.maxConnectionLifeTime") * time.Second
+	maxConnectionLifeTime := viper.GetDuration("database.mongo.maxConnectionLifeTime")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

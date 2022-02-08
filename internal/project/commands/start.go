@@ -12,6 +12,7 @@ import (
 	"demo/routers"
 	/*#bean.replace("{{ .PkgPath }}/routers")**/
 
+	"github.com/getsentry/sentry-go"
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/cobra"
@@ -50,6 +51,10 @@ func init() {
 }
 
 func start(cmd *cobra.Command, args []string) {
+	// Flush buffered sentry events before the program terminates.
+	// Set the timeout to the maximum duration the program can afford to wait.
+	defer sentry.Flush(viper.GetDuration("sentry.timeout"))
+
 	// Create a bean object
 	b := bean.New()
 

@@ -9,28 +9,35 @@ import (
 	"demo/framework/internals/async"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/async")**/
 	/**#bean*/
+	"demo/framework/internals/helpers"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
+	/**#bean*/
 	"demo/services"
 	/*#bean.replace("{{ .PkgPath }}/services")**/
 
+	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 )
 
-type MyTestHandler interface {
-	MyTestJSONIndex(c echo.Context) error // Test JSON index page
-	MyTestHTMLIndex(c echo.Context) error // Test HTML index page
+type ExampleHandler interface {
+	JSONIndex(c echo.Context) error // Test JSON index page
+	HTMLIndex(c echo.Context) error // Test HTML index page
 }
 
-type myTestHandler struct {
-	myTestService services.MyTestService
+type exampleHandler struct {
+	exampleService services.ExampleService
 }
 
-func NewMyTestHandler(myTestSvc services.MyTestService) *myTestHandler {
-	return &myTestHandler{myTestSvc}
+func NewExampleHandler(exampleSvc services.ExampleService) *exampleHandler {
+	return &exampleHandler{exampleSvc}
 }
 
-func (handler *myTestHandler) MyTestJSONIndex(c echo.Context) error {
+func (handler *exampleHandler) JSONIndex(c echo.Context) error {
+	span := sentry.StartSpan(c.Request().Context(), "handler")
+	span.Description = helpers.CurrFuncName()
+	defer span.Finish()
 
-	dbName, err := handler.myTestService.GetMasterSQLTableList(c)
+	dbName, err := handler.exampleService.GetMasterSQLTableList(span.Context())
 	if err != nil {
 		return err
 	}
@@ -45,7 +52,7 @@ func (handler *myTestHandler) MyTestJSONIndex(c echo.Context) error {
 	})
 }
 
-func (handler *myTestHandler) MyTestHTMLIndex(c echo.Context) error {
+func (handler *exampleHandler) HTMLIndex(c echo.Context) error {
 
 	return c.Render(http.StatusOK, "index", echo.Map{
 		"title": "Index title!",
