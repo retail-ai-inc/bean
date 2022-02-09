@@ -4,7 +4,10 @@ package commands
 import (
 	"log"
 	"os"
-	"runtime/debug"
+
+	/**#bean*/
+	"demo/framework/internals/helpers"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -34,12 +37,7 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
-
-	if bi, ok := debug.ReadBuildInfo(); ok {
-		rootCmd.Version = bi.Main.Version
-	} else {
-		log.Fatalln("Failed to read build info")
-	}
+	rootCmd.Version = helpers.CurrVersion()
 
 	viper.AddConfigPath(".")
 	viper.SetConfigType("json")
