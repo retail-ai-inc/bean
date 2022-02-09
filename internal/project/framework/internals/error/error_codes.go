@@ -1,14 +1,14 @@
 /**#bean*/ /*#bean.replace({{ .Copyright }})**/
 package error
 
+import "errors"
+
 type ErrorCode string
 
 const (
 	API_SUCCESS ErrorCode = "000000"
-)
 
-// API general error code
-const (
+	// API general error code
 	PROBLEM_PARSING_JSON     ErrorCode = "100001"
 	UNAUTHORIZED_ACCESS      ErrorCode = "100002"
 	RESOURCE_NOT_FOUND       ErrorCode = "100003"
@@ -18,9 +18,16 @@ const (
 	TOO_MANY_REQUESTS        ErrorCode = "100010"
 	UNKNOWN_ERROR_CODE       ErrorCode = "100098"
 	TIMEOUT                  ErrorCode = "100099"
+
+	// API parameter error code
+	API_DATA_VALIDATION_FAILED ErrorCode = "200001"
 )
 
-// API parameter error code
-const (
-	API_DATA_VALIDATION_FAILED ErrorCode = "200001"
+var (
+	ErrInternalServer      = errors.New("internal server error")
+	ErrInvalidJsonResponse = errors.New("invalid JSON response")
+	ErrContextExtraction   = errors.New("some data is missing in the context")
+	ErrParamMissing        = errors.New("parameters are missing")
+	ErrUpstreamTimeout     = errors.New("timeout from upstream server")
+	ErrTimeout             = errors.New("timeout")
 )

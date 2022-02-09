@@ -3,103 +3,103 @@ package error
 
 import (
 	"net/http"
-	"strings"
 
-	/**#bean*/
-	"demo/framework/internals/sentry"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/sentry")**/
 	/**#bean*/
 	"demo/framework/internals/validator"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/validator")**/
 
+	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 )
 
 type errorResp struct {
-	ErrorCode ErrorCode           `json:"errorCode"`
-	Errors    []map[string]string `json:"errors"`
-	ErrorMsg  interface{}         `json:"errorMsg"`
+	ErrorCode ErrorCode   `json:"errorCode"`
+	ErrorMsg  interface{} `json:"errorMsg"`
 }
 
-// HTTPErrorHandler is a middleware which handles all the error.
-func HTTPErrorHandler(err error, c echo.Context) {
+type ErrorHandlerFunc func(err error, c echo.Context) (bool, error)
 
-	if c.Response().Committed {
-		return
+func ValidationErrorHanderFunc(e error, c echo.Context) (bool, error) {
+	he, ok := e.(*validator.ValidationError)
+	if !ok {
+		return false, nil
+	}
+	err := c.JSON(http.StatusUnprocessableEntity, errorResp{
+		ErrorCode: API_DATA_VALIDATION_FAILED,
+		ErrorMsg:  he.ErrCollection(),
+	})
+
+	return ok, err
+}
+
+func APIErrorHanderFunc(e error, c echo.Context) (bool, error) {
+	he, ok := e.(*APIError)
+	if !ok {
+		return false, nil
 	}
 
-	switch he := err.(type) {
+	if he.HTTPStatusCode >= 404 {
+		// Send error event to sentry.
+		sentry.CaptureException(he)
+	}
 
-	case *validator.ValidationError:
+	err := c.JSON(he.HTTPStatusCode, errorResp{
+		ErrorCode: he.GlobalErrCode,
+		ErrorMsg:  he.Error(),
+	})
 
-		err := c.JSON(http.StatusUnprocessableEntity, errorResp{
-			ErrorCode: API_DATA_VALIDATION_FAILED,
-			Errors:    he.ErrCollection(),
-			ErrorMsg:  nil,
-		})
+	return ok, err
+}
 
-		if err != nil {
-			sentry.PushData(c, err, nil, true)
-		}
+func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
+	he, ok := e.(*echo.HTTPError)
+	if !ok {
+		return false, nil
+	}
 
-		return
+	// Send error event to sentry.
+	sentry.CaptureException(he)
 
-	case *APIError:
-
-		if he.HTTPStatusCode >= 404 {
-			sentry.PushData(c, he, nil, true)
-		}
-
-		err := c.JSON(he.HTTPStatusCode, errorResp{
-			ErrorCode: he.GlobalErrCode,
-			Errors:    nil,
-			ErrorMsg:  he.Error(),
-		})
-
-		if err != nil {
-			sentry.PushData(c, err, nil, true)
-		}
-
-		return
-
-	case *echo.HTTPError:
-
-		// Just in case to capture this unused type error.
-		err := c.JSON(he.Code, errorResp{
-			ErrorCode: UNKNOWN_ERROR_CODE,
-			Errors:    nil,
+	// Return different response base on some defined error.
+	var err error
+	switch he.Code {
+	case http.StatusNotFound:
+		err = c.JSON(he.Code, errorResp{
+			ErrorCode: RESOURCE_NOT_FOUND,
 			ErrorMsg:  he.Message,
 		})
-
-		if err != nil {
-			sentry.PushData(c, err, nil, true)
-		}
-
-		return
-
-	default:
-
-		// Get Content-Type parameter from request header to identify the request content type. If the request is for
-		// html then we should display the error in html.
-		contentType := c.Request().Header.Get("Content-Type")
-
-		if strings.ToLower(contentType) == "text/html" {
-			c.HTML(http.StatusInternalServerError, "<strong>Internal server error.</strong>")
-			return
-		}
-
-		// All other panic errors.
-		// Sentry already captured the panic and send notification in sentry-recover middleware.
-		err := c.JSON(http.StatusInternalServerError, errorResp{
-			ErrorCode: INTERNAL_SERVER_ERROR,
-			Errors:    nil,
-			ErrorMsg:  nil, // TODO: Put some generic message.
+	case http.StatusMethodNotAllowed:
+		err = c.JSON(he.Code, errorResp{
+			ErrorCode: METHOD_NOT_ALLOWED,
+			ErrorMsg:  he.Message,
 		})
-
-		if err != nil {
-			sentry.PushData(c, err, nil, true)
-		}
-
-		return
+	default:
+		err = c.JSON(he.Code, errorResp{
+			ErrorCode: UNKNOWN_ERROR_CODE,
+			ErrorMsg:  he.Message,
+		})
 	}
+
+	return ok, err
+}
+
+func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
+	// Send error event to sentry.
+	sentry.CaptureException(err)
+
+	// Get Content-Type parameter from request header to identify the request content type. If the request is for
+	// html then we should display the error in html.
+	if c.Request().Header.Get("Content-Type") == "text/html" {
+		err := c.HTML(http.StatusInternalServerError, "<strong>Internal server error.</strong>")
+		return true, err
+	}
+
+	// All other uncaught errors.
+	// Sentry already captured the panic and send notification in sentry-recover middleware.
+	err = c.JSON(http.StatusInternalServerError, errorResp{
+		ErrorCode: INTERNAL_SERVER_ERROR,
+		ErrorMsg:  err.Error(),
+	})
+
+	return true, err
 }
