@@ -80,7 +80,7 @@ var (
 )
 
 // AccessLoggerWithConfig returns a Logger middleware with config.
-func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
+func AccessLoggerWithConfig(config LoggerConfig, sentryOn bool) echo.MiddlewareFunc {
 	// Defaults
 	if config.Skipper == nil {
 		config.Skipper = DefaultLoggerConfig.Skipper
@@ -108,9 +108,11 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
 			// Start a sentry span for tracing.
-			span := sentry.StartSpan(c.Request().Context(), "middleware")
-			span.Description = helpers.CurrFuncName()
-			defer span.Finish()
+			if sentryOn {
+				span := sentry.StartSpan(c.Request().Context(), "middleware")
+				span.Description = helpers.CurrFuncName()
+				defer span.Finish()
+			}
 
 			// Log the access before processing the request.
 			if err = config.logAccess(c); err != nil {

@@ -14,13 +14,15 @@ import (
 )
 
 // RequestTimeout attach a timeout context to the request.
-func RequestTimeout(timeout time.Duration) echo.MiddlewareFunc {
+func RequestTimeout(timeout time.Duration, sentryOn bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Start a sentry span for tracing.
-			span := sentry.StartSpan(c.Request().Context(), "middleware")
-			span.Description = helpers.CurrFuncName()
-			defer span.Finish()
+			if sentryOn {
+				span := sentry.StartSpan(c.Request().Context(), "middleware")
+				span.Description = helpers.CurrFuncName()
+				defer span.Finish()
+			}
 			timeoutCtx, cancel := context.WithTimeout(c.Request().Context(), timeout)
 			c.SetRequest(c.Request().WithContext(timeoutCtx))
 			defer cancel()

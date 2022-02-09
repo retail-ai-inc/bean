@@ -10,13 +10,15 @@ import (
 )
 
 // ServerHeader middleware adds a `Server` header to the response.
-func ServerHeader(name, version string) echo.MiddlewareFunc {
+func ServerHeader(name, version string, sentryOn bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
 			// Start a sentry span for tracing.
-			span := sentry.StartSpan(c.Request().Context(), "middleware")
-			span.Description = helpers.CurrFuncName()
-			defer span.Finish()
+			if sentryOn {
+				span := sentry.StartSpan(c.Request().Context(), "middleware")
+				span.Description = helpers.CurrFuncName()
+				defer span.Finish()
+			}
 			c.Response().Header().Set(echo.HeaderServer, name+"/"+version)
 			return next(c)
 		}
