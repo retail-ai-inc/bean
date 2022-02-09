@@ -3,10 +3,7 @@
 package async
 
 import (
-	/**#bean*/
-	"demo/framework/internals/sentry"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/sentry")**/
-
+	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 )
 
@@ -15,22 +12,24 @@ type Task func(c echo.Context)
 // `Execute` provides a safe way to execute a function asynchronously, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
 func Execute(fn Task, e *echo.Echo) {
-
 	go func() {
-		// Acquire a context from global echo instance and reset it to avoid race condition.
-		c := e.AcquireContext()
-		c.Reset(nil, nil)
-
+		c := e.AcquireContext() // Acquire a context from echo.
+		c.Reset(nil, nil)       // IMPORTANT: It must be seset before use.
 		defer recoverPanic(c)
 		fn(c)
 	}()
 }
 
-// Write the error to console or sentry when a goroutine of a task panics.
+// Recover the panic and send the exception to sentry.
 func recoverPanic(c echo.Context) {
-
-	if r := recover(); r != nil {
-		sentry.PushData(c, r, nil, false)
+	if err := recover(); err != nil {
+		// Create a new Hub by cloning the existing one.
+		localHub := sentry.CurrentHub().Clone()
+		localHub.ConfigureScope(func(scope *sentry.Scope) {
+			scope.SetTag("goroutine", "true")
+		})
+		localHub.Recover(err)
+		c.Logger().Error(err)
 	}
 
 	// Release the acquired context.

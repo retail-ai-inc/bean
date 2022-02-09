@@ -58,13 +58,15 @@ func beforeSend(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
 	case *validator.ValidationError:
 		return event
 	case *error.APIError:
+		event.Contexts["Error"] = map[string]interface{}{
+			"HTTPStatusCode": err.HTTPStatusCode,
+			"GlobalErrCode":  err.GlobalErrCode,
+			"Message":        err.Error(),
+		}
 		return event
 	case *echo.HTTPError:
 		return event
 	default:
-		event.Contexts["Error"] = map[string]interface{}{
-			"message": err.Error(),
-		}
 		return event
 	}
 }
