@@ -104,6 +104,10 @@ func (b *Bean) ServeAt(host, port string) {
 	}
 }
 
+func (b *Bean) UseMiddlewares(middlewares ...echo.MiddlewareFunc) {
+	b.Echo.Use(middlewares...)
+}
+
 func (b *Bean) UseErrorHandlerFuncs(errHdlrFuncs ...berror.ErrorHandlerFunc) {
 	if b.errorHandlerFuncs == nil {
 		b.errorHandlerFuncs = []berror.ErrorHandlerFunc{}

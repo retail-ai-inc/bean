@@ -60,7 +60,22 @@ func start(cmd *cobra.Command, args []string) {
 		// Add your own validation function here.
 	}
 
-	// bean can call `UseErrorHandlerMiddleware` multiple times
+	// Set custom middleware in here.
+	b.UseMiddlewares(
+	// Example:
+	// func(arg string) echo.MiddlewareFunc {
+	// 	return func(next echo.HandlerFunc) echo.HandlerFunc {
+	// 		return func(c echo.Context) error {
+	// 			c.Logger().Info(arg)
+	// 			return next(c)
+	// 		}
+	// 	}
+	// }("example"),
+	)
+
+	// Set custom error handler function here.
+	// Bean use a error function chain inside the default http error handler,
+	// so that it can easily add or remove the different kind of error handling.
 	b.UseErrorHandlerFuncs(
 		berror.ValidationErrorHanderFunc,
 		berror.APIErrorHanderFunc,
@@ -70,9 +85,6 @@ func start(cmd *cobra.Command, args []string) {
 		// 	return false, nil
 		// },
 	)
-
-	// Set global middleware in here.
-	// b.UseMiddlewares()
 
 	b.BeforeServe = func() {
 		// Init DB dependency.
