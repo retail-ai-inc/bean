@@ -2,8 +2,6 @@
 package routers
 
 import (
-	"net/http"
-
 	/**#bean*/
 	"demo/framework/bean"
 	/*#bean.replace("{{ .PkgPath }}/framework/bean")**/
@@ -16,6 +14,8 @@ import (
 	/**#bean*/
 	"demo/services"
 	/*#bean.replace("{{ .PkgPath }}/services")**/
+
+	"net/http"
 
 	"github.com/labstack/echo/v4"
 )

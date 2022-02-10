@@ -6,6 +6,9 @@ import (
 	"demo/framework/bean"
 	/*#bean.replace("{{ .PkgPath }}/framework/bean")**/
 	/**#bean*/
+	berror "demo/framework/internals/error"
+	/*#bean.replace(berror "{{ .PkgPath }}/framework/internals/error")**/
+	/**#bean*/
 	beanValidator "demo/framework/internals/validator"
 	/*#bean.replace(beanValidator "{{ .PkgPath }}/framework/internals/validator")**/
 	/**#bean*/
@@ -35,15 +38,6 @@ var (
 
 func init() {
 	rootCmd.AddCommand(startCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// startCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
 	defaultHost := viper.GetString("http.host")
 	defaultPort := viper.GetString("http.port")
 	startCmd.Flags().StringVar(&host, "host", defaultHost, "host address")
@@ -58,31 +52,50 @@ func start(cmd *cobra.Command, args []string) {
 	// Create a bean object
 	b := bean.New()
 
-	b.BeforeServe = func() {
-		// Init global middleware if you need
-		// middlerwares.Init()
-
-		// Init DB dependency.
-		b.InitDB()
-
-		// Init different routes.
-		routers.Init(b)
-	}
-
 	// Below is an example of how you can initialize your own validator. Just create a new directory
 	// as `packages/validator` and create a validator package inside the directory. Then initialize your
 	// own validation function here, such as; `validator.MyTestValidationFunction(c, vd)`.
 	b.Validate = func(c echo.Context, vd *validator.Validate) {
 		beanValidator.TestUserIdValidation(c, vd)
-
 		// Add your own validation function here.
 	}
 
-	// Below is an example of how you can set custom error handler middleware
-	// bean can call `UseErrorHandlerMiddleware` multiple times
-	b.UseErrorHandlerMiddleware(func(e error, c echo.Context) (bool, error) {
-		return false, nil
-	})
+	// Set custom middleware in here.
+	b.UseMiddlewares(
+	// Example:
+	// func(arg string) echo.MiddlewareFunc {
+	// 	return func(next echo.HandlerFunc) echo.HandlerFunc {
+	// 		return func(c echo.Context) error {
+	// 			c.Logger().Info(arg)
+	// 			return next(c)
+	// 		}
+	// 	}
+	// }("example"),
+	)
+
+	// Set custom error handler function here.
+	// Bean use a error function chain inside the default http error handler,
+	// so that it can easily add or remove the different kind of error handling.
+	b.UseErrorHandlerFuncs(
+		berror.ValidationErrorHanderFunc,
+		berror.APIErrorHanderFunc,
+		berror.EchoHTTPErrorHanderFunc,
+		// Set your custom error handler func here, for example:
+		// func(e error, c echo.Context) (bool, error) {
+		// 	return false, nil
+		// },
+	)
+
+	b.BeforeServe = func() {
+		// Init DB dependency.
+		b.InitDB()
+
+		// Init different routes.
+		routers.Init(b)
+
+		// You can also replace the default error handler.
+		// b.Echo.HTTPErrorHandler = YourErrorHandler()
+	}
 
 	b.ServeAt(host, port)
 }

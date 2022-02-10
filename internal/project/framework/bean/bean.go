@@ -3,6 +3,7 @@ package bean
 
 import (
 	"net/http"
+
 	/**#bean*/
 	"demo/framework/kernel"
 	/*#bean.replace("{{ .PkgPath }}/framework/kernel")**/
@@ -18,8 +19,12 @@ import (
 	/**#bean*/
 	validate "demo/framework/internals/validator"
 	/*#bean.replace(validate "{{ .PkgPath }}/framework/internals/validator")**/
+	/**#bean*/
+	"demo/packages/options"
+	/*#bean.replace("{{ .PkgPath }}/packages/options")**/
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/getsentry/sentry-go"
 	"github.com/go-playground/validator/v10"
 	"github.com/go-redis/redis/v8"
 	"github.com/labstack/echo/v4"
@@ -46,12 +51,12 @@ type DBDeps struct {
 }
 
 type Bean struct {
-	DBConn                  *DBDeps
-	Echo                    *echo.Echo
-	Environment             string
-	Validate                func(c echo.Context, vd *validator.Validate)
-	BeforeServe             func()
-	errorHandlerMiddlewares []berror.ErrorHandlerMiddleware
+	DBConn            *DBDeps
+	Echo              *echo.Echo
+	Environment       string
+	Validate          func(c echo.Context, vd *validator.Validate)
+	BeforeServe       func()
+	errorHandlerFuncs []berror.ErrorHandlerFunc
 }
 
 func New() (b *Bean) {
@@ -69,26 +74,15 @@ func New() (b *Bean) {
 }
 
 func (b *Bean) ServeAt(host, port string) {
-	// before bean bootstrap
-	if b.BeforeServe != nil {
-		b.BeforeServe()
-	}
+	projectName := viper.GetString("projectName")
+	env := viper.GetString("environment")
+	b.Echo.Logger.Info("Starting " + projectName + " at " + env + "...🚀")
 
-	b.UseErrorHandlerMiddleware(
-		berror.ValidationErrorHanderMiddleware,
-		berror.APIErrorHanderMiddleware,
-		berror.HTTPErrorHanderMiddleware,
-		berror.DefaultErrorHanderMiddleware,
-	)
-
-	b.Echo.HTTPErrorHandler = berror.ErrorHandlerChain(b.errorHandlerMiddlewares...)
+	b.UseErrorHandlerFuncs(berror.DefaultErrorHanderFunc)
+	b.Echo.HTTPErrorHandler = DefaultHTTPErrorHandler(b.errorHandlerFuncs...)
 
 	// Initialize and bind the validator to echo instance
 	validate.BindCustomValidator(b.Echo, b.Validate)
-
-	projectName := viper.GetString("name")
-
-	b.Echo.Logger.Info(`Starting ` + projectName + ` server...🚀`)
 
 	s := http.Server{
 		Addr:    host + ":" + port,
@@ -99,17 +93,49 @@ func (b *Bean) ServeAt(host, port string) {
 	// for it :)
 	s.SetKeepAlivesEnabled(viper.GetBool("http.keepAlive"))
 
+	// before bean bootstrap
+	if b.BeforeServe != nil {
+		b.BeforeServe()
+	}
+
 	// Start the server
 	if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		b.Echo.Logger.Fatal(err)
 	}
 }
 
-func (b *Bean) UseErrorHandlerMiddleware(errorHandlerMiddleware ...berror.ErrorHandlerMiddleware) {
-	if b.errorHandlerMiddlewares == nil {
-		b.errorHandlerMiddlewares = []berror.ErrorHandlerMiddleware{}
+func (b *Bean) UseMiddlewares(middlewares ...echo.MiddlewareFunc) {
+	b.Echo.Use(middlewares...)
+}
+
+func (b *Bean) UseErrorHandlerFuncs(errHdlrFuncs ...berror.ErrorHandlerFunc) {
+	if b.errorHandlerFuncs == nil {
+		b.errorHandlerFuncs = []berror.ErrorHandlerFunc{}
 	}
-	b.errorHandlerMiddlewares = append(b.errorHandlerMiddlewares, errorHandlerMiddleware...)
+	b.errorHandlerFuncs = append(b.errorHandlerFuncs, errHdlrFuncs...)
+}
+
+func DefaultHTTPErrorHandler(errHdlrFuncs ...berror.ErrorHandlerFunc) echo.HTTPErrorHandler {
+	return func(err error, c echo.Context) {
+
+		if c.Response().Committed {
+			return
+		}
+
+		for _, handle := range errHdlrFuncs {
+			handled, err := handle(err, c)
+			if err != nil {
+				if options.SentryOn {
+					sentry.CaptureException(err)
+				} else {
+					c.Logger().Error(err)
+				}
+			}
+			if handled {
+				break
+			}
+		}
+	}
 }
 
 // InitDB initialize all the database dependencies and store it in global variable `global.DBConn`.

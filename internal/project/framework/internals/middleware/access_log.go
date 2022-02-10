@@ -16,6 +16,9 @@ import (
 	/**#bean*/
 	"demo/framework/internals/helpers"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
+	/**#bean*/
+	"demo/packages/options"
+	/*#bean.replace("{{ .PkgPath }}/packages/options")**/
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
@@ -108,9 +111,11 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
 			// Start a sentry span for tracing.
-			span := sentry.StartSpan(c.Request().Context(), "middleware")
-			span.Description = helpers.CurrFuncName()
-			defer span.Finish()
+			if options.SentryOn {
+				span := sentry.StartSpan(c.Request().Context(), "middleware")
+				span.Description = helpers.CurrFuncName()
+				defer span.Finish()
+			}
 
 			// Log the access before processing the request.
 			if err = config.logAccess(c); err != nil {

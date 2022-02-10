@@ -8,6 +8,9 @@ import (
 	/**#bean*/
 	"demo/framework/internals/helpers"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
+	/**#bean*/
+	"demo/packages/options"
+	/*#bean.replace("{{ .PkgPath }}/packages/options")**/
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
@@ -18,9 +21,11 @@ func RequestTimeout(timeout time.Duration) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Start a sentry span for tracing.
-			span := sentry.StartSpan(c.Request().Context(), "middleware")
-			span.Description = helpers.CurrFuncName()
-			defer span.Finish()
+			if options.SentryOn {
+				span := sentry.StartSpan(c.Request().Context(), "middleware")
+				span.Description = helpers.CurrFuncName()
+				defer span.Finish()
+			}
 			timeoutCtx, cancel := context.WithTimeout(c.Request().Context(), timeout)
 			c.SetRequest(c.Request().WithContext(timeoutCtx))
 			defer cancel()

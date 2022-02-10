@@ -69,7 +69,6 @@ func NewEcho() *echo.Echo {
 		}
 	}
 	e.Logger.SetLevel(log.DEBUG)
-	e.Logger.Info("ENVIRONMENT: ", viper.GetString("environment"))
 
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if viper.GetBool("accessLog.on") {
@@ -88,9 +87,10 @@ func NewEcho() *echo.Echo {
 
 	// IMPORTANT: Capturing error and send to sentry if needed.
 	// Sentry `panic` error handler and APM initialization if activated from `env.json`
-	if viper.GetBool("sentry.on") {
+	options.SentryOn = viper.GetBool("sentry.on")
+	if options.SentryOn {
 		// To initialize Sentry's handler, we need to initialize sentry first.
-		if err := sentry.Init(options.DefaultSentryClientOptions); err != nil {
+		if err := sentry.Init(options.DefaultSentryClientOptions()); err != nil {
 			e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
 		}
 

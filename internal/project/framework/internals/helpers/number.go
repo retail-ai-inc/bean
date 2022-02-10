@@ -1,3 +1,4 @@
+/**#bean*/ /*#bean.replace({{ .Copyright }})**/
 package helpers
 
 // TODO: Change to generic after go1.18 release
