@@ -119,7 +119,11 @@ func DefaultHTTPErrorHandler(errHdlrFuncs ...berror.ErrorHandlerFunc) echo.HTTPE
 		for _, handle := range errHdlrFuncs {
 			handled, err := handle(err, c)
 			if err != nil {
-				sentry.CaptureException(err)
+				if viper.GetBool("sentry.on") {
+					sentry.CaptureException(err)
+				} else {
+					c.Logger().Error(err)
+				}
 			}
 			if handled {
 				break
