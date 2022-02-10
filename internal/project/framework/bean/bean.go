@@ -19,6 +19,9 @@ import (
 	/**#bean*/
 	validate "demo/framework/internals/validator"
 	/*#bean.replace(validate "{{ .PkgPath }}/framework/internals/validator")**/
+	/**#bean*/
+	"demo/packages/options"
+	/*#bean.replace("{{ .PkgPath }}/packages/options")**/
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/getsentry/sentry-go"
@@ -71,16 +74,15 @@ func New() (b *Bean) {
 }
 
 func (b *Bean) ServeAt(host, port string) {
+	projectName := viper.GetString("projectName")
+	env := viper.GetString("environment")
+	b.Echo.Logger.Info("Starting " + projectName + " at " + env + "...🚀")
 
 	b.UseErrorHandlerFuncs(berror.DefaultErrorHanderFunc)
 	b.Echo.HTTPErrorHandler = DefaultHTTPErrorHandler(b.errorHandlerFuncs...)
 
 	// Initialize and bind the validator to echo instance
 	validate.BindCustomValidator(b.Echo, b.Validate)
-
-	projectName := viper.GetString("name")
-
-	b.Echo.Logger.Info(`Starting ` + projectName + ` server...🚀`)
 
 	s := http.Server{
 		Addr:    host + ":" + port,
@@ -119,7 +121,7 @@ func DefaultHTTPErrorHandler(errHdlrFuncs ...berror.ErrorHandlerFunc) echo.HTTPE
 		for _, handle := range errHdlrFuncs {
 			handled, err := handle(err, c)
 			if err != nil {
-				if viper.GetBool("sentry.on") {
+				if options.SentryOn {
 					sentry.CaptureException(err)
 				} else {
 					c.Logger().Error(err)

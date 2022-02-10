@@ -8,17 +8,20 @@ import (
 	/**#bean*/
 	"demo/framework/internals/helpers"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
+	/**#bean*/
+	"demo/packages/options"
+	/*#bean.replace("{{ .PkgPath }}/packages/options")**/
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 )
 
 // RequestTimeout attach a timeout context to the request.
-func RequestTimeout(timeout time.Duration, sentryOn bool) echo.MiddlewareFunc {
+func RequestTimeout(timeout time.Duration) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Start a sentry span for tracing.
-			if sentryOn {
+			if options.SentryOn {
 				span := sentry.StartSpan(c.Request().Context(), "middleware")
 				span.Description = helpers.CurrFuncName()
 				defer span.Finish()

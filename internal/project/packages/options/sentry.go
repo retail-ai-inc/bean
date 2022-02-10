@@ -17,6 +17,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+var SentryOn bool // Global variable
+
 func DefaultSentryClientOptions() sentry.ClientOptions {
 	return sentry.ClientOptions{
 		Debug:            viper.GetBool("sentry.debug"),

@@ -39,8 +39,6 @@ import (
 
 func NewEcho() *echo.Echo {
 
-	sentryOn := viper.GetBool("sentry.on")
-
 	e := echo.New()
 
 	// Hide default `Echo` banner during startup.
@@ -71,7 +69,6 @@ func NewEcho() *echo.Echo {
 		}
 	}
 	e.Logger.SetLevel(log.DEBUG)
-	e.Logger.Info("ENVIRONMENT: ", viper.GetString("environment"))
 
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if viper.GetBool("accessLog.on") {
@@ -84,13 +81,14 @@ func NewEcho() *echo.Echo {
 				accessLogConfig.Output = file
 			}
 		}
-		accessLogger := imiddleware.AccessLoggerWithConfig(accessLogConfig, sentryOn)
+		accessLogger := imiddleware.AccessLoggerWithConfig(accessLogConfig)
 		e.Use(accessLogger)
 	}
 
 	// IMPORTANT: Capturing error and send to sentry if needed.
 	// Sentry `panic` error handler and APM initialization if activated from `env.json`
-	if sentryOn {
+	options.SentryOn = viper.GetBool("sentry.on")
+	if options.SentryOn {
 		// To initialize Sentry's handler, we need to initialize sentry first.
 		if err := sentry.Init(options.DefaultSentryClientOptions()); err != nil {
 			e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
@@ -118,7 +116,7 @@ func NewEcho() *echo.Echo {
 
 	// IMPORTANT: Request related middleware.
 	// Time out middleware.
-	e.Use(imiddleware.RequestTimeout(viper.GetDuration("http.timeout"), sentryOn))
+	e.Use(imiddleware.RequestTimeout(viper.GetDuration("http.timeout")))
 
 	// Set the `X-Request-ID` header field if it doesn't exist.
 	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
@@ -126,7 +124,7 @@ func NewEcho() *echo.Echo {
 	}))
 
 	// Adds a `Server` header to the response.
-	e.Use(imiddleware.ServerHeader(viper.GetString("name"), viper.GetString("version"), sentryOn))
+	e.Use(imiddleware.ServerHeader(viper.GetString("name"), viper.GetString("version")))
 
 	// Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
 	e.Use(echomiddleware.BodyLimit(viper.GetString("http.bodyLimit")))

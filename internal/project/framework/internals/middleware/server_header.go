@@ -5,16 +5,19 @@ import (
 	/**#bean*/
 	"demo/framework/internals/helpers"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
+	/**#bean*/
+	"demo/packages/options"
+	/*#bean.replace("{{ .PkgPath }}/packages/options")**/
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 )
 
 // ServerHeader middleware adds a `Server` header to the response.
-func ServerHeader(name, version string, sentryOn bool) echo.MiddlewareFunc {
+func ServerHeader(name, version string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
 			// Start a sentry span for tracing.
-			if sentryOn {
+			if options.SentryOn {
 				span := sentry.StartSpan(c.Request().Context(), "middleware")
 				span.Description = helpers.CurrFuncName()
 				defer span.Finish()

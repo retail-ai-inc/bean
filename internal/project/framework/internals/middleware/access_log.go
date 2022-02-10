@@ -16,6 +16,9 @@ import (
 	/**#bean*/
 	"demo/framework/internals/helpers"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
+	/**#bean*/
+	"demo/packages/options"
+	/*#bean.replace("{{ .PkgPath }}/packages/options")**/
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
@@ -80,7 +83,7 @@ var (
 )
 
 // AccessLoggerWithConfig returns a Logger middleware with config.
-func AccessLoggerWithConfig(config LoggerConfig, sentryOn bool) echo.MiddlewareFunc {
+func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 	// Defaults
 	if config.Skipper == nil {
 		config.Skipper = DefaultLoggerConfig.Skipper
@@ -108,7 +111,7 @@ func AccessLoggerWithConfig(config LoggerConfig, sentryOn bool) echo.MiddlewareF
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
 			// Start a sentry span for tracing.
-			if sentryOn {
+			if options.SentryOn {
 				span := sentry.StartSpan(c.Request().Context(), "middleware")
 				span.Description = helpers.CurrFuncName()
 				defer span.Finish()

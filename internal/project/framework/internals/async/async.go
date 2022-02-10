@@ -3,6 +3,10 @@
 package async
 
 import (
+	/**#bean*/
+	"demo/packages/options"
+	/*#bean.replace("{{ .PkgPath }}/packages/options")**/
+
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 )
@@ -24,11 +28,13 @@ func Execute(fn Task, e *echo.Echo) {
 func recoverPanic(c echo.Context) {
 	if err := recover(); err != nil {
 		// Create a new Hub by cloning the existing one.
-		localHub := sentry.CurrentHub().Clone()
-		localHub.ConfigureScope(func(scope *sentry.Scope) {
-			scope.SetTag("goroutine", "true")
-		})
-		localHub.Recover(err)
+		if options.SentryOn {
+			localHub := sentry.CurrentHub().Clone()
+			localHub.ConfigureScope(func(scope *sentry.Scope) {
+				scope.SetTag("goroutine", "true")
+			})
+			localHub.Recover(err)
+		}
 		c.Logger().Error(err)
 	}
 
