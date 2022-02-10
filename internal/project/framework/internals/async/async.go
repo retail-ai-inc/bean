@@ -18,7 +18,7 @@ type Task func(c echo.Context)
 func Execute(fn Task, e *echo.Echo) {
 	go func() {
 		c := e.AcquireContext() // Acquire a context from echo.
-		c.Reset(nil, nil)       // IMPORTANT: It must be seset before use.
+		c.Reset(nil, nil)       // IMPORTANT: It must be reset before use.
 		defer recoverPanic(c)
 		fn(c)
 	}()
