@@ -17,15 +17,15 @@ import (
 	"demo/framework/internals/helpers"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
 	/**#bean*/
-	validate "demo/framework/internals/validator"
-	/*#bean.replace(validate "{{ .PkgPath }}/framework/internals/validator")**/
+	"demo/framework/internals/validator"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/validator")**/
 	/**#bean*/
 	"demo/packages/options"
 	/*#bean.replace("{{ .PkgPath }}/packages/options")**/
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/getsentry/sentry-go"
-	"github.com/go-playground/validator/v10"
+	validatorV10 "github.com/go-playground/validator/v10"
 	"github.com/go-redis/redis/v8"
 	"github.com/labstack/echo/v4"
 	"github.com/spf13/viper"
@@ -54,9 +54,9 @@ type Bean struct {
 	DBConn            *DBDeps
 	Echo              *echo.Echo
 	Environment       string
-	Validate          func(c echo.Context, vd *validator.Validate)
 	BeforeServe       func()
 	errorHandlerFuncs []berror.ErrorHandlerFunc
+	validate          *validatorV10.Validate
 }
 
 func New() (b *Bean) {
@@ -67,7 +67,8 @@ func New() (b *Bean) {
 	e := kernel.NewEcho()
 
 	b = &Bean{
-		Echo: e,
+		Echo:     e,
+		validate: validatorV10.New(),
 	}
 
 	return b
@@ -81,8 +82,7 @@ func (b *Bean) ServeAt(host, port string) {
 	b.UseErrorHandlerFuncs(berror.DefaultErrorHanderFunc)
 	b.Echo.HTTPErrorHandler = DefaultHTTPErrorHandler(b.errorHandlerFuncs...)
 
-	// Initialize and bind the validator to echo instance
-	validate.BindCustomValidator(b.Echo, b.Validate)
+	b.Echo.Validator = &validator.DefaultValidator{Validator: b.validate}
 
 	s := http.Server{
 		Addr:    host + ":" + port,
@@ -113,6 +113,14 @@ func (b *Bean) UseErrorHandlerFuncs(errHdlrFuncs ...berror.ErrorHandlerFunc) {
 		b.errorHandlerFuncs = []berror.ErrorHandlerFunc{}
 	}
 	b.errorHandlerFuncs = append(b.errorHandlerFuncs, errHdlrFuncs...)
+}
+
+func (b *Bean) UseValidation(validateFuncs ...validator.ValidatorFunc) {
+	for _, validateFunc := range validateFuncs {
+		if err := validateFunc(b.validate); err != nil {
+			b.Echo.Logger.Error(err)
+		}
+	}
 }
 
 func DefaultHTTPErrorHandler(errHdlrFuncs ...berror.ErrorHandlerFunc) echo.HTTPErrorHandler {

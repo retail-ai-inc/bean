@@ -60,4 +60,7 @@ func Init(b *bean.Bean) {
 
 	// IMPORTANT: Just a HTML response index page. Please change or update it if you want.
 	e.GET("/html", hdlrs.exampleHdlr.HTMLIndex)
+
+	// Example of using validator.
+	e.POST("/example", hdlrs.exampleHdlr.Validate)
 }
