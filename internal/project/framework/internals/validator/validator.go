@@ -17,53 +17,29 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/labstack/echo/v4"
 )
 
-var validate *validator.Validate
+type ValidatorFunc func(*validator.Validate) error
 
 // ValidationError implements the builtin `error` interface and extends custom output function.
 type ValidationError struct {
 	Err error
 }
 
-// CustomValidator implements the Echo#Validator interface.
-type CustomValidator struct {
-	validate *validator.Validate
-}
-
-func BindCustomValidator(e *echo.Echo, initializer func(c echo.Context, vd *validator.Validate)) {
-
-	c := e.AcquireContext()
-	c.Reset(nil, nil)
-
-	validate = validator.New()
-
-	// XXX: IMPORTANT - Add your customize validation functions.
-	if initializer != nil {
-		initializer(c, validate)
-	}
-
-	e.Validator = &CustomValidator{validate: validate}
+// DefaultValidator implements the Echo#Validator interface.
+type DefaultValidator struct {
+	Validator *validator.Validate
 }
 
 // Validate implements the `Echo#Validator.Validate` function.
-func (cv *CustomValidator) Validate(data interface{}) error {
-
-	err := cv.validate.Struct(data)
-	if err != nil {
-
-		// This check is only needed when your code could produce an invalid value for
-		// validation such as interface with nil value. Most including myself do not usually
-		// have code like this.
-		if _, ok := err.(*validator.InvalidValidationError); ok {
-
+func (dv *DefaultValidator) Validate(data interface{}) error {
+	if err := dv.Validator.Struct(data); err != nil {
+		// Checking any invalid data passed to the validator.
+		if err, ok := err.(*validator.InvalidValidationError); ok {
 			panic(err)
 		}
-
 		return &ValidationError{err}
 	}
-
 	return nil
 }
 
@@ -148,10 +124,6 @@ func (ve *ValidationError) ErrCollection() []map[string]string {
 
 			errorCollection = append(errorCollection, map[string]string{"field": fieldname, "code": fieldname + "_oneof_" + err.Param()})
 
-		case "testUserIdValidation":
-
-			errorCollection = append(errorCollection, map[string]string{"field": fieldname, "code": fieldname + "_invalid_user_id"})
-
 		default:
 
 			errorCollection = append(errorCollection, map[string]string{"field": fieldname, "code": fieldname + "_invalid"})
@@ -163,6 +135,5 @@ func (ve *ValidationError) ErrCollection() []map[string]string {
 
 // Error implements the builtin `error.Error` function.
 func (ve *ValidationError) Error() string {
-
 	return ve.Err.Error()
 }

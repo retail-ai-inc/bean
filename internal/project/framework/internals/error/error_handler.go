@@ -24,7 +24,7 @@ func ValidationErrorHanderFunc(e error, c echo.Context) (bool, error) {
 	if !ok {
 		return false, nil
 	}
-	err := c.JSON(http.StatusUnprocessableEntity, errorResp{
+	err := c.JSON(http.StatusBadRequest, errorResp{
 		ErrorCode: API_DATA_VALIDATION_FAILED,
 		ErrorMsg:  he.ErrCollection(),
 	})
