@@ -40,7 +40,7 @@ func InitRedisMasterConn() (*redis.Client, int) {
 }
 
 // GetTenantDB returns a singleton tenant db connection.
-func getAllRedisTenantDB(tenantCfgs []*TenantCfg) (map[uint64]*redis.Client, map[uint64]int) {
+func getAllRedisTenantDB(tenantCfgs []*TenantConnections) (map[uint64]*redis.Client, map[uint64]int) {
 
 	redisConns := make(map[uint64]*redis.Client, len(tenantCfgs))
 	redisDBNames := make(map[uint64]int, len(tenantCfgs))
@@ -48,21 +48,23 @@ func getAllRedisTenantDB(tenantCfgs []*TenantCfg) (map[uint64]*redis.Client, map
 	for _, t := range tenantCfgs {
 
 		var cfgsMap map[string]map[string]interface{}
-
+		var err error
 		if t.Connections != nil {
-			if err := json.Unmarshal(t.Connections, &cfgsMap); err != nil {
+			if err = json.Unmarshal(t.Connections, &cfgsMap); err != nil {
 				panic(err)
 			}
 		}
 
 		redisCfg := cfgsMap["redis"]
-		encryptedPassword := redisCfg["password"].(string)
+		password := redisCfg["password"].(string)
 
-		// Tenant database password is encrypted in master db config.
-		tenantDBPassPhraseKey := viper.GetString("melonpanPassPhraseKey")
-		password, err := aes.MelonpanAESDecrypt(tenantDBPassPhraseKey, encryptedPassword)
-		if err != nil {
-			panic(err)
+		// IMPORTANT: If tenant database password is encrypted in master db config.
+		tenantDBPassPhraseKey := viper.GetString("database.tenant.secret")
+		if tenantDBPassPhraseKey != "" {
+			password, err = aes.MelonpanAESDecrypt(tenantDBPassPhraseKey, password)
+			if err != nil {
+				panic(err)
+			}
 		}
 
 		host := redisCfg["host"].(string)

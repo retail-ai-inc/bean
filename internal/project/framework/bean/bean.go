@@ -154,7 +154,7 @@ func (b *Bean) InitDB() {
 	var tenantRedisDBs map[uint64]*redis.Client
 	var tenantRedisDBNames map[uint64]int
 
-	isTenant := viper.GetBool("database.mysql.isTenant")
+	isTenant := viper.GetBool("database.tenant.on")
 	if isTenant {
 		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn()
 		tenantMySQLDBs, tenantMySQLDBNames = dbdrivers.InitMysqlTenantConns(masterMySQLDB)

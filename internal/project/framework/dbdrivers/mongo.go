@@ -41,7 +41,7 @@ func InitMongoMasterConn() (*mongo.Client, string) {
 	return nil, ""
 }
 
-func getAllMongoTenantDB(tenantCfgs []*TenantCfg) (map[uint64]*mongo.Client, map[uint64]string) {
+func getAllMongoTenantDB(tenantCfgs []*TenantConnections) (map[uint64]*mongo.Client, map[uint64]string) {
 
 	mongoConns := make(map[uint64]*mongo.Client, len(tenantCfgs))
 	mongoDBNames := make(map[uint64]string, len(tenantCfgs))
@@ -49,22 +49,24 @@ func getAllMongoTenantDB(tenantCfgs []*TenantCfg) (map[uint64]*mongo.Client, map
 	for _, t := range tenantCfgs {
 
 		var cfgsMap map[string]map[string]interface{}
-
+		var err error
 		if t.Connections != nil {
-			if err := json.Unmarshal(t.Connections, &cfgsMap); err != nil {
+			if err = json.Unmarshal(t.Connections, &cfgsMap); err != nil {
 				panic(err)
 			}
 		}
 
 		mongoCfg := cfgsMap["mongodb"]
 		userName := mongoCfg["username"].(string)
-		encryptedPassword := mongoCfg["password"].(string)
+		password := mongoCfg["password"].(string)
 
-		// Tenant database password is encrypted in master db config.
-		tenantDBPassPhraseKey := viper.GetString("melonpanPassPhraseKey")
-		password, err := aes.MelonpanAESDecrypt(tenantDBPassPhraseKey, encryptedPassword)
-		if err != nil {
-			panic(err)
+		// IMPORTANT: If tenant database password is encrypted in master db config.
+		tenantDBPassPhraseKey := viper.GetString("database.tenant.secret")
+		if tenantDBPassPhraseKey != "" {
+			password, err = aes.MelonpanAESDecrypt(tenantDBPassPhraseKey, password)
+			if err != nil {
+				panic(err)
+			}
 		}
 
 		host := mongoCfg["host"].(string)

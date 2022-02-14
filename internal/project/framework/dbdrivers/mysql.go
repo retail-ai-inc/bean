@@ -17,13 +17,24 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// Tenant represent a tenant database configuration record in masterdatabase
-type TenantCfg struct {
+// TenantConnections represent a tenant database configuration record in master database
+type TenantConnections struct {
 	ID          uint64         `gorm:"primary_key;AUTO_INCREMENT;column:Id"`
-	UUID        string         `gorm:"column:Uuid"`
-	TenantID    uint64         `gorm:"column:RetailerCompanyId"`
-	Code        string         `gorm:"column:Code"`
-	Connections datatypes.JSON `gorm:"column:Connections"`
+	UUID        string         `gorm:"type:CHAR(36);not null;unique;column:Uuid"`
+	TenantID    uint64         `gorm:"not null;column:TenantId"`
+	Code        string         `gorm:"type:VARCHAR(20);not null;unique;column:Code"`
+	Connections datatypes.JSON `gorm:"not null;column:Connections"`
+	CreatedBy   uint64         `gorm:"not null;default:0;column:CreatedBy"`
+	UpdatedBy   uint64         `gorm:"not null;default:0;column:UpdatedBy"`
+	DeletedBy   uint64         `gorm:"default:NULL;column:DeletedBy"`
+	CreatedAt   time.Time      `gorm:"type:timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP;column:CreatedAt"`
+	UpdatedAt   time.Time      `gorm:"type:timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;column:UpdatedAt"`
+	DeletedAt   gorm.DeletedAt `gorm:"type:timestamp NULL DEFAULT NULL;column:DeletedAt"`
+}
+
+func (TenantConnections) TableName() string {
+
+	return "TenantConnections"
 }
 
 // InitMysqlMasterConn returns mysql master db connection.
@@ -46,15 +57,20 @@ func InitMysqlMasterConn() (*gorm.DB, string) {
 
 func InitMysqlTenantConns(master *gorm.DB) (map[uint64]*gorm.DB, map[uint64]string) {
 
+	err := createTenantConnectionsTableIfNotExist(master)
+	if err != nil {
+		panic(err)
+	}
+
 	tenantCfgs := GetAllTenantCfgs(master)
 
 	return getAllMysqlTenantDB(tenantCfgs, false)
 }
 
 // GetAllTenantCfgs return all Tenant data from master db.
-func GetAllTenantCfgs(db *gorm.DB) []*TenantCfg {
+func GetAllTenantCfgs(db *gorm.DB) []*TenantConnections {
 
-	var tt []*TenantCfg
+	var tt []*TenantConnections
 
 	err := db.Table("TenantConnections").Find(&tt).Error
 	if err != nil {
@@ -67,7 +83,7 @@ func GetAllTenantCfgs(db *gorm.DB) []*TenantCfg {
 }
 
 // getAllMysqlTenantDB returns all tenant db connection.
-func getAllMysqlTenantDB(tenantCfgs []*TenantCfg, isCloudFunction bool) (map[uint64]*gorm.DB, map[uint64]string) {
+func getAllMysqlTenantDB(tenantCfgs []*TenantConnections, isCloudFunction bool) (map[uint64]*gorm.DB, map[uint64]string) {
 
 	mysqlConns := make(map[uint64]*gorm.DB, len(tenantCfgs))
 	mysqlDBNames := make(map[uint64]string, len(tenantCfgs))
@@ -75,22 +91,24 @@ func getAllMysqlTenantDB(tenantCfgs []*TenantCfg, isCloudFunction bool) (map[uin
 	for _, t := range tenantCfgs {
 
 		var cfgsMap map[string]map[string]interface{}
-
+		var err error
 		if t.Connections != nil {
-			if err := json.Unmarshal(t.Connections, &cfgsMap); err != nil {
+			if err = json.Unmarshal(t.Connections, &cfgsMap); err != nil {
 				panic(err)
 			}
 		}
 
 		mysqlCfg := cfgsMap["mysql"]
 		userName := mysqlCfg["username"].(string)
-		encryptedPassword := mysqlCfg["password"].(string)
+		password := mysqlCfg["password"].(string)
 
-		// Tenant database password is encrypted in master db config.
-		tenantDBPassPhraseKey := viper.GetString("melonpanPassPhraseKey")
-		password, err := aes.MelonpanAESDecrypt(tenantDBPassPhraseKey, encryptedPassword)
-		if err != nil {
-			panic(err)
+		// IMPORTANT: If tenant database password is encrypted in master db config.
+		tenantDBPassPhraseKey := viper.GetString("database.tenant.secret")
+		if tenantDBPassPhraseKey != "" {
+			password, err = aes.MelonpanAESDecrypt(tenantDBPassPhraseKey, password)
+			if err != nil {
+				panic(err)
+			}
 		}
 
 		host := mysqlCfg["host"].(string)
@@ -143,4 +161,13 @@ func connectMysqlDB(userName, password, host, port, dbName string) (*gorm.DB, st
 	}
 
 	return db, dbName
+}
+func createTenantConnectionsTableIfNotExist(masterDb *gorm.DB) error {
+
+	if !masterDb.Migrator().HasTable("TenantConnections") {
+		err := masterDb.Migrator().CreateTable(&TenantConnections{})
+		return err
+	}
+
+	return nil
 }
