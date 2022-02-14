@@ -56,24 +56,29 @@ func getAllMongoTenantDB(tenantCfgs []*TenantConnections) (map[uint64]*mongo.Cli
 			}
 		}
 
-		mongoCfg := cfgsMap["mongodb"]
-		userName := mongoCfg["username"].(string)
-		password := mongoCfg["password"].(string)
+		// IMPORTANT: Check the `mongodb` object exist in the Connections column or not.
+		if mongoCfg, ok := cfgsMap["mongodb"]; ok {
+			userName := mongoCfg["username"].(string)
+			password := mongoCfg["password"].(string)
 
-		// IMPORTANT: If tenant database password is encrypted in master db config.
-		tenantDBPassPhraseKey := viper.GetString("database.tenant.secret")
-		if tenantDBPassPhraseKey != "" {
-			password, err = aes.MelonpanAESDecrypt(tenantDBPassPhraseKey, password)
-			if err != nil {
-				panic(err)
+			// IMPORTANT: If tenant database password is encrypted in master db config.
+			tenantDBPassPhraseKey := viper.GetString("database.tenant.secret")
+			if tenantDBPassPhraseKey != "" {
+				password, err = aes.MelonpanAESDecrypt(tenantDBPassPhraseKey, password)
+				if err != nil {
+					panic(err)
+				}
 			}
+
+			host := mongoCfg["host"].(string)
+			port := mongoCfg["port"].(string)
+			dbName := mongoCfg["database"].(string)
+
+			mongoConns[t.TenantID], mongoDBNames[t.TenantID] = connectMongoDB(userName, password, host, port, dbName)
+
+		} else {
+			mongoConns[t.TenantID], mongoDBNames[t.TenantID] = nil, ""
 		}
-
-		host := mongoCfg["host"].(string)
-		port := mongoCfg["port"].(string)
-		dbName := mongoCfg["database"].(string)
-
-		mongoConns[t.TenantID], mongoDBNames[t.TenantID] = connectMongoDB(userName, password, host, port, dbName)
 	}
 
 	return mongoConns, mongoDBNames
