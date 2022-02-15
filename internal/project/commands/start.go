@@ -88,7 +88,7 @@ func start(cmd *cobra.Command, args []string) {
 		// b.Echo.HTTPErrorHandler = YourErrorHandler()
 
 		// Or default validator:
-		// b.Echo.Validator = &CustomerValidaer{}
+		// b.Echo.Validator = &CustomValidator{}
 	}
 
 	b.ServeAt(host, port)
