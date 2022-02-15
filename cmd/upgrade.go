@@ -96,7 +96,7 @@ func (p *Project) updateFrameworkFiles(path string, d fs.DirEntry, err error) er
 		}
 	} else {
 		// Create templates from the files.
-		var temp *template.Template = nil
+		var temp *template.Template
 		fmt.Println(p.RootDir + p.SubDir + "/" + path)
 
 		if strings.HasSuffix(path, ".go") {

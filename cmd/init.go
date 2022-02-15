@@ -156,7 +156,7 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 		}
 	} else {
 		// Create templates from the files.
-		var temp *template.Template = nil
+		var temp *template.Template
 		fmt.Println(p.RootDir + "/" + path)
 
 		if strings.HasSuffix(path, ".go") {
