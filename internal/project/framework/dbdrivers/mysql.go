@@ -98,30 +98,35 @@ func getAllMysqlTenantDB(tenantCfgs []*TenantConnections, isCloudFunction bool) 
 			}
 		}
 
-		mysqlCfg := cfgsMap["mysql"]
-		userName := mysqlCfg["username"].(string)
-		password := mysqlCfg["password"].(string)
+		// IMPORTANT: Check the `mysql` object exist in the Connections column or not.
+		if mysqlCfg, ok := cfgsMap["mysql"]; ok {
+			userName := mysqlCfg["username"].(string)
+			password := mysqlCfg["password"].(string)
 
-		// IMPORTANT: If tenant database password is encrypted in master db config.
-		tenantDBPassPhraseKey := viper.GetString("database.tenant.secret")
-		if tenantDBPassPhraseKey != "" {
-			password, err = aes.MelonpanAESDecrypt(tenantDBPassPhraseKey, password)
-			if err != nil {
-				panic(err)
+			// IMPORTANT: If tenant database password is encrypted in master db config.
+			tenantDBPassPhraseKey := viper.GetString("database.tenant.secret")
+			if tenantDBPassPhraseKey != "" {
+				password, err = aes.MelonpanAESDecrypt(tenantDBPassPhraseKey, password)
+				if err != nil {
+					panic(err)
+				}
 			}
+
+			host := mysqlCfg["host"].(string)
+
+			// Cloud function is running from a different default network.
+			if isCloudFunction {
+				host = mysqlCfg["gcpHost"].(string)
+			}
+
+			port := mysqlCfg["port"].(string)
+			dbName := mysqlCfg["database"].(string)
+
+			mysqlConns[t.TenantID], mysqlDBNames[t.TenantID] = connectMysqlDB(userName, password, host, port, dbName)
+
+		} else {
+			mysqlConns[t.TenantID], mysqlDBNames[t.TenantID] = nil, ""
 		}
-
-		host := mysqlCfg["host"].(string)
-
-		// Cloud function is running from a different default network.
-		if isCloudFunction {
-			host = mysqlCfg["gcpHost"].(string)
-		}
-
-		port := mysqlCfg["port"].(string)
-		dbName := mysqlCfg["database"].(string)
-
-		mysqlConns[t.TenantID], mysqlDBNames[t.TenantID] = connectMysqlDB(userName, password, host, port, dbName)
 	}
 
 	return mysqlConns, mysqlDBNames

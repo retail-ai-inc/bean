@@ -55,23 +55,28 @@ func getAllRedisTenantDB(tenantCfgs []*TenantConnections) (map[uint64]*redis.Cli
 			}
 		}
 
-		redisCfg := cfgsMap["redis"]
-		password := redisCfg["password"].(string)
+		// IMPORTANT: Check the `redis` object exist in the Connections column or not.
+		if redisCfg, ok := cfgsMap["redis"]; ok {
+			password := redisCfg["password"].(string)
 
-		// IMPORTANT: If tenant database password is encrypted in master db config.
-		tenantDBPassPhraseKey := viper.GetString("database.tenant.secret")
-		if tenantDBPassPhraseKey != "" {
-			password, err = aes.MelonpanAESDecrypt(tenantDBPassPhraseKey, password)
-			if err != nil {
-				panic(err)
+			// IMPORTANT: If tenant database password is encrypted in master db config.
+			tenantDBPassPhraseKey := viper.GetString("database.tenant.secret")
+			if tenantDBPassPhraseKey != "" {
+				password, err = aes.MelonpanAESDecrypt(tenantDBPassPhraseKey, password)
+				if err != nil {
+					panic(err)
+				}
 			}
+
+			host := redisCfg["host"].(string)
+			port := redisCfg["port"].(string)
+			dbName := viper.GetInt("database.redis.database")
+
+			redisConns[t.TenantID], redisDBNames[t.TenantID] = connectRedisDB(password, host, port, dbName)
+
+		} else {
+			redisConns[t.TenantID], redisDBNames[t.TenantID] = nil, -1
 		}
-
-		host := redisCfg["host"].(string)
-		port := redisCfg["port"].(string)
-		dbName := viper.GetInt("database.redis.database")
-
-		redisConns[t.TenantID], redisDBNames[t.TenantID] = connectRedisDB(password, host, port, dbName)
 	}
 
 	return redisConns, redisDBNames
