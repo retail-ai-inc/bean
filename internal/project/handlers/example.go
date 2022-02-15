@@ -6,6 +6,9 @@ import (
 	"demo/framework/internals/async"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/async")**/
 	/**#bean*/
+	berror "demo/framework/internals/error"
+	/*#bean.replace("{{ .PkgPath }}/framework/internals/async")**/
+	/**#bean*/
 	"demo/framework/internals/helpers"
 	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
 	/**#bean*/
@@ -20,8 +23,9 @@ import (
 )
 
 type ExampleHandler interface {
-	JSONIndex(c echo.Context) error // Test JSON index page
-	HTMLIndex(c echo.Context) error // Test HTML index page
+	JSONIndex(c echo.Context) error // JSON example
+	HTMLIndex(c echo.Context) error // HTML example
+	Validate(c echo.Context) error  // Validation example
 }
 
 type exampleHandler struct {
@@ -71,4 +75,21 @@ func (handler *exampleHandler) HTMLIndex(c echo.Context) error {
 		"copyrightYear": time.Now().Year(),
 		"template":      "templates/master",
 	})
+}
+
+func (handler *exampleHandler) Validate(c echo.Context) error {
+	var params struct {
+		Example string `json:"example" validate:"required,example,min=7"`
+		Other   int    `json:"other" validate:"required,gt=0"`
+	}
+
+	if err := c.Bind(&params); err != nil {
+		return berror.NewAPIError(http.StatusBadRequest, berror.PROBLEM_PARSING_JSON, err)
+	}
+
+	if err := c.Validate(params); err != nil {
+		return err
+	}
+
+	return c.String(http.StatusOK, params.Example+" OK\n")
 }
