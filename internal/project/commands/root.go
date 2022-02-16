@@ -5,10 +5,7 @@ import (
 	"log"
 	"os"
 
-	/**#bean*/
-	"demo/framework/internals/helpers"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
-
+	"github.com/retail-ai-inc/bean/framework/internals/helpers"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

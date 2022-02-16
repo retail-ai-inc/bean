@@ -3,9 +3,6 @@ package routers
 
 import (
 	/**#bean*/
-	"demo/framework/bean"
-	/*#bean.replace("{{ .PkgPath }}/framework/bean")**/
-	/**#bean*/
 	"demo/handlers"
 	/*#bean.replace("{{ .PkgPath }}/handlers")**/
 	/**#bean*/
@@ -18,6 +15,7 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"github.com/retail-ai-inc/bean/framework/bean"
 )
 
 type Repositories struct {

@@ -3,15 +3,6 @@ package handlers
 
 import (
 	/**#bean*/
-	"demo/framework/internals/async"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/async")**/
-	/**#bean*/
-	berror "demo/framework/internals/error"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/async")**/
-	/**#bean*/
-	"demo/framework/internals/helpers"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
-	/**#bean*/
 	"demo/services"
 	/*#bean.replace("{{ .PkgPath }}/services")**/
 
@@ -20,6 +11,9 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
+	"github.com/retail-ai-inc/bean/framework/internals/async"
+	berror "github.com/retail-ai-inc/bean/framework/internals/error"
+	"github.com/retail-ai-inc/bean/framework/internals/helpers"
 )
 
 type ExampleHandler interface {

@@ -4,14 +4,9 @@ package repositories
 import (
 	"context"
 
-	/**#bean*/
-	"demo/framework/bean"
-	/*#bean.replace("{{ .PkgPath }}/framework/bean")**/
-	/**#bean*/
-	"demo/framework/internals/helpers"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
-
 	"github.com/getsentry/sentry-go"
+	"github.com/retail-ai-inc/bean/framework/bean"
+	"github.com/retail-ai-inc/bean/framework/internals/helpers"
 )
 
 type ExampleRepository interface {

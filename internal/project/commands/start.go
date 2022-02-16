@@ -2,12 +2,7 @@
 package commands
 
 import (
-	/**#bean*/
-	"demo/framework/bean"
-	/*#bean.replace("{{ .PkgPath }}/framework/bean")**/
-	/**#bean*/
-	berror "demo/framework/internals/error"
-	/*#bean.replace(berror "{{ .PkgPath }}/framework/internals/error")**/
+	"fmt"
 	/**#bean*/
 	"demo/middlewares"
 	/*#bean.replace("{{ .PkgPath }}/middlewares")**/
@@ -19,6 +14,10 @@ import (
 	/*#bean.replace("{{ .PkgPath }}/validations")**/
 
 	"github.com/getsentry/sentry-go"
+	"github.com/retail-ai-inc/bean/framework/bean"
+	berror "github.com/retail-ai-inc/bean/framework/internals/error"
+	"github.com/retail-ai-inc/bean/framework/internals/helpers"
+	"github.com/retail-ai-inc/bean/framework/options"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -46,11 +45,36 @@ func init() {
 }
 
 func start(cmd *cobra.Command, args []string) {
+	// Unmarshal the env.json into config object.
+	var config bean.Config
+	if err := viper.Unmarshal(&config); err != nil {
+		fmt.Println(err)
+	}
+
 	// Flush buffered sentry events before the program terminates.
-	defer sentry.Flush(viper.GetDuration("sentry.timeout"))
+	defer sentry.Flush(config.Sentry.Timeout)
+
+	// Prepare sentry options before initialize bean.
+	if config.Sentry.On {
+		options.SentryOn = true
+		config.Sentry.ClientOptions = &sentry.ClientOptions{
+			Debug:            config.Sentry.Debug,
+			Dsn:              config.Sentry.Dsn,
+			Environment:      config.Environment,
+			BeforeSend:       options.DefaultBeforeSend, // Custom beforeSend function
+			AttachStacktrace: true,
+			TracesSampleRate: helpers.FloatInRange(config.Sentry.TracesSampleRate, 0.0, 1.0),
+		}
+
+		// Example of setting a global scope, if you want to set the scope per event,
+		// please check `sentry.WithScope()`.
+		// config.Sentry.ConfigureScope = func(scope *sentry.Scope) {
+		// scope.SetTag("my-tag", "my value")
+		// }
+	}
 
 	// Create a bean object
-	b := bean.New()
+	b := bean.New(config)
 
 	// Add custom validation to the default validator.
 	b.UseValidation(
