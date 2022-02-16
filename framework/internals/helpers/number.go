@@ -1,4 +1,5 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+// Copyright The RAI Inc.
+// The RAI Authors
 package helpers
 
 // TODO: Change to generic after go1.18 release

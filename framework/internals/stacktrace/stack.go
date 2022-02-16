@@ -1,4 +1,6 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+// Copyright The RAI Inc.
+// The RAI Authors
+
 // Do not change this file.
 // It is copied from github.com/pkg/errors pacakge
 package stacktrace

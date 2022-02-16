@@ -1,4 +1,5 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+// Copyright The RAI Inc.
+// The RAI Authors
 
 // A sample POST data validation error response looks like as follows:
 // 	{

@@ -1,4 +1,6 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+// Copyright The RAI Inc.
+// The RAI Authors
+
 // Safe way to execute `go routine` without crashing the parent process while having a `panic`.
 package async
 

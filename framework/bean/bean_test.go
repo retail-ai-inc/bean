@@ -1,5 +1,5 @@
-/**#bean*/
-/*#bean.replace({{ .Copyright }})**/
+// Copyright The RAI Inc.
+// The RAI Authors
 package bean
 
 import (

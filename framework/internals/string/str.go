@@ -1,12 +1,13 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+// Copyright The RAI Inc.
+// The RAI Authors
 package str
 
 import (
 	"encoding/base64"
 	"math/rand"
+	"net/url"
 	"strings"
 	"unicode"
-	"net/url"
 )
 
 // IsBlank Checks if a string is whitespace, empty ("").
@@ -49,7 +50,7 @@ func IsEqualsAny(val string, vals ...string) bool {
 
 // IsValidUrl tests a string to determine if it is a well-structured url or not.
 func IsValidUrl(urlString string) bool {
-	
+
 	_, err := url.ParseRequestURI(urlString)
 	if err != nil {
 		return false
