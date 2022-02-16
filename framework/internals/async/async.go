@@ -3,13 +3,9 @@
 package async
 
 import (
-	/**#bean*/
-	/*#bean.replace("{{ .PkgPath }}/packages/options")**/
-
-	"demo/framework/options"
-
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
+	"github.com/retail-ai-inc/bean/framework/options"
 )
 
 type Task func(c echo.Context)
