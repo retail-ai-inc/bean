@@ -3,44 +3,16 @@
 package bean
 
 import (
-	"fmt"
-	"log"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path"
-	"runtime"
 	"testing"
 
 	"github.com/labstack/echo/v4"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
 
-func init() {
-	_, filename, _, _ := runtime.Caller(0)
-	// The ".." may change depending on you folder structure
-	dir := path.Join(path.Dir(filename), "../../")
-	err := os.Chdir(dir)
-	if err != nil {
-		panic(err)
-	}
-
-	viper.AddConfigPath(".")
-	viper.SetConfigType("json")
-	viper.SetConfigName("env")
-
-	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalln(err)
-	}
-}
-
 func TestBean_UseErrorHandlerFuncs(t *testing.T) {
-	var config Config
-	if err := viper.Unmarshal(&config); err != nil {
-		fmt.Println(err)
-	}
-	b := New(config)
+	b := &Bean{}
 	assert.Empty(t, b.errorHandlerFuncs)
 
 	b.UseErrorHandlerFuncs(func(err error, c echo.Context) (bool, error) {
@@ -50,11 +22,9 @@ func TestBean_UseErrorHandlerFuncs(t *testing.T) {
 }
 
 func TestDefaultHTTPErrorHandler(t *testing.T) {
-	var config Config
-	if err := viper.Unmarshal(&config); err != nil {
-		fmt.Println(err)
-	}
-	b := New(config)
+	b := &Bean{}
+	b.Echo = echo.New()
+
 	b.UseErrorHandlerFuncs(
 		func(err error, c echo.Context) (bool, error) {
 			he, ok := err.(*fakeError)
@@ -75,7 +45,8 @@ func TestDefaultHTTPErrorHandler(t *testing.T) {
 			return true, err
 		},
 	)
-	b.Echo.HTTPErrorHandler = DefaultHTTPErrorHandler()
+
+	b.Echo.HTTPErrorHandler = b.DefaultHTTPErrorHandler()
 
 	b.Echo.Any("/fake", func(c echo.Context) error {
 		return newFakeError("fake error")

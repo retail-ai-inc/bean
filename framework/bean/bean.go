@@ -249,7 +249,7 @@ func (b *Bean) ServeAt(host, port string) {
 	b.Echo.Logger.Info("Starting " + b.Config.ProjectName + " at " + b.Config.Environment + "...🚀")
 
 	b.UseErrorHandlerFuncs(berror.DefaultErrorHanderFunc)
-	b.Echo.HTTPErrorHandler = DefaultHTTPErrorHandler(b.errorHandlerFuncs...)
+	b.Echo.HTTPErrorHandler = b.DefaultHTTPErrorHandler()
 
 	b.Echo.Validator = &validator.DefaultValidator{Validator: b.validate}
 
@@ -292,14 +292,14 @@ func (b *Bean) UseValidation(validateFuncs ...validator.ValidatorFunc) {
 	}
 }
 
-func DefaultHTTPErrorHandler(errHdlrFuncs ...berror.ErrorHandlerFunc) echo.HTTPErrorHandler {
+func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
 	return func(err error, c echo.Context) {
 
 		if c.Response().Committed {
 			return
 		}
 
-		for _, handle := range errHdlrFuncs {
+		for _, handle := range b.errorHandlerFuncs {
 			handled, err := handle(err, c)
 			if err != nil {
 				if options.SentryOn {
