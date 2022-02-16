@@ -85,13 +85,13 @@ directory. the suffix of the package_name should match the current directory.`,
 				log.Fatalln(err)
 			}
 
-			fmt.Println("\ninitializing go mod...")
-			goModInitCmd := exec.Command("go", "mod", "init", p.PkgPath)
-			goModInitCmd.Stdout = os.Stdout
-			goModInitCmd.Stderr = os.Stderr
-			if err := goModInitCmd.Run(); err != nil {
-				log.Fatalln(err)
-			}
+			// fmt.Println("\ninitializing go mod...")
+			// goModInitCmd := exec.Command("go", "mod", "init", p.PkgPath)
+			// goModInitCmd.Stdout = os.Stdout
+			// goModInitCmd.Stderr = os.Stderr
+			// if err := goModInitCmd.Run(); err != nil {
+			// 	log.Fatalln(err)
+			// }
 
 			fmt.Println("\ntidying go mod...")
 			goModTidyCmd := exec.Command("go", "mod", "tidy")
@@ -214,6 +214,9 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 			parentPath := strings.TrimSuffix(path, fileNameWithoutPath)
 			fileName = parentPath + strings.TrimPrefix(fileNameWithoutPath, "bean-dot")
 		}
+
+		// Strip off the `.tmp` file
+		fileName = strings.TrimSuffix(fileName, ".tmp")
 
 		file, err := os.Create(p.RootDir + "/" + fileName)
 		if err != nil {
