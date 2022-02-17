@@ -5,13 +5,11 @@ import (
 	"context"
 
 	/**#bean*/
-	"demo/framework/internals/helpers"
-	/*#bean.replace("{{ .PkgPath }}/framework/internals/helpers")**/
-	/**#bean*/
 	"demo/repositories"
 	/*#bean.replace("{{ .PkgPath }}/repositories")**/
 
 	"github.com/getsentry/sentry-go"
+	"github.com/retail-ai-inc/bean/framework/internals/helpers"
 )
 
 type ExampleService interface {
