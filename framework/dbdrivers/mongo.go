@@ -38,12 +38,6 @@ func InitMongoMasterConn(config MongoConfig) (*mongo.Client, string) {
 
 	masterCfg := config.Master
 	if masterCfg != nil && masterCfg.Database != "" {
-		// userName := masterCfg["username"].(string)
-		// password := masterCfg["password"].(string)
-		// host := masterCfg["host"].(string)
-		// port := masterCfg["port"].(string)
-		// dbName := database
-
 		return connectMongoDB(masterCfg.Username, masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
 			config.MaxConnectionPoolSize, config.ConnectTimeout, config.MaxConnectionLifeTime)
 	}

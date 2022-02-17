@@ -54,12 +54,6 @@ func InitMysqlMasterConn(config SQLConfig) (*gorm.DB, string) {
 	masterCfg := config.Master
 
 	if masterCfg != nil {
-		// userName := mysqlConfig["username"]
-		// password := mysqlConfig["password"]
-		// host := mysqlConfig["host"]
-		// port := mysqlConfig["port"]
-		// dbName := mysqlConfig["database"]
-
 		return connectMysqlDB(masterCfg.Username, masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
 			config.MaxIdleConnections, config.MaxOpenConnections, config.MaxConnectionLifeTime, config.Debug)
 	}

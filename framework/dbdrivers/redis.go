@@ -35,11 +35,6 @@ func InitRedisMasterConn(config RedisConfig) (*redis.Client, int) {
 	masterCfg := config.Master
 
 	if masterCfg != nil {
-		// password := masterCfg["password"].(string)
-		// host := masterCfg["host"].(string)
-		// port := masterCfg["port"].(string)
-		// dbName := masterCfg["database"].(int)
-
 		return connectRedisDB(masterCfg.Password, masterCfg.Host, masterCfg.port, masterCfg.Database, config.Maxretries)
 	}
 
