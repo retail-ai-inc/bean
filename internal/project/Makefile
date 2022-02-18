@@ -23,7 +23,8 @@ endif
 test: ## run tests with race detactor
 	go test -race ./...
 
-clean: ## remove the output binary from go build, as well as go install
+clean: ## remove the output binary from go build, as well as go install and entire module download cache for safety
+	go clean -modcache
 	go clean -i
 
 .PHONY: build build-race build-slim lint test clean
