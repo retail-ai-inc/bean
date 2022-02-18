@@ -63,7 +63,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 
 			// IMPORTANT: If tenant database password is encrypted in master db config.
 			if tenantDBPassPhraseKey != "" {
-				password, err = aes.MelonpanAESDecrypt(tenantDBPassPhraseKey, password)
+				password, err = aes.BeanAESDecrypt(tenantDBPassPhraseKey, password)
 				if err != nil {
 					panic(err)
 				}
