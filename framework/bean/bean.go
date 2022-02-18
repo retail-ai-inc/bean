@@ -144,7 +144,7 @@ func NewEcho(config Config) *echo.Echo {
 		Partials:     []string{},
 		Funcs:        make(template.FuncMap),
 		DisableCache: !viewsTemplateCache,
-		Delims:       goview.Delims{Left: "{{`{{`}}", Right: "{{`}}`}}"},
+		Delims:       goview.Delims{Left: "{{", Right: "}}"},
 	})
 
 	// IMPORTANT: Configure debug log.
