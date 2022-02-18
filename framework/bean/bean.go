@@ -90,7 +90,7 @@ type Config struct {
 			On     bool
 			Secret string
 		}
-		SQL    dbdrivers.SQLConfig
+		MySQL  dbdrivers.SQLConfig
 		Mongo  dbdrivers.MongoConfig
 		Redis  dbdrivers.RedisConfig
 		Badger dbdrivers.BadgerConfig
@@ -332,12 +332,12 @@ func (b *Bean) InitDB() {
 	var tenantRedisDBNames map[uint64]int
 
 	if b.Config.Database.Tenant.On {
-		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.SQL)
-		tenantMySQLDBs, tenantMySQLDBNames = dbdrivers.InitMysqlTenantConns(b.Config.Database.SQL, masterMySQLDB, b.Config.Database.Tenant.Secret)
+		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
+		tenantMySQLDBs, tenantMySQLDBNames = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, b.Config.Database.Tenant.Secret)
 		tenantMongoDBs, tenantMongoDBNames = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, b.Config.Database.Tenant.Secret)
 		tenantRedisDBs, tenantRedisDBNames = dbdrivers.InitRedisTenantConns(b.Config.Database.Redis, masterMySQLDB, b.Config.Database.Tenant.Secret)
 	} else {
-		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.SQL)
+		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
 		masterMongoDB, masterMongoDBName = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo)
 		masterRedisDB, masterRedisDBName = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
 	}

@@ -53,7 +53,7 @@ func InitMysqlMasterConn(config SQLConfig) (*gorm.DB, string) {
 
 	masterCfg := config.Master
 
-	if masterCfg != nil {
+	if masterCfg != nil && masterCfg.Database != "" {
 		return connectMysqlDB(masterCfg.Username, masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
 			config.MaxIdleConnections, config.MaxOpenConnections, config.MaxConnectionLifeTime, config.Debug)
 	}
