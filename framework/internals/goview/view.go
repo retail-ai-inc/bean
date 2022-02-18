@@ -48,7 +48,7 @@ var DefaultConfig = Config{
 	Partials:     []string{},
 	Funcs:        make(template.FuncMap),
 	DisableCache: false,
-	Delims:       Delims{Left: "{{`{{`}}", Right: "{{`}}`}}"},
+	Delims:       Delims{Left: "{{", Right: "}}"},
 }
 
 // ViewEngine view template engine
