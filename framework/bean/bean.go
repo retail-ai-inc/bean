@@ -64,6 +64,7 @@ type Config struct {
 	ProjectName  string
 	Environment  string
 	DebugLogPath string
+	Secret       string
 	AccessLog    struct {
 		On       bool
 		BodyDump bool
@@ -333,9 +334,9 @@ func (b *Bean) InitDB() {
 
 	if b.Config.Database.Tenant.On {
 		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
-		tenantMySQLDBs, tenantMySQLDBNames = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, b.Config.Database.Tenant.Secret)
-		tenantMongoDBs, tenantMongoDBNames = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, b.Config.Database.Tenant.Secret)
-		tenantRedisDBs, tenantRedisDBNames = dbdrivers.InitRedisTenantConns(b.Config.Database.Redis, masterMySQLDB, b.Config.Database.Tenant.Secret)
+		tenantMySQLDBs, tenantMySQLDBNames = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, b.Config.Secret)
+		tenantMongoDBs, tenantMongoDBNames = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, b.Config.Secret)
+		tenantRedisDBs, tenantRedisDBNames = dbdrivers.InitRedisTenantConns(b.Config.Database.Redis, masterMySQLDB, b.Config.Secret)
 	} else {
 		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
 		masterMongoDB, masterMongoDBName = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo)

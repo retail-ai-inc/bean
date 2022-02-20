@@ -32,6 +32,8 @@ type Project struct {
 	RootFS fs.FS
 	// BeanVersion is the current bean version.
 	BeanVersion string
+	// Secret is similar like a passphrase to hold a key to generate tokens, hash password or similar security credentials.
+	Secret string
 }
 
 // rootCmd represents the base command when called without any subcommands
