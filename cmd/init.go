@@ -15,6 +15,7 @@ import (
 	"text/template"
 
 	"github.com/go-playground/validator/v10"
+	str "github.com/retail-ai-inc/bean/framework/internals/string"
 	"github.com/spf13/cobra"
 )
 
@@ -47,6 +48,12 @@ directory. the suffix of the package_name should match the current directory.`,
 				log.Fatalln(err)
 			}
 
+			// Generate a 32 character long random secret string.
+			secret, err := str.GenerateRandomString(32, false)
+			if err != nil {
+				log.Fatalln(err)
+			}
+
 			p := &Project{
 				Copyright: `// MIT License
 
@@ -73,6 +80,7 @@ directory. the suffix of the package_name should match the current directory.`,
 				PkgName:     pkgName,
 				RootDir:     wd,
 				BeanVersion: rootCmd.Version,
+				Secret:      secret,
 			}
 
 			// Set the relative root path of the internal FS.

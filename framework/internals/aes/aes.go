@@ -15,10 +15,8 @@ import (
 	"fmt"
 )
 
-// This function will encrypt a text using AES in base64. The `key` a.k.a passphrase is also encoded
-// using base64. This is heavily biased by melonpan's `encryptString()` implementation. So, if you need a
-// normal AES encryption function then create another one.
-func MelonpanAESEncrypt(key, plainText string) (string, error) {
+// This function will encrypt a text using AES in base64. The `key` a.k.a passphrase is also encoded using base64.
+func BeanAESEncrypt(key, plainText string) (string, error) {
 
 	keyInByte, err := base64.StdEncoding.DecodeString(key)
 	if err != nil {
@@ -73,10 +71,8 @@ func MelonpanAESEncrypt(key, plainText string) (string, error) {
 	return ticketR, nil
 }
 
-// This function will decrypt an AES encrypted text in base64. The `key` a.k.a passphrase is also encoded
-// using base64. This is heavily biased by melonpan's `decryptString()` implementation. So, if you need a
-// normal AES decryption function then create another one.
-func MelonpanAESDecrypt(key, encryptedText string) (string, error) {
+// This function will decrypt an AES encrypted text in base64. The `key` a.k.a passphrase is also encoded using base64.
+func BeanAESDecrypt(key, encryptedText string) (string, error) {
 
 	base64DecodedByteText, err := base64.StdEncoding.DecodeString(encryptedText)
 	if err != nil {
