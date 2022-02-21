@@ -6,7 +6,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/retail-ai-inc/bean/framework/bean"
-	"github.com/retail-ai-inc/bean/framework/internals/helpers"
+	"github.com/retail-ai-inc/bean/framework/helpers"
 )
 
 type ExampleRepository interface {

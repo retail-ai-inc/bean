@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"time"
 
-	str "github.com/retail-ai-inc/bean/framework/internals/string"
+	str "github.com/retail-ai-inc/bean/framework/string"
 )
 
 type CopyableMap map[string]interface{}

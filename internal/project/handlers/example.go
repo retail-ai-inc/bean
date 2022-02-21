@@ -9,9 +9,9 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/framework/internals/async"
-	berror "github.com/retail-ai-inc/bean/framework/internals/error"
-	"github.com/retail-ai-inc/bean/framework/internals/helpers"
+	"github.com/retail-ai-inc/bean/framework/async"
+	berror "github.com/retail-ai-inc/bean/framework/error"
+	"github.com/retail-ai-inc/bean/framework/helpers"
 )
 
 type ExampleHandler interface {

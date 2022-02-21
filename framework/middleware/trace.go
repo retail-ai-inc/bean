@@ -7,7 +7,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/framework/internals/helpers"
+	"github.com/retail-ai-inc/bean/framework/helpers"
 )
 
 // Tracer attach a root sentry span context to the request.

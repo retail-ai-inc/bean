@@ -7,8 +7,8 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/framework/internals/error"
-	"github.com/retail-ai-inc/bean/framework/internals/validator"
+	"github.com/retail-ai-inc/bean/framework/error"
+	"github.com/retail-ai-inc/bean/framework/validator"
 )
 
 type SentryConfig struct {

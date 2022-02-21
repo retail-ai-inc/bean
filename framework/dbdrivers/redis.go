@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/retail-ai-inc/bean/framework/internals/aes"
+	"github.com/retail-ai-inc/bean/framework/aes"
 	"gorm.io/gorm"
 )
 

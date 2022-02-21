@@ -7,7 +7,7 @@ import (
 	"{{ .PkgPath }}/repositories"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/retail-ai-inc/bean/framework/internals/helpers"
+	"github.com/retail-ai-inc/bean/framework/helpers"
 )
 
 type ExampleService interface {

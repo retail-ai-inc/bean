@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/retail-ai-inc/bean/framework/internals/helpers"
+	"github.com/retail-ai-inc/bean/framework/helpers"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

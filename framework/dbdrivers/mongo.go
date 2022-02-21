@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/retail-ai-inc/bean/framework/internals/aes"
+	"github.com/retail-ai-inc/bean/framework/aes"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/gorm"

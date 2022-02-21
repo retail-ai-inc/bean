@@ -8,7 +8,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/framework/internals/helpers"
+	"github.com/retail-ai-inc/bean/framework/helpers"
 	"github.com/retail-ai-inc/bean/framework/options"
 )
 

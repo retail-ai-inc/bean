@@ -12,8 +12,8 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
-	"github.com/retail-ai-inc/bean/framework/internals/helpers"
-	structure "github.com/retail-ai-inc/bean/framework/internals/struct"
+	"github.com/retail-ai-inc/bean/framework/helpers"
+	structure "github.com/retail-ai-inc/bean/framework/struct"
 )
 
 // CustomBinder is an implementation of the Binder interface

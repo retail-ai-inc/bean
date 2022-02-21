@@ -10,8 +10,8 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/retail-ai-inc/bean/framework/bean"
-	berror "github.com/retail-ai-inc/bean/framework/internals/error"
-	"github.com/retail-ai-inc/bean/framework/internals/helpers"
+	berror "github.com/retail-ai-inc/bean/framework/error"
+	"github.com/retail-ai-inc/bean/framework/helpers"
 	"github.com/retail-ai-inc/bean/framework/options"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
