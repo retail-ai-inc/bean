@@ -21,7 +21,7 @@ else
 endif
 
 test: ## run tests with race detactor
-	go test -race ./...
+	go test -v -race ./cmd/... ./framework/...
 
 clean: ## remove the output binary from go build, as well as go install and build cache
 	go clean -i -r -cache
