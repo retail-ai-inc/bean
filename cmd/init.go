@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	fpath "path"
-	"regexp"
 	"strings"
 	"text/template"
 
@@ -139,29 +138,8 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 		var temp *template.Template
 		fmt.Println(p.RootDir + "/" + path)
 
-		if strings.HasSuffix(path, ".go") {
-			// Preprocess bean directive for .go files.
-			file, err := p.RootFS.Open(path)
-			if err != nil {
-				return err
-			}
-
-			content, err := ioutil.ReadAll(file)
-			if err != nil {
-				return err
-			}
-
-			result, err := PreprocessBeanDirective(string(content))
-			if err != nil {
-				return err
-			}
-
-			temp, err = template.New(path).Parse(result)
-			if err != nil {
-				return err
-			}
-		} else if strings.HasSuffix(path, ".html") {
-			// Preprocess bean directive for .html files.
+		if strings.HasSuffix(path, ".html") {
+			// For .html files, just copy and not need to pass the template.
 			file, err := p.RootFS.Open(path)
 			if err != nil {
 				return err
@@ -195,8 +173,8 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 			fileName = parentPath + strings.TrimPrefix(fileNameWithoutPath, "bean-dot")
 		}
 
-		// Strip off the `.tmp` file
-		fileName = strings.TrimSuffix(fileName, ".tmp")
+		// Strip off the `.tpl` file
+		fileName = strings.TrimSuffix(fileName, ".tpl")
 
 		file, err := os.Create(p.RootDir + "/" + fileName)
 		if err != nil {
@@ -213,11 +191,4 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 	}
 
 	return nil
-}
-
-func PreprocessBeanDirective(content string) (string, error) {
-	re := regexp.MustCompile(`(?sU)/\*\*#bean\*/.*/\*#bean\.replace\((.*)\)\*\*/`)
-	bs := re.ReplaceAll([]byte(content), []byte("${1}"))
-	result := string(bs)
-	return result, nil
 }
