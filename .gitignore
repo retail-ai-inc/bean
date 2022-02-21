@@ -17,8 +17,7 @@
 .vscode
 .idea
 golangci-lint
-/bean
+bean
+!bean/
 main
-internal/project/go.mod
-internal/project/go.sum
 /vendor

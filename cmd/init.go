@@ -14,7 +14,7 @@ import (
 	"text/template"
 
 	"github.com/go-playground/validator/v10"
-	str "github.com/retail-ai-inc/bean/framework/string"
+	str "github.com/retail-ai-inc/bean/string"
 	"github.com/spf13/cobra"
 )
 
