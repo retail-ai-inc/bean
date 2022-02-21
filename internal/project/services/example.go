@@ -1,12 +1,10 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+{{ .Copyright }}
 package services
 
 import (
 	"context"
 
-	/**#bean*/
-	"demo/repositories"
-	/*#bean.replace("{{ .PkgPath }}/repositories")**/
+	"{{ .PkgPath }}/repositories"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/retail-ai-inc/bean/framework/internals/helpers"

@@ -1,4 +1,4 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+{{ .Copyright }}
 package commands
 
 import (

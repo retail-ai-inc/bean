@@ -1,18 +1,12 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+{{ .Copyright }}
 package routers
 
 import (
-	/**#bean*/
-	"demo/handlers"
-	/*#bean.replace("{{ .PkgPath }}/handlers")**/
-	/**#bean*/
-	"demo/repositories"
-	/*#bean.replace("{{ .PkgPath }}/repositories")**/
-	/**#bean*/
-	"demo/services"
-	/*#bean.replace("{{ .PkgPath }}/services")**/
-
 	"net/http"
+
+	"{{ .PkgPath }}/handlers"
+	"{{ .PkgPath }}/repositories"
+	"{{ .PkgPath }}/services"
 
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/framework/bean"

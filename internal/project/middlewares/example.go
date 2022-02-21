@@ -1,4 +1,4 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+{{ .Copyright }}
 package middlewares
 
 import "github.com/labstack/echo/v4"

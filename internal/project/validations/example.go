@@ -1,4 +1,4 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+{{ .Copyright }}
 package validations
 
 import "github.com/go-playground/validator/v10"

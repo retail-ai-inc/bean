@@ -1,4 +1,4 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+{{ .Copyright }}
 package repositories
 
 import "github.com/retail-ai-inc/bean/framework/bean"

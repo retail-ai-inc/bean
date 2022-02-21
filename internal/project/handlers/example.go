@@ -1,13 +1,11 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+{{ .Copyright }}
 package handlers
 
 import (
-	/**#bean*/
-	"demo/services"
-	/*#bean.replace("{{ .PkgPath }}/services")**/
-
 	"net/http"
 	"time"
+
+	"{{ .PkgPath }}/services"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"

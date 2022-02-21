@@ -1,7 +1,7 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+{{ .Copyright }}
 package main
 
-import /**#bean*/ "demo/commands" /*#bean.replace("{{ .PkgName }}/commands")**/
+import "{{ .PkgName }}/commands"
 
 func main() {
 	commands.Execute()

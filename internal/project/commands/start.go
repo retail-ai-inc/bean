@@ -1,17 +1,12 @@
-/**#bean*/ /*#bean.replace({{ .Copyright }})**/
+{{ .Copyright }}
 package commands
 
 import (
 	"fmt"
-	/**#bean*/
-	"demo/middlewares"
-	/*#bean.replace("{{ .PkgPath }}/middlewares")**/
-	/**#bean*/
-	"demo/routers"
-	/*#bean.replace("{{ .PkgPath }}/routers")**/
-	/**#bean*/
-	"demo/validations"
-	/*#bean.replace("{{ .PkgPath }}/validations")**/
+
+	"{{ .PkgPath }}/middlewares"
+	"{{ .PkgPath }}/routers"
+	"{{ .PkgPath }}/validations"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/retail-ai-inc/bean/framework/bean"
