@@ -88,8 +88,7 @@ type Config struct {
 	}
 	Database struct {
 		Tenant struct {
-			On     bool
-			Secret string
+			On bool
 		}
 		MySQL  dbdrivers.SQLConfig
 		Mongo  dbdrivers.MongoConfig
