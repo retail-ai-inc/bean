@@ -4,13 +4,13 @@ GOLANGCI_LINT_VERSION=latest
 all: lint test build
 
 build:
-	go build
+	go build ./cmd/bean
 
 build-race: ## build with race detactor
-	go build -race
+	go build -race ./cmd/bean
 
 build-slim: ## build without symbol and DWARF table, smaller binary but no debugging and profiling ability
-	go build -trimpath -ldflags="-s -w"
+	go build -trimpath -ldflags="-s -w" ./cmd/bean
 
 lint: ## run all the lint tools, install golangci-lint if not exist
 ifeq (,$(wildcard $(GOPATH)/bin/golangci-lint))
@@ -21,7 +21,7 @@ else
 endif
 
 test: ## run tests with race detactor
-	go test -race ./...
+	go test -v -race ./...
 
 clean: ## remove the output binary from go build, as well as go install and build cache
 	go clean -i -r -cache

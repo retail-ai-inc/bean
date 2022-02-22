@@ -15,9 +15,12 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.17
+    
+    - name: Lint
+      run: make lint
 
     - name: Build
-      run: go build -v $(go list ./... | grep -v /internal/) # exclude internal
+      run: go build -v ./...
 
     - name: Test
-      run: go test -v $(go list ./... | grep -v /internal/) # exclude internal
+      run: go test -v ./...

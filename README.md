@@ -5,7 +5,6 @@ A web framework written in GO on-top of `echo` to ease your application developm
 - [BEAN (豆)](#bean-豆)
   - [How to use](#how-to-use)
     - [Initialize a project](#initialize-a-project)
-    - [Upgrade the framework code inside a project](#upgrade-the-framework-code-inside-a-project)
   - [Service-Repository Pattern](#service-repository-pattern)
   - [Code Styling](#code-styling)
     - [Comment](#comment)
@@ -20,7 +19,7 @@ A web framework written in GO on-top of `echo` to ease your application developm
 ### Initialize a project
 1. Install the package by
 ```
-go install github.com/retail-ai-inc/bean@latest
+go install github.com/retail-ai-inc/bean/cmd/bean@latest
 ```
 2. Create a project directory
 ```
@@ -33,19 +32,6 @@ bean init my_project
 or
 ```
 bean init github.com/me/my_project  // if the project will be published.
-```
-### Upgrade the framework code inside a project
-1. Update the bean to latest version
-```
-go install github.com/retail-ai-inc/bean@latest
-```
-2. Navigate to the project directory
-```
-cd my_project
-```
-3. Run the `upgrade` command
-```
-bean upgrade
 ```
 
 ## Service-Repository Pattern
