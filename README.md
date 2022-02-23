@@ -1,7 +1,10 @@
 <div id="top"></div>
 
 # BEAN (豆)
-A web framework written in GO on-top of `echo` to ease your application development.
+A web framework written in GO on-top of `echo` to ease your application development. Our main goal is not to compete with other `Go` framework instead we are mainly focusing on `tooling` and `structuring` a project to make developers life a bit easier and less stressful to maintain their project more in a lean way.
+
+**We are `heavily` working on a separate documentation page. Please stay tune and we will keep update you here.**
+
 - [BEAN (豆)](#bean-豆)
   - [How to use](#how-to-use)
     - [Initialize a project](#initialize-a-project)
@@ -11,9 +14,6 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [Do’s and Don’ts](#dos-and-donts)
     - [Context](#context)
     - [Pointer](#pointer)
-  - [Template Development](#template-development)
-    - [Replacement Directive](#replacement-directive)
-    - [Template File For Hidden File](#template-file-for-hidden-file)
 
 ## How to use
 ### Initialize a project
@@ -31,8 +31,10 @@ bean init my_project
 ```
 or
 ```
-bean init github.com/me/my_project  // if the project will be published.
+bean init github.com/me/my_project
 ```
+
+The above command will produce a nice directory structure with all necessary configuration files and code to start your project quickly.
 
 ## Service-Repository Pattern
 Bean is using service repository pattern for any database, file or external transaction. The `repository` provides a collection of interfaces to access data stored in a database, file system or external service. Data is returned in the form of `structs` or `interface`. The main idea to use `Repository Pattern` is to create a bridge between models and handlers. Here is a simple pictorial map to understand the service-repository pattern in a simple manner:
@@ -72,24 +74,3 @@ the value to the parameter. For instance, passing an int value to a function mak
 int, and passing a pointer value makes a copy of the pointer, but not the data it points to.
 ```
 For complicated object, pointer should be used as parameter instead of values to reduce the usage of copying the whole object. ref: [https://go.dev/doc/faq#pass_by_value](https://go.dev/doc/faq#pass_by_value)
-
-## Template Development
-
-### Replacement Directive
-
-In `.go` file, you can wrap content with `/**#bean*/` and `/*#bean.replace(<Replacement>)**/`. Bean will replace the content with the replacement.
-for example, when content in template file is 
-```text
-/**#bean*/
-"demo/framework/dbdrivers"
-/*#bean.replace("{{ .PkgPath }}/framework/dbdrivers")**/
-```
-Bean will generate:
-```text
-"{{ .PkgPath }}/framework/dbdrivers"
-```
-
-### Template File For Hidden File
-
-goembed don't support the file which start with `.`, so we can name it with prefix `bean-dot`
-for example, we want to make `.gitignore` as template, we can name it as `bean-dot.gitignore`, Bean init command will rename `bean-dot.gitignore` to `.gitignore` 
