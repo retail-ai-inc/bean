@@ -23,18 +23,23 @@ go install github.com/retail-ai-inc/bean/cmd/bean@latest
 ```
 2. Create a project directory
 ```
-mkdir my_project && cd my_project
+mkdir myproject && cd myproject
 ```
 3. Initialize the project using bean by
 ```
-bean init my_project
+bean init myproject
 ```
 or
 ```
-bean init github.com/me/my_project
+bean init github.com/me/myproject
 ```
 
-The above command will produce a nice directory structure with all necessary configuration files and code to start your project quickly.
+The above command will produce a nice directory structure with all necessary configuration files and code to start your project quickly. Now, let's build your project and start:
+
+```
+make build
+./myproject start
+```
 
 ## Service-Repository Pattern
 Bean is using service repository pattern for any database, file or external transaction. The `repository` provides a collection of interfaces to access data stored in a database, file system or external service. Data is returned in the form of `structs` or `interface`. The main idea to use `Repository Pattern` is to create a bridge between models and handlers. Here is a simple pictorial map to understand the service-repository pattern in a simple manner:
