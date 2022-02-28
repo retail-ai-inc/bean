@@ -19,10 +19,6 @@ import (
 )
 
 var (
-	// Used for flags.
-	startWeb   bool
-	startQueue bool
-
 	validationRule = `A module path must satisfy the following requirements:
 
 	1. The path must consist of one or more path elements separated by slashes (/, U+002F). It must not begin or end with a slash.
@@ -90,8 +86,6 @@ directory. the suffix of the package_name should match the current directory.`,
 func init() {
 	initCmd.DisableFlagsInUseLine = true
 	rootCmd.AddCommand(initCmd)
-	initCmd.Flags().BoolVarP(&startWeb, "web", "w", false, "start with web service")
-	initCmd.Flags().BoolVarP(&startQueue, "queue", "q", false, "start with job queue service")
 }
 
 func getProjectName(pkgPath string) (string, error) {
