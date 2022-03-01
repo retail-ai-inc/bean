@@ -13,15 +13,17 @@ type APIError struct {
 	HTTPStatusCode int
 	GlobalErrCode  ErrorCode
 	Err            error
+	Sentry         bool // Easy control for sentry to ignore this error or not
 	*stacktrace.Stack
 }
 
 // NewAPIError returns the proper error object from {{ .PkgPath }}. You must provide `error` interface as 3rd parameter.
-func NewAPIError(HTTPStatusCode int, globalErrCode ErrorCode, err error) *APIError {
+func NewAPIError(HTTPStatusCode int, globalErrCode ErrorCode, err error, sentry bool) *APIError {
 	return &APIError{
 		HTTPStatusCode: HTTPStatusCode,
 		GlobalErrCode:  globalErrCode,
 		Err:            err,
+		Sentry:         sentry,
 		Stack:          stacktrace.Callers(),
 	}
 }

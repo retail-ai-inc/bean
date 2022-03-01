@@ -54,7 +54,7 @@ func TestAPIErrorHanderFunc(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, false, got)
 
-	apiErr := NewAPIError(http.StatusInternalServerError, INTERNAL_SERVER_ERROR, errors.New("internal"))
+	apiErr := NewAPIError(http.StatusInternalServerError, INTERNAL_SERVER_ERROR, errors.New("internal"), false)
 	got, err = APIErrorHanderFunc(apiErr, c)
 	assert.NoError(t, err)
 	assert.Equal(t, true, got)
