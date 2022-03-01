@@ -21,6 +21,8 @@ var (
 	// Used for flags.
 	host string
 	port string
+	startWeb bool
+	startQueue bool
 
 	// startCmd represents the start command.
 	startCmd = &cobra.Command{
@@ -37,6 +39,8 @@ func init() {
 	defaultPort := viper.GetString("http.port")
 	startCmd.Flags().StringVar(&host, "host", defaultHost, "host address")
 	startCmd.Flags().StringVar(&port, "port", defaultPort, "port number")
+	startCmd.Flags().BoolVarP(&startWeb, "web", "w", false, "start with web service")
+	startCmd.Flags().BoolVarP(&startQueue, "queue", "q", false, "start with job queue worker pool service")
 }
 
 func start(cmd *cobra.Command, args []string) {
@@ -110,5 +114,17 @@ func start(cmd *cobra.Command, args []string) {
 		// b.Echo.Validator = &CustomValidator{}
 	}
 
-	b.ServeAt(host, port)
+	if startQueue && startWeb {
+		// Start both web and worker pool
+		go func() {
+			// TODO: start the queue
+		}()
+		b.ServeAt(host, port)
+	} else if startQueue && !startWeb {
+		// Only start worker pool
+		// TODO: start the queue
+	} else {
+		// Only start the web
+		b.ServeAt(host, port)
+	}
 }
