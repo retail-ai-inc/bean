@@ -54,7 +54,6 @@ type DBDeps struct {
 type Bean struct {
 	DBConn            *DBDeps
 	Echo              *echo.Echo
-	Environment       string
 	BeforeServe       func()
 	errorHandlerFuncs []berror.ErrorHandlerFunc
 	validate          *validatorV10.Validate
@@ -253,7 +252,7 @@ func NewEcho(config Config) *echo.Echo {
 }
 
 func (b *Bean) ServeAt(host, port string) {
-	b.Echo.Logger.Info("Starting " + b.Config.ProjectName + " at " + b.Config.Environment + "...🚀")
+	b.Echo.Logger.Info("Starting " + b.Config.Environment + " " + b.Config.ProjectName + " at " + b.Config.HTTP.Host + ":" + b.Config.HTTP.Port + "...🚀")
 
 	b.UseErrorHandlerFuncs(berror.DefaultErrorHanderFunc)
 	b.Echo.HTTPErrorHandler = b.DefaultHTTPErrorHandler()
