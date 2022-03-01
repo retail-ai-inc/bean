@@ -3,6 +3,7 @@
 package bean
 
 import (
+	"crypto/tls"
 	"html/template"
 	"net/http"
 	"os"
@@ -82,6 +83,12 @@ type Config struct {
 		Timeout         time.Duration
 		KeepAlive       bool
 		AllowedMethod   []string
+		SSL             struct {
+			On            bool
+			CertFile      string
+			PrivFile      string
+			MinTLSVersion uint16
+		}
 	}
 	HTML struct {
 		ViewsTemplateCache bool
@@ -268,8 +275,19 @@ func (b *Bean) ServeAt(host, port string) {
 	}
 
 	// Start the server
-	if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		b.Echo.Logger.Fatal(err)
+	if b.Config.HTTP.SSL.On {
+		s.TLSConfig = &tls.Config{
+			MinVersion: b.Config.HTTP.SSL.MinTLSVersion,
+		}
+
+		if err := s.ListenAndServeTLS(b.Config.HTTP.SSL.CertFile, b.Config.HTTP.SSL.PrivFile); err != nil && err != http.ErrServerClosed {
+			b.Echo.Logger.Fatal(err)
+		}
+
+	} else {
+		if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			b.Echo.Logger.Fatal(err)
+		}
 	}
 }
 
