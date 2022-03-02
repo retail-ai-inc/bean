@@ -1,7 +1,7 @@
 {{ .Copyright }}
 package main
 
-import "{{ .PkgName }}/commands"
+import "{{ .PkgPath }}/commands"
 
 func main() {
 	commands.Execute()
