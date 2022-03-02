@@ -77,7 +77,7 @@ var (
 			}
 
 			// Set the relative root path of the internal templates folder.
-			if p.RootFS, err = fs.Sub(InternalFS, "internal/tpl"); err != nil {
+			if p.RootFS, err = fs.Sub(InternalFS, "internal/_tpl"); err != nil {
 				log.Fatalln(err)
 			}
 			// fmt.Println("InternalFS", InternalFS)
