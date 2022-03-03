@@ -18,12 +18,12 @@ type APIError struct {
 }
 
 // NewAPIError returns the proper error object from {{ .PkgPath }}. You must provide `error` interface as 3rd parameter.
-func NewAPIError(HTTPStatusCode int, globalErrCode ErrorCode, err error, ignorable bool) *APIError {
+func NewAPIError(HTTPStatusCode int, globalErrCode ErrorCode, err error) *APIError {
 	return &APIError{
 		HTTPStatusCode: HTTPStatusCode,
 		GlobalErrCode:  globalErrCode,
 		Err:            err,
-		Ignorable:      ignorable,
+		Ignorable:      false,
 		Stack:          stacktrace.Callers(),
 	}
 }
