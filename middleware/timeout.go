@@ -18,7 +18,7 @@ func RequestTimeout(timeout time.Duration) echo.MiddlewareFunc {
 		return func(c echo.Context) error {
 			// Start a sentry span for tracing.
 			if options.SentryOn {
-				span := sentry.StartSpan(c.Request().Context(), "middleware")
+				span := sentry.StartSpan(c.Request().Context(), "http.middleware")
 				span.Description = helpers.CurrFuncName()
 				defer span.Finish()
 			}

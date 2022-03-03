@@ -18,7 +18,7 @@ func NewExampleRepository(dbDeps *bean.DBDeps) *DbInfra {
 }
 
 func (db *DbInfra) GetMasterSQLTableName(ctx context.Context) (string, error) {
-	span := sentry.StartSpan(ctx, "repository")
+	span := sentry.StartSpan(ctx, "db")
 	span.Description = helpers.CurrFuncName()
 	defer span.Finish()
 	return db.Conn.MasterMySQLDBName, nil

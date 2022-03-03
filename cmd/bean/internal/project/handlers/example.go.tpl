@@ -29,7 +29,7 @@ func NewExampleHandler(exampleSvc services.ExampleService) *exampleHandler {
 }
 
 func (handler *exampleHandler) JSONIndex(c echo.Context) error {
-	span := sentry.StartSpan(c.Request().Context(), "handler")
+	span := sentry.StartSpan(c.Request().Context(), "http.handler")
 	span.Description = helpers.CurrFuncName()
 	defer span.Finish()
 
