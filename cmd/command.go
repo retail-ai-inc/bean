@@ -35,88 +35,89 @@ var (
 	4. The commandName is a non-empty string made of up ASCII letters, ASCII digits, and limited ASCII punctuation (-, ., _).
 	`
 	commandCmd = &cobra.Command{
-		Use:   "command",
+		Use:   "command <command-name>",
 		Short: "Creates a new command",
 		Long: `Command takes one argument that is the name of user-defined command
-		Example :- "bean create command test" will create a command test in the commands folder.`,
+Example :- "bean create command test" will create a command test in the commands folder.`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-
-			beanCheck := beanInitialisationCheck()
-			if !beanCheck {
-				log.Fatalln("env.json for bean not found!!")
-			}
-
-			wd, err := os.Getwd()
-			if err != nil {
-				log.Fatalln(err)
-			}
-
-			userCommandName := args[0]
-			commandName, err := getCommandName(userCommandName)
-			if err != nil {
-				log.Fatalln(commandValidationRule)
-			}
-
-			commandFilesPath := wd + "/commands/"
-			commandFileName := strings.ToLower(commandName)
-
-			// check if command already exists.
-			_, err = os.Stat(commandFilesPath + commandFileName + ".go")
-			if err == nil {
-				log.Fatalln("Command with name " + commandFileName + " already exists.")
-			}
-
-			p := &Project{
-				Copyright:   copyright,
-				RootDir:     wd,
-				BeanVersion: rootCmd.Version,
-			}
-
-			// Set the relative root path of the internal templates folder.
-			if p.RootFS, err = fs.Sub(InternalFS, "internal/_tpl"); err != nil {
-				log.Fatalln(err)
-			}
-
-			// Reading the base command file.
-			baseCommandFilePath := "command.go"
-
-			file, err := p.RootFS.Open(baseCommandFilePath)
-			if err != nil {
-				log.Fatalln(err)
-				return
-			}
-			fileData, err := ioutil.ReadAll(file)
-			if err != nil {
-				log.Fatalln(err)
-				return
-			}
-
-			tmpl, err := template.New("").Parse(string(fileData))
-			if err != nil {
-				log.Fatalln(err)
-				return
-			}
-
-			var command Command
-			command.ProjectObject = *p
-			command.CommandName = commandName
-			commandFileCreate, err := os.Create(commandFilesPath + commandFileName + ".go")
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			defer commandFileCreate.Close()
-
-			err = tmpl.Execute(commandFileCreate, command)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			fmt.Printf("command with name %s and command file with name %s.go created\n", commandName, commandFileName)
-		},
+		Run:  command,
 	}
 )
+
+func command(cmd *cobra.Command, args []string) {
+	beanCheck := beanInitialisationCheck()
+	if !beanCheck {
+		log.Fatalln("env.json for bean not found!!")
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	userCommandName := args[0]
+	commandName, err := getCommandName(userCommandName)
+	if err != nil {
+		log.Fatalln(commandValidationRule)
+	}
+
+	commandFilesPath := wd + "/commands/"
+	commandFileName := strings.ToLower(commandName)
+
+	// check if command already exists.
+	_, err = os.Stat(commandFilesPath + commandFileName + ".go")
+	if err == nil {
+		log.Fatalln("Command with name " + commandFileName + " already exists.")
+	}
+
+	p := &Project{
+		Copyright:   copyright,
+		RootDir:     wd,
+		BeanVersion: rootCmd.Version,
+	}
+
+	// Set the relative root path of the internal templates folder.
+	if p.RootFS, err = fs.Sub(InternalFS, "internal/_tpl"); err != nil {
+		log.Fatalln(err)
+	}
+
+	// Reading the base command file.
+	baseCommandFilePath := "command.go"
+
+	file, err := p.RootFS.Open(baseCommandFilePath)
+	if err != nil {
+		log.Fatalln(err)
+		return
+	}
+	fileData, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatalln(err)
+		return
+	}
+
+	tmpl, err := template.New("").Parse(string(fileData))
+	if err != nil {
+		log.Fatalln(err)
+		return
+	}
+
+	var command Command
+	command.ProjectObject = *p
+	command.CommandName = commandName
+	commandFileCreate, err := os.Create(commandFilesPath + commandFileName + ".go")
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer commandFileCreate.Close()
+
+	err = tmpl.Execute(commandFileCreate, command)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	fmt.Printf("command with name %s and command file with name %s.go created\n", commandName, commandFileName)
+}
 
 func getCommandName(commandName string) (string, error) {
 	validate := validator.New()
