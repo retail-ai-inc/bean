@@ -13,6 +13,7 @@ type APIError struct {
 	HTTPStatusCode int
 	GlobalErrCode  ErrorCode
 	Err            error
+	Ignorable      bool // An extra option to control the behaviour. (example: push to some error tracker or not)
 	*stacktrace.Stack
 }
 
@@ -22,6 +23,7 @@ func NewAPIError(HTTPStatusCode int, globalErrCode ErrorCode, err error) *APIErr
 		HTTPStatusCode: HTTPStatusCode,
 		GlobalErrCode:  globalErrCode,
 		Err:            err,
+		Ignorable:      false,
 		Stack:          stacktrace.Callers(),
 	}
 }

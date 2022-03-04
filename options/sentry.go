@@ -30,6 +30,9 @@ func DefaultBeforeSend(event *sentry.Event, hint *sentry.EventHint) *sentry.Even
 	case *validator.ValidationError:
 		return event
 	case *error.APIError:
+		if err.Ignorable {
+			return nil
+		}
 		event.Contexts["Error"] = map[string]interface{}{
 			"HTTPStatusCode": err.HTTPStatusCode,
 			"GlobalErrCode":  err.GlobalErrCode,
