@@ -17,7 +17,7 @@ func New{{.RepoName}}Repository(dbDeps *bean.DBDeps) *DbInfra {
 }
 
 func (db *DbInfra) {{.RepoName}}ExampleFunc(ctx context.Context) (string, error) {
-	// span := sentry.StartSpan(ctx, "repository")
+	// span := sentry.StartSpan(ctx, "db")
 	// span.Description = helpers.CurrFuncName()
 	// defer span.Finish()
 	return "{{.RepoName}}", nil

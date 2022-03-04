@@ -22,7 +22,7 @@ type {{.ServiceNameUpper}}Service interface {
 return &{{.ServiceNameLower}}Service{{"{}}"}}{{end}}
 
 func (service *{{.ServiceNameLower}}Service) {{.ServiceNameUpper}}ServiceExampleFunc(ctx context.Context) (string, error) {
-	// span := sentry.StartSpan(ctx, "service")
+	// span := sentry.StartSpan(ctx, "http.service")
 	// span.Description = helpers.CurrFuncName()
 	// defer span.Finish()
 	return "{{.ServiceNameUpper}}Service", nil

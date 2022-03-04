@@ -30,7 +30,7 @@ type {{.HandlerNameLower}}Handler struct {
 	return &{{.HandlerNameLower}}Handler{{"{}}"}}{{end}}
 
 func (handler *{{.HandlerNameLower}}Handler) JSONIndex(c echo.Context) error {
-	span := sentry.StartSpan(c.Request().Context(), "handler")
+	span := sentry.StartSpan(c.Request().Context(), "http.handler")
 	span.Description = helpers.CurrFuncName()
 	defer span.Finish()
 
