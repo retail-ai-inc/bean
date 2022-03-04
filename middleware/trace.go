@@ -15,7 +15,7 @@ func Tracer() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Start a sentry span for tracing.
-			span := sentry.StartSpan(c.Request().Context(), "REST API",
+			span := sentry.StartSpan(c.Request().Context(), "http",
 				sentry.TransactionName(fmt.Sprintf(c.Request().RequestURI)),
 				sentry.ContinueFromRequest(c.Request()),
 			)
