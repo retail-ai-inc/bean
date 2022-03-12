@@ -15,7 +15,7 @@ type RedisConfig struct {
 		Database int
 		Password string
 		Host     string
-		port     string
+		Port     string
 	}
 	Prefix     string
 	Maxretries int
@@ -35,7 +35,7 @@ func InitRedisMasterConn(config RedisConfig) (*redis.Client, int) {
 	masterCfg := config.Master
 
 	if masterCfg != nil {
-		return connectRedisDB(masterCfg.Password, masterCfg.Host, masterCfg.port, masterCfg.Database, config.Maxretries)
+		return connectRedisDB(masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database, config.Maxretries)
 	}
 
 	return nil, -1
