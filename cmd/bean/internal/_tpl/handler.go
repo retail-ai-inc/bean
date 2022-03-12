@@ -40,7 +40,7 @@ func (handler *{{.HandlerNameLower}}Handler) JSONIndex(c echo.Context) error {
 	}{{else}}output := "output"{{end}}
 
 	// IMPORTANT: Panic inside a goroutine will crash the whole application.
-	// Example: How to execute some asynchronous code safely instead of plain goroutine.
+	// Example: How to execute some asynchronous code safely instead of plain goroutine:
 	async.Execute(func(c echo.Context) {
 		c.Logger().Debug(output)
 		// IMPORTANT: Using sentry directly in goroutine may cause data race!
