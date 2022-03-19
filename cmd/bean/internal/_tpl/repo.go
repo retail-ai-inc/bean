@@ -1,4 +1,3 @@
-{{ .ProjectObject.Copyright }}
 package repositories
 
 import (
@@ -8,17 +7,18 @@ import (
 	"github.com/retail-ai-inc/bean"
 )
 
-type {{.RepoName}}Repository interface{
-	{{.RepoName}}ExampleFunc(ctx context.Context) (string, error)
+type {{.RepoNameUpper}}Repository interface{
+	{{.RepoNameUpper}}ExampleFunc(ctx context.Context) (string, error)
 }
 
-func New{{.RepoName}}Repository(dbDeps *bean.DBDeps) *DbInfra {
+func New{{.RepoNameUpper}}Repository(dbDeps *bean.DBDeps) *DbInfra {
 	return &DbInfra{dbDeps}
 }
 
-func (db *DbInfra) {{.RepoName}}ExampleFunc(ctx context.Context) (string, error) {
+func (db *DbInfra) {{.RepoNameUpper}}ExampleFunc(ctx context.Context) (string, error) {
+	// IMPORTANT - If you wanna trace the performance of your handler function then uncomment following 3 lines
 	// span := sentry.StartSpan(ctx, "db")
 	// span.Description = helpers.CurrFuncName()
 	// defer span.Finish()
-	return "{{.RepoName}}", nil
+	return "{{.RepoNameUpper}}", nil
 }

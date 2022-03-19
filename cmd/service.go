@@ -1,5 +1,24 @@
-// Copyright The RAI Inc.
-// The RAI Authors
+// MIT License
+
+// Copyright (c) The RAI Authors
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 package cmd
 
 import (
@@ -40,7 +59,7 @@ var (
 	`
 	serviceCmd = &cobra.Command{
 		Use:   "service <service-name>",
-		Short: "Creates a new service",
+		Short: "Create a new service file of your choice",
 		Long: `Command takes one argument that is the name of user-defined service
 Example :- "bean create service post" will create a service Post in the services folder.`,
 		Args: cobra.ExactArgs(1),
@@ -114,7 +133,6 @@ func service(cmd *cobra.Command, args []string) {
 	var service Service
 	// check if repo with same name exists then set template for service accordingly.
 	repoCheck := checkRepoExists(serviceFileName)
-	fmt.Println("repoExistsCheck", repoCheck)
 	if repoCheck {
 		service.RepoExists = true
 	} else {
@@ -135,7 +153,21 @@ func service(cmd *cobra.Command, args []string) {
 		log.Println(err)
 		return
 	}
-	fmt.Printf("service with name %s and service file with name %s.go created\n", serviceName, serviceFileName)
+
+	routerFilesPath := wd + "/routers/"
+	lineNumber, err := matchTextInFileAndReturnLineNumber(routerFilesPath+"route.go", "type Services struct {")
+	if err == nil && lineNumber > 0 {
+		textToInsert := `	` + service.ServiceNameLower + `Svc services.` + service.ServiceNameUpper + `Service` + ` // added by bean`
+		_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
+
+		lineNumber, err := matchTextInFileAndReturnLineNumber(routerFilesPath+"route.go", "svcs := &Services{")
+		if err == nil && lineNumber > 0 {
+			textToInsert := `		` + service.ServiceNameLower + `Svc: services.New` + service.ServiceNameUpper + `Service(),` + ` // added by bean`
+			_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
+		}
+	}
+
+	fmt.Printf("service with name %s and service file %s.go created\n", serviceName, serviceFileName)
 }
 
 func getServiceName(serviceName string) (string, error) {

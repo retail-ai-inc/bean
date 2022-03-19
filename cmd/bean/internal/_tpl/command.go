@@ -1,4 +1,3 @@
-{{ .ProjectObject.Copyright }}
 package commands
 
 import (

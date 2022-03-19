@@ -1,21 +1,20 @@
-{{ .ProjectObject.Copyright }}
 package handlers
 
 import (
 	"net/http"
 	"time"
-	"github.com/getsentry/sentry-go"
+	//"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/async"
 	berror "github.com/retail-ai-inc/bean/error"
-	"github.com/retail-ai-inc/bean/helpers"
+	//"github.com/retail-ai-inc/bean/helpers"
 	{{if .ServiceExists}}"{{.ProjectObject.PkgPath}}/services"{{end}}
 )
 
 type {{.HandlerNameUpper}}Handler interface {
-	JSONIndex(c echo.Context) error // JSON {{.HandlerNameLower}}
-	HTMLIndex(c echo.Context) error // HTML {{.HandlerNameLower}}
-	Validate(c echo.Context) error  // Validation {{.HandlerNameLower}}
+	{{.HandlerNameUpper}}JSONResponse(c echo.Context) error		// An example JSON response handler function
+	{{.HandlerNameUpper}}HTMLResponse(c echo.Context) error		// An example HTML response handler function
+	{{.HandlerNameUpper}}ValidateResponse(c echo.Context) error	// An example response handler function with validation
 }
 
 {{if .ServiceExists}}
@@ -27,14 +26,16 @@ type {{.HandlerNameLower}}Handler struct {
 {{if .ServiceExists}}func New{{.HandlerNameUpper}}Handler({{.HandlerNameLower}}Svc services.{{.HandlerNameUpper}}Service) *{{.HandlerNameLower}}Handler {
 	return &{{.HandlerNameLower}}Handler{{"{"}}{{.HandlerNameLower}}Svc{{"}"}}
 }{{else}}func New{{.HandlerNameUpper}}Handler() *{{.HandlerNameLower}}Handler {
-	return &{{.HandlerNameLower}}Handler{{"{}}"}}{{end}}
+	return &{{.HandlerNameLower}}Handler{{"{}\n}"}}{{end}}
 
-func (handler *{{.HandlerNameLower}}Handler) JSONIndex(c echo.Context) error {
-	span := sentry.StartSpan(c.Request().Context(), "http.handler")
-	span.Description = helpers.CurrFuncName()
-	defer span.Finish()
+func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c echo.Context) error {
+	
+	// IMPORTANT - If you wanna trace the performance of your handler function then uncomment following 3 lines
+	//span := sentry.StartSpan(c.Request().Context(), "http.handler")
+	//span.Description = helpers.CurrFuncName()
+	//defer span.Finish()
 
-	{{if .ServiceExists}}output, err := handler.{{.HandlerNameLower}}Service.{{.HandlerNameUpper}}ServiceExampleFunc(span.Context())
+	{{if .ServiceExists}}output, err := handler.{{.HandlerNameLower}}Service.{{.HandlerNameUpper}}ServiceExampleFunc(c.Request().Context())
 	if err != nil {
 		return err
 	}{{else}}output := "output"{{end}}
@@ -55,7 +56,7 @@ func (handler *{{.HandlerNameLower}}Handler) JSONIndex(c echo.Context) error {
 	})
 }
 
-func (handler *{{.HandlerNameLower}}Handler) HTMLIndex(c echo.Context) error {
+func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}HTMLResponse(c echo.Context) error {
 	return c.Render(http.StatusOK, "index", echo.Map{
 		"title": "Index title!",
 		"add": func(a int, b int) int {
@@ -70,7 +71,7 @@ func (handler *{{.HandlerNameLower}}Handler) HTMLIndex(c echo.Context) error {
 	})
 }
 
-func (handler *{{.HandlerNameLower}}Handler) Validate(c echo.Context) error {
+func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}ValidateResponse(c echo.Context) error {
 	var params struct {
 		Example string `json:"example" validate:"required,example,min=7"`
 		Other   int    `json:"other" validate:"required,gt=0"`

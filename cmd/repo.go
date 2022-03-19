@@ -24,7 +24,8 @@ func init() {
 
 type Repo struct {
 	ProjectObject Project
-	RepoName      string
+	RepoNameUpper string
+	RepoNameLower string
 }
 
 // repoCmd represents the repo command
@@ -38,7 +39,7 @@ var (
 
 	repoCmd = &cobra.Command{
 		Use:   "repo <repo-name>",
-		Short: "Creates a new repository",
+		Short: "Create a new repository file of your choice",
 		Long: `Command takes one argument that is the name of user-defined repository
 Example :- "bean create repo post" will create a repository Post in repositories folder.`,
 		Args: cobra.ExactArgs(1),
@@ -105,7 +106,9 @@ func repo(cmd *cobra.Command, args []string) {
 
 	var repo Repo
 	repo.ProjectObject = *p
-	repo.RepoName = repoName
+	repo.RepoNameLower = strings.ToLower(repoName)
+	repo.RepoNameUpper = repoName
+
 	repoFileCreate, err := os.Create(repoFilesPath + repoFileName + ".go")
 	if err != nil {
 		log.Println(err)
@@ -118,7 +121,21 @@ func repo(cmd *cobra.Command, args []string) {
 		log.Println(err)
 		return
 	}
-	fmt.Printf("repository with name %s and repository file with name %s.go created\n", repoName, repoFileName)
+
+	routerFilesPath := wd + "/routers/"
+	lineNumber, err := matchTextInFileAndReturnLineNumber(routerFilesPath+"route.go", "type Repositories struct {")
+	if err == nil && lineNumber > 0 {
+		textToInsert := `	` + repo.RepoNameLower + `Repo repositories.` + repo.RepoNameUpper + `Repository` + ` // added by bean`
+		_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
+
+		lineNumber, err := matchTextInFileAndReturnLineNumber(routerFilesPath+"route.go", "repos := &Repositories{")
+		if err == nil && lineNumber > 0 {
+			textToInsert := `		` + repo.RepoNameLower + `Repo: repositories.New` + repo.RepoNameUpper + `Repository(b.DBConn),` + ` // added by bean`
+			_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
+		}
+	}
+
+	fmt.Printf("repository with name %s and repository file %s.go created\n", repoName, repoFileName)
 }
 
 func getRepoName(repoName string) (string, error) {

@@ -1,4 +1,3 @@
-{{ .ProjectObject.Copyright }}
 package services
 
 import (
@@ -19,9 +18,10 @@ type {{.ServiceNameUpper}}Service interface {
 {{if .RepoExists}}func New{{.ServiceNameUpper}}Service({{.ServiceNameLower}}Repo repositories.{{.ServiceNameUpper}}Repository) *{{.ServiceNameLower}}Service {
 	return &{{.ServiceNameLower}}Service{{"{"}}{{.ServiceNameLower}}Repo{{"}"}}
 }{{else}}func New{{.ServiceNameUpper}}Service() *{{.ServiceNameLower}}Service {
-return &{{.ServiceNameLower}}Service{{"{}}"}}{{end}}
+	return &{{.ServiceNameLower}}Service{{"{}\n}"}}{{end}}
 
 func (service *{{.ServiceNameLower}}Service) {{.ServiceNameUpper}}ServiceExampleFunc(ctx context.Context) (string, error) {
+	// IMPORTANT - If you wanna trace the performance of your handler function then uncomment following 3 lines
 	// span := sentry.StartSpan(ctx, "http.service")
 	// span.Description = helpers.CurrFuncName()
 	// defer span.Finish()

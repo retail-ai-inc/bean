@@ -1,8 +1,28 @@
-// Copyright The RAI Inc.
-// The RAI Authors
+// MIT License
+
+// Copyright (c) The RAI Authors
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 package cmd
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -40,7 +60,7 @@ var (
 
 	handlerCmd = &cobra.Command{
 		Use:   "handler <handler-name>",
-		Short: "Creates a new handler",
+		Short: "Create a new handler file of your choice",
 		Long: `Command takes one argument that is the name of user-defined handler
 Example :- "bean create handler post" will create a handler Post in handlers folder.`,
 		Args: cobra.ExactArgs(1),
@@ -99,6 +119,8 @@ func handler(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	defer file.Close()
+
 	fileData, err := ioutil.ReadAll(file)
 	if err != nil {
 		log.Fatalln(err)
@@ -114,12 +136,12 @@ func handler(cmd *cobra.Command, args []string) {
 	var handler Handler
 	// check if service with same name exists then set template for handler accordingly.
 	serviceCheck := checkServiceExists(handlerFileName)
-	fmt.Println("serviceExistsCheck", serviceCheck)
 	if serviceCheck {
 		handler.ServiceExists = true
 	} else {
 		handler.ServiceExists = false
 	}
+
 	handler.ProjectObject = *p
 	handler.HandlerNameLower = strings.ToLower(handlerName)
 	handler.HandlerNameUpper = handlerName
@@ -128,6 +150,7 @@ func handler(cmd *cobra.Command, args []string) {
 		log.Println(err)
 		return
 	}
+
 	defer handlerFileCreate.Close()
 
 	err = tmpl.Execute(handlerFileCreate, handler)
@@ -135,7 +158,28 @@ func handler(cmd *cobra.Command, args []string) {
 		log.Println(err)
 		return
 	}
-	fmt.Printf("handler with name %s and handler file with name %s.go created\n", handlerName, handlerFileName)
+
+	routerFilesPath := wd + "/routers/"
+	lineNumber, err := matchTextInFileAndReturnLineNumber(routerFilesPath+"route.go", "type Handlers struct {")
+	if err == nil && lineNumber > 0 {
+		textToInsert := `	` + handler.HandlerNameLower + `Hdlr handlers.` + handler.HandlerNameUpper + `Handler` + ` // added by bean`
+		_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
+
+		lineNumber, err := matchTextInFileAndReturnLineNumber(routerFilesPath+"route.go", "hdlrs := &Handlers{")
+		if err == nil && lineNumber > 0 {
+			var textToInsert string
+
+			if handler.ServiceExists {
+				textToInsert = `		` + handler.HandlerNameLower + `Hdlr: handlers.New` + handler.HandlerNameUpper + `Handler(svcs.` + handler.HandlerNameLower + `Svc),` + ` // added by bean`
+			} else {
+				textToInsert = `		` + handler.HandlerNameLower + `Hdlr: handlers.New` + handler.HandlerNameUpper + `Handler(),` + ` // added by bean`
+			}
+
+			_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
+		}
+	}
+
+	fmt.Printf("handler with name %s and handler file %s.go created\n", handlerName, handlerFileName)
 }
 
 func getHandlerName(handlerName string) (string, error) {
@@ -164,7 +208,65 @@ func checkServiceExists(repoName string) bool {
 	if err != nil {
 		log.Fatalln(err)
 	}
+
 	serviceFilesPath := wd + "/services/"
 	_, err = os.Stat(serviceFilesPath + repoName + ".go")
+
 	return err == nil
+}
+
+func matchTextInFileAndReturnLineNumber(filePath string, needle string) (int, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	line := 1
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), needle) {
+			return line, nil
+		}
+
+		line++
+	}
+
+	if err := scanner.Err(); err != nil {
+		return 0, err
+	}
+
+	return 0, nil
+}
+
+// Insert sting to n-th line of file.
+func insertStringToNthLineOfFile(filePath, textToInsert string, lineNumber int) error {
+
+	f, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
+	fileContent := ""
+	for i, line := range lines {
+		if i == lineNumber {
+			fileContent += textToInsert + "\n"
+		}
+		fileContent += line
+		fileContent += "\n"
+	}
+
+	return ioutil.WriteFile(filePath, []byte(fileContent), 0644)
 }
