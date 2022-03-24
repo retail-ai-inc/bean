@@ -186,7 +186,7 @@ func NewEcho(config Config) *echo.Echo {
 	if config.AccessLog.On {
 		accessLogConfig := middleware.LoggerConfig{BodyDump: config.AccessLog.BodyDump}
 		if config.AccessLog.Path != "" {
-			if file, err := openFile(config.DebugLogPath); err != nil {
+			if file, err := openFile(config.AccessLog.Path); err != nil {
 				e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
 			} else {
 				accessLogConfig.Output = file
