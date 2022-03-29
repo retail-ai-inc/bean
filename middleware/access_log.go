@@ -41,6 +41,7 @@ import (
 	"github.com/labstack/gommon/color"
 	"github.com/retail-ai-inc/bean/helpers"
 	"github.com/retail-ai-inc/bean/options"
+	str "github.com/retail-ai-inc/bean/string"
 	"github.com/valyala/fasttemplate"
 )
 
@@ -246,7 +247,7 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 					return buf.WriteString(strconv.FormatInt(res.Size, 10))
 				case "request_body":
 					if len(reqBody) > 0 {
-						reqBody, _ = MaskSensitiveInfo(reqBody, config.MaskedParameters)
+						reqBody, _ = maskSensitiveInfo(reqBody, config.MaskedParameters)
 						return buf.Write(reqBody)
 					}
 					return buf.WriteString(`""`)
@@ -373,7 +374,7 @@ func (w *bodyDumpResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return w.ResponseWriter.(http.Hijacker).Hijack()
 }
 
-func MaskSensitiveInfo(reqBody []byte, maskedParams []string) ([]byte, error) {
+func maskSensitiveInfo(reqBody []byte, maskedParams []string) ([]byte, error) {
 	var unmarshaledRequest = make(map[string]interface{})
 	err := json.Unmarshal(reqBody, &unmarshaledRequest)
 	if err != nil {
@@ -381,19 +382,10 @@ func MaskSensitiveInfo(reqBody []byte, maskedParams []string) ([]byte, error) {
 		return reqBody, err
 	}
 	for key, value := range unmarshaledRequest {
-		if contains(maskedParams, key) {
+		if str.Contains(maskedParams, key) {
 			maskedRequest := strings.Replace(string(reqBody), value.(string), "****", 1)
 			reqBody = []byte(maskedRequest)
 		}
 	}
 	return reqBody, nil
-}
-
-func contains(stringSlice []string, checkString string) bool {
-	for _, element := range stringSlice {
-		if element == checkString {
-			return true
-		}
-	}
-	return false
 }
