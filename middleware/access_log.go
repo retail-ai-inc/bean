@@ -25,6 +25,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -65,6 +66,10 @@ type (
 		// BodyDump is an option to control the log also print the request and response body.
 		// Optional. Default value false.
 		BodyDump bool
+
+		// MaskedParameters is a slice of parameters for which the user wants to mask the value in logs.
+		// Optional. Default value [].
+		MaskedParameters []string
 
 		accessLogTemplate *fasttemplate.Template
 		bodyDumpTemplate  *fasttemplate.Template
@@ -241,6 +246,7 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 					return buf.WriteString(strconv.FormatInt(res.Size, 10))
 				case "request_body":
 					if len(reqBody) > 0 {
+						reqBody, _ = MaskSensitiveInfo(reqBody, config.MaskedParameters)
 						return buf.Write(reqBody)
 					}
 					return buf.WriteString(`""`)
@@ -365,4 +371,29 @@ func (w *bodyDumpResponseWriter) Flush() {
 
 func (w *bodyDumpResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return w.ResponseWriter.(http.Hijacker).Hijack()
+}
+
+func MaskSensitiveInfo(reqBody []byte, maskedParams []string) ([]byte, error) {
+	var unmarshaledRequest = make(map[string]interface{})
+	err := json.Unmarshal(reqBody, &unmarshaledRequest)
+	if err != nil {
+		fmt.Println("err", err)
+		return reqBody, err
+	}
+	for key, value := range unmarshaledRequest {
+		if contains(maskedParams, key) {
+			maskedRequest := strings.Replace(string(reqBody), value.(string), "****", 1)
+			reqBody = []byte(maskedRequest)
+		}
+	}
+	return reqBody, nil
+}
+
+func contains(stringSlice []string, checkString string) bool {
+	for _, element := range stringSlice {
+		if element == checkString {
+			return true
+		}
+	}
+	return false
 }
