@@ -41,7 +41,6 @@ import (
 	"github.com/labstack/gommon/color"
 	"github.com/retail-ai-inc/bean/helpers"
 	"github.com/retail-ai-inc/bean/options"
-	str "github.com/retail-ai-inc/bean/string"
 	"github.com/valyala/fasttemplate"
 )
 
@@ -381,11 +380,13 @@ func maskSensitiveInfo(reqBody []byte, maskedParams []string) ([]byte, error) {
 		fmt.Println("err", err)
 		return reqBody, err
 	}
-	for key, value := range unmarshaledRequest {
-		if str.Contains(maskedParams, key) {
-			maskedRequest := strings.Replace(string(reqBody), value.(string), "****", 1)
-			reqBody = []byte(maskedRequest)
+
+	for _, maskedParam := range maskedParams {
+		if _, ok := unmarshaledRequest[maskedParam]; ok {
+			unmarshaledRequest[maskedParam] = "****"
 		}
 	}
-	return reqBody, nil
+	maskedRequestBody, _ := json.Marshal(unmarshaledRequest)
+
+	return maskedRequestBody, nil
 }
