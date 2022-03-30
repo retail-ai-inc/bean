@@ -45,6 +45,7 @@ import (
 	berror "github.com/retail-ai-inc/bean/error"
 	"github.com/retail-ai-inc/bean/goview"
 	"github.com/retail-ai-inc/bean/helpers"
+	"github.com/retail-ai-inc/bean/job"
 	"github.com/retail-ai-inc/bean/middleware"
 	"github.com/retail-ai-inc/bean/options"
 	str "github.com/retail-ai-inc/bean/string"
@@ -77,6 +78,7 @@ type Bean struct {
 	errorHandlerFuncs []berror.ErrorHandlerFunc
 	validate          *validatorV10.Validate
 	Config            Config
+	jobRunner         *job.JobRunner
 }
 
 type Config struct {
@@ -120,6 +122,21 @@ type Config struct {
 		Redis  dbdrivers.RedisConfig
 		Badger dbdrivers.BadgerConfig
 	}
+	Queue struct {
+		Redis struct {
+			Password string
+			Host     string
+			Port     string
+			Name     uint
+			Prefix   string
+			PoolSize uint
+			Maxidel  uint
+		}
+		Health struct {
+			Port string
+			Host string
+		}
+	}
 	Sentry   options.SentryConfig
 	Security struct {
 		HTTP struct {
@@ -142,9 +159,10 @@ func New(config Config) (b *Bean) {
 	e := NewEcho(config)
 
 	b = &Bean{
-		Echo:     e,
-		validate: validatorV10.New(),
-		Config:   config,
+		Echo:      e,
+		validate:  validatorV10.New(),
+		Config:    config,
+		jobRunner: job.NewJobRunner(),
 	}
 
 	return b
@@ -395,6 +413,21 @@ func (b *Bean) InitDB() {
 		TenantRedisDBNames: tenantRedisDBNames,
 		BadgerDB:           masterBadgerDB,
 	}
+}
+
+// UseJobMiddleware to set the job middleware
+func (b *Bean) UseJobMiddleware(middlewares ...job.JobMiddleware) {
+	b.jobRunner.UseJobMiddleware(middlewares...)
+}
+
+// UseJob to set the jobs
+func (b *Bean) UseJob(jobs ...job.Job) {
+	b.jobRunner.UseJob(jobs...)
+}
+
+// StartJobRunner will start job runner
+func (b *Bean) StartJobRunner(concurrency uint) {
+	b.jobRunner.Start(concurrency)
 }
 
 // `prometheusUrlSkipper` ignores metrics route on some endpoints.

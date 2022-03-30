@@ -128,3 +128,7 @@ func start(cmd *cobra.Command, args []string) {
 		b.ServeAt(host, port)
 	}
 }
+
+function startJob(b *bean.Bean){
+    b.Start(b.Config)
+}
