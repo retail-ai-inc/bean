@@ -374,10 +374,13 @@ func (w *bodyDumpResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 }
 
 func maskSensitiveInfo(reqBody []byte, maskedParams []string) ([]byte, error) {
+	if len(maskedParams) == 0 {
+		return reqBody, nil
+	}
+	
 	var unmarshaledRequest = make(map[string]interface{})
 	err := json.Unmarshal(reqBody, &unmarshaledRequest)
 	if err != nil {
-		fmt.Println("err", err)
 		return reqBody, err
 	}
 
