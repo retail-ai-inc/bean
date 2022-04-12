@@ -7,7 +7,7 @@ import (
 	"github.com/retail-ai-inc/bean"
 )
 
-type {{.RepoNameUpper}}Repository interface{
+type {{.RepoNameUpper}}Repository interface {
 	{{.RepoNameUpper}}ExampleFunc(ctx context.Context) (string, error)
 }
 

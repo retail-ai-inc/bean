@@ -123,12 +123,12 @@ func repo(cmd *cobra.Command, args []string) {
 	}
 
 	routerFilesPath := wd + "/routers/"
-	lineNumber, err := matchTextInFileAndReturnLineNumber(routerFilesPath+"route.go", "type Repositories struct {")
+	lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(routerFilesPath+"route.go", "type Repositories struct {")
 	if err == nil && lineNumber > 0 {
 		textToInsert := `	` + repo.RepoNameLower + `Repo repositories.` + repo.RepoNameUpper + `Repository` + ` // added by bean`
 		_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
 
-		lineNumber, err := matchTextInFileAndReturnLineNumber(routerFilesPath+"route.go", "repos := &Repositories{")
+		lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(routerFilesPath+"route.go", "repos := &Repositories{")
 		if err == nil && lineNumber > 0 {
 			textToInsert := `		` + repo.RepoNameLower + `Repo: repositories.New` + repo.RepoNameUpper + `Repository(b.DBConn),` + ` // added by bean`
 			_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)

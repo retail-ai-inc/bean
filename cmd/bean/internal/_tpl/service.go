@@ -13,10 +13,10 @@ type {{.ServiceNameUpper}}Service interface {
 
 {{if .RepoExists}}type {{.ServiceNameLower}}Service struct {
 	{{.ServiceNameLower}}Repository repositories.{{.ServiceNameUpper}}Repository
-}{{else}}type {{.ServiceNameLower}}Service struct{}{{end}}
+}{{else}}type {{.ServiceNameLower}}Service struct {}{{end}}
 
 {{if .RepoExists}}func New{{.ServiceNameUpper}}Service({{.ServiceNameLower}}Repo repositories.{{.ServiceNameUpper}}Repository) *{{.ServiceNameLower}}Service {
-	return &{{.ServiceNameLower}}Service{{"{"}}{{.ServiceNameLower}}Repo{{"}"}}
+	return &{{.ServiceNameLower}}Service{{"{\n\t\t"}}{{.ServiceNameLower}}Repository: {{.ServiceNameLower}}Repo,{{"\n\t}"}}
 }{{else}}func New{{.ServiceNameUpper}}Service() *{{.ServiceNameLower}}Service {
 	return &{{.ServiceNameLower}}Service{{"{}\n}"}}{{end}}
 
