@@ -271,7 +271,7 @@ func NewEcho(config Config) *echo.Echo {
 }
 
 func (b *Bean) ServeAt(host, port string) {
-	b.Echo.Logger.Info("Starting " + b.Config.Environment + " " + b.Config.ProjectName + " at " + b.Config.HTTP.Host + ":" + b.Config.HTTP.Port + "...🚀")
+	b.Echo.Logger.Info("Starting " + b.Config.Environment + " " + b.Config.ProjectName + " at " + host + ":" + port + "...🚀")
 
 	b.UseErrorHandlerFuncs(berror.DefaultErrorHanderFunc)
 	b.Echo.HTTPErrorHandler = b.DefaultHTTPErrorHandler()
