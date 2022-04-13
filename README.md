@@ -11,6 +11,8 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [Service-Repository Pattern](#service-repository-pattern)
   - [Code Styling](#code-styling)
     - [Comment](#comment)
+  - [How To Create Repository File(s)](#how-to-create-repository-files)
+  - [One Liner To Create Service And Repositories](#one-liner-to-create-service-and-repositories)
   - [Do’s and Don’ts](#dos-and-donts)
     - [Context](#context)
     - [Pointer](#pointer)
@@ -69,6 +71,37 @@ For some special message, please add appropiate TAG at the beginning of the comm
 // FIX:
 // ISSUE:
 ```
+
+## How To Create Repository File(s)
+
+```
+bean create repo login
+bean create repo logout
+```
+
+Above two commands will create 2 repository files under `repositories` folder as `login.go` and `logout.go`.
+
+Now let's associate the above repository files with a service called `auth`:
+
+```
+bean create service auth --repo login --repo logout
+```
+
+Above command will create a service file under `services` folder as `auth.go` and automatically set the `type authService struct` and `func NewAuthService`.
+
+Now you can run `make build` or `make build-slim` to compile your newly created service with repositories.
+
+## One Liner To Create Service And Repositories
+
+```
+bean create service auth --repo login --repo profile,logout
+
+OR
+
+bean create service auth -r login -r profile,logout
+```
+
+Above command will create both service repository files if it doesn't exist and automatically set the association.
 
 ## Do’s and Don’ts
 ### Context
