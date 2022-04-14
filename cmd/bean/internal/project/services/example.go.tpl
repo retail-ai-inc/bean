@@ -6,8 +6,7 @@ import (
 
 	"{{ .PkgPath }}/repositories"
 
-	"github.com/getsentry/sentry-go"
-	"github.com/retail-ai-inc/bean/helpers"
+	"github.com/retail-ai-inc/bean/trace"
 )
 
 type ExampleService interface {
@@ -23,8 +22,7 @@ func NewExampleService(exampleRepo repositories.ExampleRepository) *exampleServi
 }
 
 func (service *exampleService) GetMasterSQLTableList(ctx context.Context) (string, error) {
-	span := sentry.StartSpan(ctx, "http.service")
-	span.Description = helpers.CurrFuncName()
-	defer span.Finish()
+	finish := trace.Start(ctx, "http.service")
+	defer finish()
 	return service.exampleRepository.GetMasterSQLTableName(span.Context())
 }
