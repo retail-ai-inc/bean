@@ -85,9 +85,10 @@ type Config struct {
 	DebugLogPath string
 	Secret       string
 	AccessLog    struct {
-		On       bool
-		BodyDump bool
-		Path     string
+		On                bool
+		BodyDump          bool
+		Path              string
+		BodyDumpMaskParam []string
 	}
 	Prometheus struct {
 		On            bool
@@ -190,6 +191,9 @@ func NewEcho(config Config) *echo.Echo {
 				e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
 			} else {
 				accessLogConfig.Output = file
+			}
+			if len(config.AccessLog.BodyDumpMaskParam) > 0 {
+				accessLogConfig.MaskedParameters = config.AccessLog.BodyDumpMaskParam
 			}
 		}
 		accessLogger := middleware.AccessLoggerWithConfig(accessLogConfig)
