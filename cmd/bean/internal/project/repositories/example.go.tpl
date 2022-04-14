@@ -4,9 +4,8 @@ package repositories
 import (
 	"context"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/retail-ai-inc/bean"
-	"github.com/retail-ai-inc/bean/helpers"
+	"github.com/retail-ai-inc/bean/trace"
 )
 
 type ExampleRepository interface {
@@ -18,8 +17,7 @@ func NewExampleRepository(dbDeps *bean.DBDeps) *DbInfra {
 }
 
 func (db *DbInfra) GetMasterSQLTableName(ctx context.Context) (string, error) {
-	span := sentry.StartSpan(ctx, "db")
-	span.Description = helpers.CurrFuncName()
-	defer span.Finish()
+	finish := trace.Start(ctx, "db")
+	defer finish()
 	return db.Conn.MasterMySQLDBName, nil
 }

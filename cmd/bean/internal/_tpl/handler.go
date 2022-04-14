@@ -3,11 +3,11 @@ package handlers
 import (
 	"net/http"
 	"time"
-	//"github.com/getsentry/sentry-go"
+	
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/async"
 	berror "github.com/retail-ai-inc/bean/error"
-	//"github.com/retail-ai-inc/bean/helpers"
+	//"github.com/retail-ai-inc/bean/trace"
 	{{if .ServiceExists}}"{{.ProjectObject.PkgPath}}/services"{{end}}
 )
 
@@ -30,10 +30,10 @@ type {{.HandlerNameLower}}Handler struct {
 
 func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c echo.Context) error {
 	
-	// IMPORTANT - If you wanna trace the performance of your handler function then uncomment following 3 lines
-	//span := sentry.StartSpan(c.Request().Context(), "http.handler")
-	//span.Description = helpers.CurrFuncName()
-	//defer span.Finish()
+	// IMPORTANT: If you wanna trace the performance of your handler function then uncomment following 3 lines
+	// tctx := trace.NewTraceableContext(c.Request().Context())
+	// finish := trace.Start(tctx, "http.handler")
+	// defer finish()
 
 	{{if .ServiceExists}}output, err := handler.{{.HandlerNameLower}}Service.{{.HandlerNameUpper}}ServiceExampleFunc(c.Request().Context())
 	if err != nil {
