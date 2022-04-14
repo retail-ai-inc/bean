@@ -282,7 +282,7 @@ func service(cmd *cobra.Command, args []string) {
 										newText := "\treturn &" + service.ServiceNameLower + "Service{\n" + strings.Join(param[:], "") + "\t}"
 										replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
 
-										needle = `// "github.com/retail-ai-inc/bean/helpers"`
+										needle = `// "github.com/retail-ai-inc/bean/trace"`
 										lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
 										if err == nil {
 											replaceStringToNthLineOfFile(serviceFileToUpdate, "\t\""+p.PkgPath+`/repositories"`, lineNumber+1)
