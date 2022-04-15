@@ -7,11 +7,10 @@ import (
 
 	"{{ .PkgPath }}/services"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/async"
 	berror "github.com/retail-ai-inc/bean/error"
-	"github.com/retail-ai-inc/bean/helpers"
+	"github.com/retail-ai-inc/bean/trace"
 )
 
 type ExampleHandler interface {
@@ -29,11 +28,11 @@ func NewExampleHandler(exampleSvc services.ExampleService) *exampleHandler {
 }
 
 func (handler *exampleHandler) JSONIndex(c echo.Context) error {
-	span := sentry.StartSpan(c.Request().Context(), "http.handler")
-	span.Description = helpers.CurrFuncName()
-	defer span.Finish()
+	tctx := trace.NewTraceableContext(c.Request().Context())
+	finish := trace.Start(tctx, "http.handler")
+	defer finish()
 
-	dbName, err := handler.exampleService.GetMasterSQLTableList(span.Context())
+	dbName, err := handler.exampleService.GetMasterSQLTableList(tctx)
 	if err != nil {
 		return err
 	}

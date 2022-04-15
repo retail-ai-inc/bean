@@ -66,6 +66,10 @@ type (
 		// Optional. Default value false.
 		BodyDump bool
 
+		// MaskedParameters is a slice of parameters for which the user wants to mask the value in logs.
+		// Optional. Default value [].
+		MaskedParameters []string
+
 		accessLogTemplate *fasttemplate.Template
 		bodyDumpTemplate  *fasttemplate.Template
 		colorer           *color.Color
@@ -241,6 +245,7 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 					return buf.WriteString(strconv.FormatInt(res.Size, 10))
 				case "request_body":
 					if len(reqBody) > 0 {
+						reqBody, _ = maskSensitiveInfo(reqBody, config.MaskedParameters)
 						return buf.Write(reqBody)
 					}
 					return buf.WriteString(`""`)
@@ -365,4 +370,25 @@ func (w *bodyDumpResponseWriter) Flush() {
 
 func (w *bodyDumpResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return w.ResponseWriter.(http.Hijacker).Hijack()
+}
+
+func maskSensitiveInfo(reqBody []byte, maskedParams []string) ([]byte, error) {
+	if len(maskedParams) == 0 {
+		return reqBody, nil
+	}
+	
+	var unmarshaledRequest = make(map[string]interface{})
+	err := json.Unmarshal(reqBody, &unmarshaledRequest)
+	if err != nil {
+		return reqBody, err
+	}
+
+	for _, maskedParam := range maskedParams {
+		if _, ok := unmarshaledRequest[maskedParam]; ok {
+			unmarshaledRequest[maskedParam] = "****"
+		}
+	}
+	maskedRequestBody, _ := json.Marshal(unmarshaledRequest)
+
+	return maskedRequestBody, nil
 }

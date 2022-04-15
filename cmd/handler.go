@@ -23,12 +23,14 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
 	"io/ioutil"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"text/template"
 	"unicode"
@@ -160,12 +162,12 @@ func handler(cmd *cobra.Command, args []string) {
 	}
 
 	routerFilesPath := wd + "/routers/"
-	lineNumber, err := matchTextInFileAndReturnLineNumber(routerFilesPath+"route.go", "type Handlers struct {")
+	lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(routerFilesPath+"route.go", "type Handlers struct {")
 	if err == nil && lineNumber > 0 {
 		textToInsert := `	` + handler.HandlerNameLower + `Hdlr handlers.` + handler.HandlerNameUpper + `Handler` + ` // added by bean`
 		_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
 
-		lineNumber, err := matchTextInFileAndReturnLineNumber(routerFilesPath+"route.go", "hdlrs := &Handlers{")
+		lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(routerFilesPath+"route.go", "hdlrs := &Handlers{")
 		if err == nil && lineNumber > 0 {
 			var textToInsert string
 
@@ -215,7 +217,7 @@ func checkServiceExists(repoName string) bool {
 	return err == nil
 }
 
-func matchTextInFileAndReturnLineNumber(filePath string, needle string) (int, error) {
+func matchTextInFileAndReturnFirstOccurrenceLineNumber(filePath string, needle string) (int, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return 0, err
@@ -269,4 +271,73 @@ func insertStringToNthLineOfFile(filePath, textToInsert string, lineNumber int) 
 	}
 
 	return ioutil.WriteFile(filePath, []byte(fileContent), 0644)
+}
+
+// Replace sting to n-th line of file.
+func replaceStringToNthLineOfFile(filePath, newText string, lineNumber int) error {
+
+	f, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
+	fileContent := ""
+	for i, line := range lines {
+		if i == lineNumber-1 {
+			fileContent += newText + "\n"
+		} else {
+			fileContent += line + "\n"
+		}
+	}
+
+	return ioutil.WriteFile(filePath, []byte(fileContent), 0644)
+}
+
+func replaceStringFromFileByRegex(filePath, regex, additonal, replaceWith string) error {
+
+	input, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	re := regexp.MustCompile(regex)
+	match := re.FindStringSubmatch(string(input))
+	if len(match) > 1 {
+
+		replaceMe := additonal + match[1]
+		output := bytes.Replace(input, []byte(replaceMe), []byte(replaceWith), -1)
+
+		if err = ioutil.WriteFile(filePath, output, 0664); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func replaceStringFromFileByExactMatches(filePath, replaceMe, replaceWith string) error {
+
+	input, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	output := bytes.Replace(input, []byte(replaceMe), []byte(replaceWith), -1)
+
+	if err = ioutil.WriteFile(filePath, output, 0664); err != nil {
+		return err
+	}
+
+	return nil
 }
