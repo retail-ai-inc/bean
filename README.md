@@ -13,6 +13,7 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [One Liner To Create Service And Repositories](#one-liner-to-create-service-and-repositories)
   - [How To Create Handler](#how-to-create-handler)
   - [Two Build Commands](#two-build-commands)
+  - [Built-In Logging](#built-in-logging)
   - [Code Styling](#code-styling)
     - [Comment](#comment)
   - [Do’s and Don’ts](#dos-and-donts)
@@ -93,9 +94,27 @@ Above command will create a pre-defined sample handler file under `handlers` fol
 
 ## Two Build Commands
 
-Bean supporting 2 build commands;
+Bean supporting 2 build commands:
 - `make build` - This is usual go build command.
 - `make build-slim` - This will create a slim down version of your binary by turning off the DWARF debugging information and Go symbol table. Furthemore, this will exclude file system paths from the resulting binary using `-trimpath`.
+
+## Built-In Logging
+
+Bean has a pre-builtin logging system. If you open the `env.json` file from your project directory then you should see some configuration like below:
+
+```
+"accessLog": {
+  "on": true,
+  "bodyDump": true,
+  "path": "",
+  "bodyDumpMaskParam": []
+}
+```
+
+- `on` - Turn on/off the logging system. Default is `true`.
+- `bodyDump` - Log the request-response body in the log file. This is helpful for debugging purpose. Default `true`
+- `path` - Set the log file path. You can set like `logs/console.log`. Empty log path allow bean to log into `stdout`
+- `bodyDumpMaskParam` - For security purpose if you don't wanna `bodyDump` some sensetive request parameter then you can add those as a string into the slice like `["password", "secret"]`. Default is empty.
 
 ## Code Styling
 ### Comment
