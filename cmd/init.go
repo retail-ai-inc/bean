@@ -73,12 +73,11 @@ directory. the suffix of the package_name should match the current directory.`,
 			}
 
 			p := &Project{
-				Copyright:   copyright,
-				PkgPath:     pkgPath,
-				PkgName:     pkgName,
-				RootDir:     wd,
-				BeanVersion: rootCmd.Version,
-				Secret:      secret,
+				Copyright: copyright,
+				PkgPath:   pkgPath,
+				PkgName:   pkgName,
+				RootDir:   wd,
+				Secret:    secret,
 			}
 
 			// Set the relative root path of the internal FS.

@@ -49,8 +49,6 @@ type Project struct {
 	// RootFS contains the internal FS directory which need to be walk through recursively,
 	// different cmd may starts with different root path.(init: internal/project, upgrade: internal/project/framework).
 	RootFS fs.FS
-	// BeanVersion is the current bean version.
-	BeanVersion string
 	// Secret is similar like a passphrase to hold a key to generate tokens, hash password or similar security credentials.
 	Secret string
 }

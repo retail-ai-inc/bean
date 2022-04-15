@@ -74,9 +74,8 @@ func repo(cmd *cobra.Command, args []string) {
 	}
 
 	p := &Project{
-		Copyright:   copyright,
-		RootDir:     wd,
-		BeanVersion: rootCmd.Version,
+		Copyright: copyright,
+		RootDir:   wd,
 	}
 
 	// Set the relative root path of the internal templates folder.
