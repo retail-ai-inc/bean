@@ -9,10 +9,11 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [How to use](#how-to-use)
     - [Initialize a project](#initialize-a-project)
   - [Service-Repository Pattern](#service-repository-pattern)
-  - [Code Styling](#code-styling)
-    - [Comment](#comment)
   - [How To Create Repository File(s)](#how-to-create-repository-files)
   - [One Liner To Create Service And Repositories](#one-liner-to-create-service-and-repositories)
+  - [How To Create Handler](#how-to-create-handler)
+  - [Code Styling](#code-styling)
+    - [Comment](#comment)
   - [Do’s and Don’ts](#dos-and-donts)
     - [Context](#context)
     - [Pointer](#pointer)
@@ -51,6 +52,44 @@ Bean is using service repository pattern for any database, file or external tran
 
 ![Service_Repository_Pattern](docs/static/service_repository_pattern.png)
 
+## How To Create Repository File(s)
+
+```
+bean create repo login
+bean create repo logout
+```
+
+Above two commands will create 2 repository files under `repositories` folder as `login.go` and `logout.go`.
+
+Now let's associate the above repository files with a service called `auth`:
+
+```
+bean create service auth --repo login --repo logout
+```
+
+Above command will create a pre-defined sample service file under `services` folder as `auth.go` and automatically set the `type authService struct` and `func NewAuthService`.
+
+Now you can run `make build` or `make build-slim` to compile your newly created service with repositories.
+
+## One Liner To Create Service And Repositories
+
+```
+bean create service auth --repo login --repo profile,logout
+
+OR
+
+bean create service auth -r login -r profile,logout
+```
+
+Above command will create both service repository files if it doesn't exist and automatically set the association.
+
+## How To Create Handler
+
+```
+bean create handler auth
+```
+Above command will create a pre-defined sample handler file under `handlers` folder as `auth.go`. Furthermore, if you already create an `auth` service with same name as `auth` then bean will automatically associate your handler with the auth service in `route.go`.
+
 ## Code Styling
 ### Comment
 Please use `//` for any comment:
@@ -71,37 +110,6 @@ For some special message, please add appropiate TAG at the beginning of the comm
 // FIX:
 // ISSUE:
 ```
-
-## How To Create Repository File(s)
-
-```
-bean create repo login
-bean create repo logout
-```
-
-Above two commands will create 2 repository files under `repositories` folder as `login.go` and `logout.go`.
-
-Now let's associate the above repository files with a service called `auth`:
-
-```
-bean create service auth --repo login --repo logout
-```
-
-Above command will create a service file under `services` folder as `auth.go` and automatically set the `type authService struct` and `func NewAuthService`.
-
-Now you can run `make build` or `make build-slim` to compile your newly created service with repositories.
-
-## One Liner To Create Service And Repositories
-
-```
-bean create service auth --repo login --repo profile,logout
-
-OR
-
-bean create service auth -r login -r profile,logout
-```
-
-Above command will create both service repository files if it doesn't exist and automatically set the association.
 
 ## Do’s and Don’ts
 ### Context
