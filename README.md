@@ -12,6 +12,7 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [How To Create Repository File(s)](#how-to-create-repository-files)
   - [One Liner To Create Service And Repositories](#one-liner-to-create-service-and-repositories)
   - [How To Create Handler](#how-to-create-handler)
+  - [Two Build Commands](#two-build-commands)
   - [Code Styling](#code-styling)
     - [Comment](#comment)
   - [Do’s and Don’ts](#dos-and-donts)
@@ -89,6 +90,12 @@ Above command will create both service repository files if it doesn't exist and 
 bean create handler auth
 ```
 Above command will create a pre-defined sample handler file under `handlers` folder as `auth.go`. Furthermore, if you already create an `auth` service with same name as `auth` then bean will automatically associate your handler with the auth service in `route.go`.
+
+## Two Build Commands
+
+Bean supporting 2 build commands;
+- `make build` - This is usual go build command.
+- `make build-slim` - This will create a slim down version of your binary by turning off the DWARF debugging information and Go symbol table. Furthemore, this will exclude file system paths from the resulting binary using `-trimpath`.
 
 ## Code Styling
 ### Comment
