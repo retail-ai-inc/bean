@@ -116,6 +116,14 @@ Bean has a pre-builtin logging system. If you open the `env.json` file from your
 - `path` - Set the log file path. You can set like `logs/console.log`. Empty log path allow bean to log into `stdout`
 - `bodyDumpMaskParam` - For security purpose if you don't wanna `bodyDump` some sensetive request parameter then you can add those as a string into the slice like `["password", "secret"]`. Default is empty.
 
+## Secret Key
+
+In `env.json` file bean maintain a key called `secret`. This is a 32 character long random alphanumeric string. It's a multi purpose hash key or salt which you can use in your project to generate JWT, one way hash password, encrypt some private data, etc. By default, `bean` is providing a secret however, you can generate a new one by entering the following command from your terminal:
+
+```
+./myproject gen secret
+```
+
 ## Code Styling
 ### Comment
 Please use `//` for any comment:
