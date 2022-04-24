@@ -14,6 +14,7 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [How To Create Handler](#how-to-create-handler)
   - [Two Build Commands](#two-build-commands)
   - [Built-In Logging](#built-in-logging)
+  - [Secret Key](#secret-key)
   - [Code Styling](#code-styling)
     - [Comment](#comment)
   - [Do’s and Don’ts](#dos-and-donts)
@@ -118,7 +119,7 @@ Bean has a pre-builtin logging system. If you open the `env.json` file from your
 
 ## Secret Key
 
-In `env.json` file bean maintain a key called `secret`. This is a 32 character long random alphanumeric string. It's a multi purpose hash key or salt which you can use in your project to generate JWT, one way hash password, encrypt some private data, etc. By default, `bean` is providing a secret however, you can generate a new one by entering the following command from your terminal:
+In `env.json` file bean is maintaining a key called `secret`. This is a 32 character long random alphanumeric string. It's a multi purpose hash key or salt which you can use in your project to generate JWT, one way hash password, encrypt some private data or session. By default, `bean` is providing a secret however, you can generate a new one by entering the following command from your terminal:
 
 ```
 ./myproject gen secret
