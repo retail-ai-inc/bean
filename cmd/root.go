@@ -51,6 +51,8 @@ type Project struct {
 	RootFS fs.FS
 	// Secret is similar like a passphrase to hold a key to generate tokens, hash password or similar security credentials.
 	Secret string
+	// JWT secret/salt
+	JWTSecret string
 }
 
 // rootCmd represents the base command when called without any subcommands

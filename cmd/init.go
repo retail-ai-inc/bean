@@ -72,12 +72,19 @@ directory. the suffix of the package_name should match the current directory.`,
 				log.Fatalln(err)
 			}
 
+			// Generate a 24 character long random JWT secret string.
+			jwtSecret, err := str.GenerateRandomString(24, false)
+			if err != nil {
+				log.Fatalln(err)
+			}
+
 			p := &Project{
 				Copyright: copyright,
 				PkgPath:   pkgPath,
 				PkgName:   pkgName,
 				RootDir:   wd,
 				Secret:    secret,
+				JWTSecret: jwtSecret,
 			}
 
 			// Set the relative root path of the internal FS.
