@@ -60,3 +60,8 @@ func FindStringInSlice(slice []string, str string) int {
 
 	return -1
 }
+
+// Delete a string from a specific index of a slice.
+func DeleteStringFromSlice(slice []string, index int) []string {
+	return append(slice[:index], slice[index+1:]...)
+}
