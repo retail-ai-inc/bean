@@ -15,6 +15,7 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [Two Build Commands](#two-build-commands)
   - [Built-In Logging](#built-in-logging)
   - [Secret Key](#secret-key)
+  - [Useful Helper Functions](#useful-helper-functions)
   - [Code Styling](#code-styling)
     - [Comment](#comment)
   - [Do’s and Don’ts](#dos-and-donts)
@@ -124,6 +125,32 @@ In `env.json` file bean is maintaining a key called `secret`. This is a 32 chara
 ```
 ./myproject gen secret
 ```
+
+## Useful Helper Functions
+
+Let's import the package first:
+
+```
+import helpers "github.com/retail-ai-inc/bean/helpers"
+```
+
+**helpers.HasStringInSlice(slice []string, str string, modifier func(str string) string)** - This function tells whether a slice contains the `str` or not. If a `modifier` func is provided, it is called with the slice item before the comparation. For example:
+```
+modifier := func(s string) string {
+  if s == "cc" {
+    return "ee"
+  }
+  
+  return s
+}
+
+if !helpers.HasStringInSlice(src, "ee", modifier) {
+}
+```
+
+**helpers.FindStringInSlice(slice []string, str string)** - This function returns the smallest index at which str == slice[index], or -1 if there is no such index.
+
+**helpers.DeleteStringFromSlice(slice []string, index int)** - This function delete a string from a specific index of a slice.
 
 ## Code Styling
 ### Comment
