@@ -1,4 +1,4 @@
-{{ .Copyright }})
+{{ .Copyright }}
 package commands
 
 import (
