@@ -16,8 +16,6 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [Built-In Logging](#built-in-logging)
   - [Secret Key](#secret-key)
   - [Useful Helper Functions](#useful-helper-functions)
-  - [Code Styling](#code-styling)
-    - [Comment](#comment)
   - [Do’s and Don’ts](#dos-and-donts)
     - [Context](#context)
     - [Pointer](#pointer)
@@ -151,27 +149,6 @@ if !helpers.HasStringInSlice(src, "ee", modifier) {
 **helpers.FindStringInSlice(slice []string, str string)** - This function returns the smallest index at which str == slice[index], or -1 if there is no such index.
 
 **helpers.DeleteStringFromSlice(slice []string, index int)** - This function delete a string from a specific index of a slice.
-
-## Code Styling
-### Comment
-Please use `//` for any comment:
-
-```
-// This is a single line comment.
-
-// This is a
-// multiline comment.
-```
-
-For some special message, please add appropiate TAG at the beginning of the comment.
-
-```
-// IMPORTANT: This is super important comment.
-// WARN:
-// TODO:
-// FIX:
-// ISSUE:
-```
 
 ## Do’s and Don’ts
 ### Context
