@@ -9,6 +9,7 @@ import (
 	"{{ .PkgPath }}/validations"
 
 	"github.com/getsentry/sentry-go"
+	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"github.com/retail-ai-inc/bean"
 	berror "github.com/retail-ai-inc/bean/error"
 	"github.com/retail-ai-inc/bean/helpers"
@@ -83,6 +84,11 @@ func start(cmd *cobra.Command, args []string) {
 
 	// Set custom middleware in here.
 	b.UseMiddlewares(
+		echomiddleware.TimeoutWithConfig(echomiddleware.TimeoutConfig{
+			ErrorMessage:               `{"errorCode": "100004", "errorMsg": "timeout"}`,
+			OnTimeoutRouteErrorHandler: berror.OnTimeoutRouteErrorHandler,
+			Timeout:                    config.HTTP.Timeout,
+		}),
 		// Example:
 		middlewares.Example("example middleware"),
 	)

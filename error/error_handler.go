@@ -120,3 +120,8 @@ func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
 
 	return true, err
 }
+
+func OnTimeoutRouteErrorHandler(err error, c echo.Context) {
+	// Send error event to sentry.
+	sentry.CaptureException(err)
+}

@@ -235,9 +235,6 @@ func NewEcho(config Config) *echo.Echo {
 	e.Use(echomiddleware.Recover())
 
 	// IMPORTANT: Request related middleware.
-	// Time out middleware.
-	e.Use(middleware.RequestTimeout(config.HTTP.Timeout))
-
 	// Set the `X-Request-ID` header field if it doesn't exist.
 	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
 		Generator: uuid.NewString,
