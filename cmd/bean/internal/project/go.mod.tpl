@@ -1,13 +1,13 @@
 module {{ .PkgPath }}
 
-go 1.17
+go 1.18
 
 require (
 	github.com/getsentry/sentry-go v0.12.0
 	github.com/go-playground/validator/v10 v10.9.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/labstack/echo/v4 v4.6.3
-	github.com/retail-ai-inc/bean v1.1.12
+	github.com/retail-ai-inc/bean v1.1.13
 	github.com/spf13/cobra v1.3.0
 	github.com/spf13/viper v1.10.0
 )
