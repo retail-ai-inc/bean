@@ -56,8 +56,9 @@ func APIErrorHanderFunc(e error, c echo.Context) (bool, error) {
 	}
 
 	if he.HTTPStatusCode >= 404 {
-		// Send error event to sentry.
+		// Send error event to sentry if configured.
 		sentry.CaptureException(he)
+		c.Logger().Error(he)
 	}
 
 	err := c.JSON(he.HTTPStatusCode, errorResp{
@@ -74,8 +75,9 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 		return false, nil
 	}
 
-	// Send error event to sentry.
+	// Send error event to sentry if configured.
 	sentry.CaptureException(he)
+	c.Logger().Error(he)
 
 	// Return different response base on some defined error.
 	var err error
@@ -101,8 +103,9 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 }
 
 func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
-	// Send error event to sentry.
+	// Send error event to sentry if configured.
 	sentry.CaptureException(err)
+	c.Logger().Error(err)
 
 	// Get Content-Type parameter from request header to identify the request content type. If the request is for
 	// html then we should display the error in html.
@@ -122,6 +125,7 @@ func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
 }
 
 func OnTimeoutRouteErrorHandler(err error, c echo.Context) {
-	// Send error event to sentry.
+	// Send error event to sentry if configured.
 	sentry.CaptureException(err)
+	c.Logger().Error(err)
 }
