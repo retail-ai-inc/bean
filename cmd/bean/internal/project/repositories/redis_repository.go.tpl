@@ -123,7 +123,6 @@ func (r *redisRepository) MGet(c context.Context, companyID uint64, keys ...stri
 	}
 
 	result, err := r.clients[companyID].MGet(c, prefixedKeysSlice...).Result()
-
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
