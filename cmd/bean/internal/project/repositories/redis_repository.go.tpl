@@ -4,7 +4,6 @@ package repositories
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -45,7 +44,6 @@ func (r *redisRepository) GetJSON(c context.Context, companyID uint64, key strin
 	defer finish()
 
 	prefixKey := r.cachePrefix + "_" + key
-	fmt.Println("prefixKey", prefixKey)
 	jsonStr, err := r.clients[companyID].Get(c, prefixKey).Result()
 	if err == redis.Nil {
 		return false, nil
