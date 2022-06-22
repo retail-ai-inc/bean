@@ -35,7 +35,7 @@ func (cb *CustomBinder) Bind(i interface{}, c echo.Context) (err error) {
 
 	switch {
 
-	case strings.HasPrefix(ctype, echo.MIMEApplicationJSON) && (req.Method == http.MethodPost || req.Method == http.MethodPut):
+	case strings.HasPrefix(ctype, echo.MIMEApplicationJSON) && (req.Method == http.MethodPost || req.Method == http.MethodPut || req.Method == http.MethodPatch):
 
 		bodyBytes := bytes.NewBuffer(make([]byte, 0))
 		reader := io.TeeReader(req.Body, bodyBytes)
