@@ -23,6 +23,7 @@ package dbdrivers
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/retail-ai-inc/bean/aes"
@@ -36,8 +37,14 @@ type RedisConfig struct {
 		Host     string
 		Port     string
 	}
-	Prefix     string
-	Maxretries int
+	Prefix             string
+	Maxretries         int
+	PoolSize           int
+	MinIdleConnections int
+	DialTimeout        time.Duration
+	ReadTimeout        time.Duration
+	WriteTimeout       time.Duration
+	PoolTimeout        time.Duration
 }
 
 var cachePrefix string
@@ -54,7 +61,11 @@ func InitRedisMasterConn(config RedisConfig) (*redis.Client, int) {
 	masterCfg := config.Master
 
 	if masterCfg != nil {
-		return connectRedisDB(masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database, config.Maxretries)
+		return connectRedisDB(
+			masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
+			config.Maxretries, config.PoolSize, config.MinIdleConnections, config.DialTimeout,
+			config.ReadTimeout, config.WriteTimeout, config.PoolTimeout,
+		)
 	}
 
 	return nil, -1
@@ -96,7 +107,9 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 			}
 
 			redisConns[t.TenantID], redisDBNames[t.TenantID] = connectRedisDB(
-				password, host, port, dbName, config.Maxretries)
+				password, host, port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
+				config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout,
+			)
 
 		} else {
 			redisConns[t.TenantID], redisDBNames[t.TenantID] = nil, -1
@@ -106,13 +119,22 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 	return redisConns, redisDBNames
 }
 
-func connectRedisDB(password, host, port string, dbName int, maxretries int) (*redis.Client, int) {
+func connectRedisDB(
+	password, host, port string, dbName int, maxretries, poolsize, minIdleConnections int,
+	dialTimeout, readTimeout, writeTimeout, poolTimeout time.Duration,
+) (*redis.Client, int) {
 
 	rdb := redis.NewClient(&redis.Options{
-		Addr:       host + ":" + port,
-		Password:   password,
-		DB:         dbName,
-		MaxRetries: maxretries,
+		Addr:         host + ":" + port,
+		Password:     password,
+		DB:           dbName,
+		MaxRetries:   maxretries,
+		PoolSize:     poolsize,
+		MinIdleConns: minIdleConnections,
+		DialTimeout:  dialTimeout,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		PoolTimeout:  poolTimeout,
 	})
 
 	return rdb, dbName
