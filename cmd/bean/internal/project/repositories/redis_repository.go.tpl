@@ -43,7 +43,7 @@ func (r *redisRepository) GetJSON(c context.Context, tenantID uint64, key string
 	prefixKey := r.cachePrefix + "_" + key
 	jsonStr, err := dbdrivers.RedisGetString(c, r.clients[tenantID], prefixKey)
 	if err != nil {
-		return false, errors.WithStack(err)
+		return false, err // This `err` is actually returning stack trace.
 	} else if jsonStr == "" {
 		return false, nil
 	}
