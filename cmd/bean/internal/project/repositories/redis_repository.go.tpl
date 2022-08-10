@@ -6,37 +6,34 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
+	"github.com/retail-ai-inc/bean/dbdrivers"
 	"github.com/retail-ai-inc/bean/trace"
 )
 
 type RedisRepository interface {
-	GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error)
-	SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error
-	GetString(c context.Context, tenantID uint64, key string) (string, error)
-	SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error
-	MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error)
-    RPush(c context.Context, tenantID uint64, key string, valueList []string) error
-	LRange(c context.Context, tenantID uint64, key string) error
-	IncrementValue(c context.Context, tenantID uint64, key string) error
-	DelKey(c context.Context, tenantID uint64, key string) error
-	SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error
-	SRem(c context.Context, tenantID uint64, key string, elements interface{}) error
-	SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error)
-	SMembers(c context.Context, tenantID uint64, key string) ([]string, error)
+	GetJSON(c context.Context, companyID uint64, key string, dst interface{}) (bool, error)
+	GetString(c context.Context, companyID uint64, key string) (string, error)
+	MGet(c context.Context, companyID uint64, keys ...string) ([]interface{}, error)
+	LRange(c context.Context, companyID uint64, key string, start, stop int64) ([]string, error)
+	SMembers(c context.Context, companyID uint64, key string) ([]string, error)
+	SIsMember(c context.Context, companyID uint64, key string, element interface{}) (bool, error)
+	SetJSON(c context.Context, companyID uint64, key string, data interface{}, ttl time.Duration) error
+	SetString(c context.Context, companyID uint64, key string, data string, ttl time.Duration) error
+	RPush(c context.Context, companyID uint64, key string, valueList []string) error
+	IncrementValue(c context.Context, companyID uint64, key string) error
+	SAdd(c context.Context, companyID uint64, key string, elements interface{}) error
+	SRem(c context.Context, companyID uint64, key string, elements interface{}) error
+	DelKey(c context.Context, companyID uint64, key string) error
 }
 
 type redisRepository struct {
-	clients     map[uint64]*redis.Client
+	clients     map[uint64]*dbdrivers.RedisDBConn
 	cachePrefix string
 }
 
-func NewRedisRepository(clients map[uint64]*redis.Client, cachePrefix string) *redisRepository {
-	return &redisRepository{
-		clients:     clients,
-		cachePrefix: cachePrefix,
-	}
+func NewRedisRepository(clients map[uint64]*dbdrivers.RedisDBConn, cachePrefix string) *redisRepository {
+	return &redisRepository{clients, cachePrefix}
 }
 
 func (r *redisRepository) GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error) {
@@ -44,12 +41,11 @@ func (r *redisRepository) GetJSON(c context.Context, tenantID uint64, key string
 	defer finish()
 
 	prefixKey := r.cachePrefix + "_" + key
-	jsonStr, err := r.clients[tenantID].Get(c, prefixKey).Result()
-	if err == redis.Nil {
-		return false, nil
-
-	} else if err != nil {
+	jsonStr, err := dbdrivers.RedisGetString(c, r.clients[tenantID], prefixKey)
+	if err != nil {
 		return false, errors.WithStack(err)
+	} else if jsonStr == "" {
+		return false, nil
 	}
 
 	if err := json.Unmarshal([]byte(jsonStr), &dst); err != nil {
@@ -59,55 +55,12 @@ func (r *redisRepository) GetJSON(c context.Context, tenantID uint64, key string
 	return true, nil
 }
 
-// ttl in seconds.
-func (r *redisRepository) SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error {
-	finish := trace.Start(c, "db")
-	defer finish()
-
-	jsonBytes, err := json.Marshal(data)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	prefixKey := r.cachePrefix + "_" + key
-	if err := r.clients[tenantID].Set(c, prefixKey, string(jsonBytes), ttl).Err(); err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
-}
-
 func (r *redisRepository) GetString(c context.Context, tenantID uint64, key string) (string, error) {
 	finish := trace.Start(c, "db")
 	defer finish()
 
 	prefixKey := r.cachePrefix + "_" + key
-
-	data, err := r.clients[tenantID].Get(c, prefixKey).Result()
-
-	if err == redis.Nil {
-
-		return "", nil
-
-	} else if err != nil {
-
-		return "", errors.WithStack(err)
-	}
-
-	return data, nil
-}
-
-func (r *redisRepository) SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error {
-	finish := trace.Start(c, "db")
-	defer finish()
-
-	prefixKey := r.cachePrefix + "_" + key
-
-	if err := r.clients[tenantID].Set(c, prefixKey, data, ttl).Err(); err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
+	return dbdrivers.RedisGetString(c, r.clients[tenantID], prefixKey)
 }
 
 func (r *redisRepository) MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error) {
@@ -120,104 +73,15 @@ func (r *redisRepository) MGet(c context.Context, tenantID uint64, keys ...strin
 		prefixedKeysSlice = append(prefixedKeysSlice, prefixKey)
 	}
 
-	result, err := r.clients[tenantID].MGet(c, prefixedKeysSlice...).Result()
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	return result, nil
+	return dbdrivers.RedisMGet(c, r.clients[tenantID], prefixedKeysSlice...)
 }
 
-func (r *redisRepository) RPush(c context.Context, tenantID uint64, key string, valueList []string) error {
+func (r *redisRepository) LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error) {
 	finish := trace.Start(c, "db")
 	defer finish()
 
 	prefixKey := r.cachePrefix + "_" + key
-
-	if err := r.clients[tenantID].RPush(c, prefixKey, valueList).Err(); err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
-}
-
-func (r *redisRepository) LRange(c context.Context, tenantID uint64, key string) error {
-	finish := trace.Start(c, "db")
-	defer finish()
-
-	prefixKey := r.cachePrefix + "_" + key
-
-	if err := r.clients[tenantID].LRange(c, prefixKey, 0, -1).Err(); err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
-}
-
-func (r *redisRepository) IncrementValue(c context.Context, tenantID uint64, key string) error {
-	finish := trace.Start(c, "db")
-	defer finish()
-
-	prefixKey := r.cachePrefix + "_" + key
-
-	if err := r.clients[tenantID].Incr(c, prefixKey).Err(); err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
-}
-
-func (r *redisRepository) DelKey(c context.Context, tenantID uint64, key string) error {
-	finish := trace.Start(c, "db")
-	defer finish()
-
-	prefixKey := r.cachePrefix + "_" + key
-
-	if err := r.clients[tenantID].Del(c, prefixKey).Err(); err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
-}
-
-func (r *redisRepository) SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error {
-	finish := trace.Start(c, "db")
-	defer finish()
-
-	prefixKey := r.cachePrefix + "_" + key
-
-	if err := r.clients[tenantID].SAdd(c, prefixKey, elements).Err(); err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
-}
-
-func (r *redisRepository) SRem(c context.Context, tenantID uint64, key string, elements interface{}) error {
-	finish := trace.Start(c, "db")
-	defer finish()
-
-	prefixKey := r.cachePrefix + "_" + key
-
-	if err := r.clients[tenantID].SRem(c, prefixKey, elements).Err(); err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
-}
-
-func (r *redisRepository) SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error) {
-	finish := trace.Start(c, "db")
-	defer finish()
-
-	prefixKey := r.cachePrefix + "_" + key
-
-	result, err := r.clients[tenantID].SIsMember(c, prefixKey, element).Result()
-	if err != nil {
-		return false, errors.WithStack(err)
-	}
-
-	return result, nil
+	return dbdrivers.RedisGetLRange(c, r.clients[tenantID], prefixKey, start, stop)
 }
 
 func (r *redisRepository) SMembers(c context.Context, tenantID uint64, key string) ([]string, error) {
@@ -225,11 +89,70 @@ func (r *redisRepository) SMembers(c context.Context, tenantID uint64, key strin
 	defer finish()
 
 	prefixKey := r.cachePrefix + "_" + key
+	return dbdrivers.RedisSMembers(c, r.clients[tenantID], prefixKey)
+}
 
-	result, err := r.clients[tenantID].SMembers(c, prefixKey).Result()
-	if err != nil {
-		return []string{}, errors.WithStack(err)
-	}
+func (r *redisRepository) SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error) {
+	finish := trace.Start(c, "db")
+	defer finish()
 
-	return result, nil
+	prefixKey := r.cachePrefix + "_" + key
+	return dbdrivers.RedisSIsMember(c, r.clients[tenantID], prefixKey, element)
+}
+
+// `ttl` is in seconds.
+func (r *redisRepository) SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	prefixKey := r.cachePrefix + "_" + key
+	return dbdrivers.RedisSetJSON(c, r.clients[tenantID], prefixKey, data, ttl)
+}
+
+func (r *redisRepository) SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	prefixKey := r.cachePrefix + "_" + key
+	return dbdrivers.RedisSet(c, r.clients[tenantID], prefixKey, data, ttl)
+}
+
+func (r *redisRepository) RPush(c context.Context, tenantID uint64, key string, valueList []string) error {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	prefixKey := r.cachePrefix + "_" + key
+	return dbdrivers.RedisRPush(c, r.clients[tenantID], prefixKey, valueList)
+}
+
+func (r *redisRepository) IncrementValue(c context.Context, tenantID uint64, key string) error {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	prefixKey := r.cachePrefix + "_" + key
+	return dbdrivers.RedisIncrementValue(c, r.clients[tenantID], prefixKey)
+}
+
+func (r *redisRepository) SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	prefixKey := r.cachePrefix + "_" + key
+	return dbdrivers.RedisSAdd(c, r.clients[tenantID], prefixKey, elements)
+}
+
+func (r *redisRepository) SRem(c context.Context, tenantID uint64, key string, elements interface{}) error {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	prefixKey := r.cachePrefix + "_" + key
+	return dbdrivers.RedisSRem(c, r.clients[tenantID], prefixKey, elements)
+}
+
+func (r *redisRepository) DelKey(c context.Context, tenantID uint64, key string) error {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	prefixKey := r.cachePrefix + "_" + key
+	return dbdrivers.RedisDelKey(c, r.clients[tenantID], prefixKey)
 }
