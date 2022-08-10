@@ -91,6 +91,8 @@ func start(cmd *cobra.Command, args []string) {
 		}),
 		// Example:
 		middlewares.Example("example middleware"),
+		// IMPORTANT: The following line will produce a proper stack trace if error occurred. Keep it as the last parameter/middleware here.
+        	echomiddleware.Recover(),
 	)
 
 	// Set custom error handler function here.
