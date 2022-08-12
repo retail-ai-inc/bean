@@ -379,7 +379,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 
 			// IMPORTANT: Let's initialize the read replica connection if it is available.
 			if readHostArray, ok := redisCfg["read"]; ok {
-				if readHost, ok := readHostArray.([]string); ok {
+				if readHost, ok := readHostArray.([]interface{}); ok {
 					redisReadConn := make(map[uint64]*redis.Client, len(readHost))
 
 					for i, h := range readHost {
@@ -390,7 +390,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 						}
 
 						redisReadConn[uint64(i)], _ = connectRedisDB(
-							password, h, port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
+							password, h.(string), port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
 							config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout,
 						)
 					}
