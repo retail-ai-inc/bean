@@ -33,7 +33,6 @@ import (
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	validatorV10 "github.com/go-playground/validator/v10"
-	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/labstack/echo-contrib/prometheus"
 	"github.com/labstack/echo/v4"
@@ -63,10 +62,8 @@ type DBDeps struct {
 	MasterMongoDBName  string
 	TenantMongoDBs     map[uint64]*mongo.Client
 	TenantMongoDBNames map[uint64]string
-	MasterRedisDB      *redis.Client
-	MasterRedisDBName  int
-	TenantRedisDBs     map[uint64]*redis.Client
-	TenantRedisDBNames map[uint64]int
+	MasterRedisDB      map[uint64]*dbdrivers.RedisDBConn
+	TenantRedisDBs     map[uint64]*dbdrivers.RedisDBConn
 	BadgerDB           *badger.DB
 }
 
@@ -358,25 +355,23 @@ func (b *Bean) InitDB() {
 	var masterMySQLDBName string
 	var masterMongoDB *mongo.Client
 	var masterMongoDBName string
-	var masterRedisDB *redis.Client
-	var masterRedisDBName int
-
+	var masterRedisDB map[uint64]*dbdrivers.RedisDBConn
 	var tenantMySQLDBs map[uint64]*gorm.DB
 	var tenantMySQLDBNames map[uint64]string
 	var tenantMongoDBs map[uint64]*mongo.Client
 	var tenantMongoDBNames map[uint64]string
-	var tenantRedisDBs map[uint64]*redis.Client
-	var tenantRedisDBNames map[uint64]int
+	var tenantRedisDBs map[uint64]*dbdrivers.RedisDBConn
 
 	if b.Config.Database.Tenant.On {
 		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
 		tenantMySQLDBs, tenantMySQLDBNames = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, b.Config.Secret)
 		tenantMongoDBs, tenantMongoDBNames = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, b.Config.Secret)
-		tenantRedisDBs, tenantRedisDBNames = dbdrivers.InitRedisTenantConns(b.Config.Database.Redis, masterMySQLDB, b.Config.Secret)
+		masterRedisDB = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
+		tenantRedisDBs = dbdrivers.InitRedisTenantConns(b.Config.Database.Redis, masterMySQLDB, b.Config.Secret)
 	} else {
 		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
 		masterMongoDB, masterMongoDBName = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo)
-		masterRedisDB, masterRedisDBName = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
+		masterRedisDB = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
 	}
 
 	masterBadgerDB := dbdrivers.InitBadgerConn(b.Config.Database.Badger)
@@ -391,9 +386,7 @@ func (b *Bean) InitDB() {
 		TenantMongoDBs:     tenantMongoDBs,
 		TenantMongoDBNames: tenantMongoDBNames,
 		MasterRedisDB:      masterRedisDB,
-		MasterRedisDBName:  masterRedisDBName,
 		TenantRedisDBs:     tenantRedisDBs,
-		TenantRedisDBNames: tenantRedisDBNames,
 		BadgerDB:           masterBadgerDB,
 	}
 }
