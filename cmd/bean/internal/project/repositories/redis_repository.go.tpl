@@ -12,19 +12,19 @@ import (
 )
 
 type RedisRepository interface {
-	GetJSON(c context.Context, companyID uint64, key string, dst interface{}) (bool, error)
-	GetString(c context.Context, companyID uint64, key string) (string, error)
-	MGet(c context.Context, companyID uint64, keys ...string) ([]interface{}, error)
-	LRange(c context.Context, companyID uint64, key string, start, stop int64) ([]string, error)
-	SMembers(c context.Context, companyID uint64, key string) ([]string, error)
-	SIsMember(c context.Context, companyID uint64, key string, element interface{}) (bool, error)
-	SetJSON(c context.Context, companyID uint64, key string, data interface{}, ttl time.Duration) error
-	SetString(c context.Context, companyID uint64, key string, data string, ttl time.Duration) error
-	RPush(c context.Context, companyID uint64, key string, valueList []string) error
-	IncrementValue(c context.Context, companyID uint64, key string) error
-	SAdd(c context.Context, companyID uint64, key string, elements interface{}) error
-	SRem(c context.Context, companyID uint64, key string, elements interface{}) error
-	DelKey(c context.Context, companyID uint64, key string) error
+	GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error)
+	GetString(c context.Context, tenantID uint64, key string) (string, error)
+	MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error)
+	LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error)
+	SMembers(c context.Context, tenantID uint64, key string) ([]string, error)
+	SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error)
+	SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error
+	SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error
+	RPush(c context.Context, tenantID uint64, key string, valueList []string) error
+	IncrementValue(c context.Context, tenantID uint64, key string) error
+	SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error
+	SRem(c context.Context, tenantID uint64, key string, elements interface{}) error
+	DelKey(c context.Context, tenantID uint64, key string) error
 }
 
 type redisRepository struct {
