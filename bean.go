@@ -133,7 +133,7 @@ type Config struct {
 }
 
 // This is a global variable to hold the debug logger so that we can log data from service, repository or anywhere.
-var beanLogger echo.Logger
+var BeanLogger echo.Logger
 
 func New(config Config) (b *Bean) {
 	// Parse bean system files and directories.
@@ -183,8 +183,8 @@ func NewEcho(config Config) *echo.Echo {
 	}
 	e.Logger.SetLevel(log.DEBUG)
 
-	// Initialize `beanLogger` global variable using `e.Logger`.
-	beanLogger = e.Logger
+	// Initialize `BeanLogger` global variable using `e.Logger`.
+	BeanLogger = e.Logger
 
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if config.AccessLog.On {
@@ -399,7 +399,7 @@ func (b *Bean) InitDB() {
 
 // The bean Logger to have debug log from anywhere.
 func Logger() echo.Logger {
-	return beanLogger
+	return BeanLogger
 }
 
 // `prometheusUrlSkipper` ignores metrics route on some endpoints.
