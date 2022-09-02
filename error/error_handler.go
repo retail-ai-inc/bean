@@ -27,6 +27,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/validator"
+	"github.com/spf13/viper"
 )
 
 type errorResp struct {
@@ -57,7 +58,10 @@ func APIErrorHanderFunc(e error, c echo.Context) (bool, error) {
 
 	if he.HTTPStatusCode >= 404 {
 		// Send error event to sentry if configured.
-		sentry.CaptureException(he)
+		if viper.GetBool("sentry.on") {
+			sentry.CaptureException(he)
+		}
+
 		c.Logger().Error(he)
 	}
 
@@ -76,7 +80,10 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 	}
 
 	// Send error event to sentry if configured.
-	sentry.CaptureException(he)
+	if viper.GetBool("sentry.on") {
+		sentry.CaptureException(he)
+	}
+
 	c.Logger().Error(he)
 
 	// Return different response base on some defined error.
@@ -104,7 +111,10 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 
 func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
 	// Send error event to sentry if configured.
-	sentry.CaptureException(err)
+	if viper.GetBool("sentry.on") {
+		sentry.CaptureException(err)
+	}
+
 	c.Logger().Error(err)
 
 	// Get Content-Type parameter from request header to identify the request content type. If the request is for
@@ -126,6 +136,9 @@ func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
 
 func OnTimeoutRouteErrorHandler(err error, c echo.Context) {
 	// Send error event to sentry if configured.
-	sentry.CaptureException(err)
+	if viper.GetBool("sentry.on") {
+		sentry.CaptureException(err)
+	}
+
 	c.Logger().Error(err)
 }
