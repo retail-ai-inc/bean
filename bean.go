@@ -360,7 +360,7 @@ func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
 			handled, err := handle(err, c)
 			if err != nil {
 				if SentryOn {
-					sentry.CaptureException(err)
+					SentryCaptureException(c, err)
 				} else {
 					c.Logger().Error(err)
 				}
@@ -417,6 +417,38 @@ func (b *Bean) InitDB() {
 // The bean Logger to have debug log from anywhere.
 func Logger() echo.Logger {
 	return BeanLogger
+}
+
+// This is a global function to send sentry exception if you configure the sentry through env.json.
+func SentryCaptureException(c echo.Context, err error) {
+	if !SentryOn {
+		return
+	}
+
+	// If someone call the function from service/repository.
+	if c == nil {
+		sentry.CurrentHub().Clone().CaptureException(err)
+		return
+	}
+
+	// If the function get a proper context then push the request headers and URI along with other meaningful info.
+	sentryecho.GetHubFromContext(c).CaptureException(err)
+}
+
+// This is a global function to send sentry message if you configure the sentry through env.json.
+func SentryCaptureMessage(c echo.Context, msg string) {
+	if !SentryOn {
+		return
+	}
+
+	// If someone call the function from service/repository.
+	if c == nil {
+		sentry.CurrentHub().Clone().CaptureMessage(msg)
+		return
+	}
+
+	// If the function get a proper context then push the request headers and URI along with other meaningful info.
+	sentryecho.GetHubFromContext(c).CaptureMessage(msg)
 }
 
 // Modify event through beforeSend function.
