@@ -39,7 +39,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/color"
 	"github.com/retail-ai-inc/bean/helpers"
-	"github.com/retail-ai-inc/bean/options"
+	"github.com/spf13/viper"
 	"github.com/valyala/fasttemplate"
 )
 
@@ -131,7 +131,7 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
 			// Start a sentry span for tracing.
-			if options.SentryOn {
+			if viper.GetBool("sentry.on") {
 				span := sentry.StartSpan(c.Request().Context(), "http.middleware")
 				span.Description = helpers.CurrFuncName()
 				defer span.Finish()
@@ -376,7 +376,7 @@ func maskSensitiveInfo(reqBody []byte, maskedParams []string) ([]byte, error) {
 	if len(maskedParams) == 0 {
 		return reqBody, nil
 	}
-	
+
 	var unmarshaledRequest = make(map[string]interface{})
 	err := json.Unmarshal(reqBody, &unmarshaledRequest)
 	if err != nil {

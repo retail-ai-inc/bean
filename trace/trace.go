@@ -26,7 +26,7 @@ import (
 	"runtime"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/retail-ai-inc/bean/options"
+	"github.com/spf13/viper"
 )
 
 // TraceableContext contains a stack which holds the sentry span context information.
@@ -56,7 +56,7 @@ func (c *TraceableContext) Pop() context.Context {
 
 // Start starts a span and return a finish() function to finish the corresponding span.
 func Start(c context.Context, operation string, spanOpts ...sentry.SpanOption) func() {
-	if !options.SentryOn {
+	if !viper.GetBool("sentry.on") {
 		return func() {}
 	}
 

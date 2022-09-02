@@ -7,7 +7,7 @@ package async
 import (
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/options"
+	"github.com/spf13/viper"
 )
 
 type Task func(c echo.Context)
@@ -27,7 +27,7 @@ func Execute(fn Task, e *echo.Echo) {
 func recoverPanic(c echo.Context) {
 	if err := recover(); err != nil {
 		// Create a new Hub by cloning the existing one.
-		if options.SentryOn {
+		if viper.GetBool("sentry.on") {
 			localHub := sentry.CurrentHub().Clone()
 			localHub.ConfigureScope(func(scope *sentry.Scope) {
 				scope.SetTag("goroutine", "true")

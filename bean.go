@@ -41,11 +41,11 @@ import (
 	"github.com/retail-ai-inc/bean/binder"
 	"github.com/retail-ai-inc/bean/dbdrivers"
 	"github.com/retail-ai-inc/bean/echoview"
+
 	berror "github.com/retail-ai-inc/bean/error"
 	"github.com/retail-ai-inc/bean/goview"
 	"github.com/retail-ai-inc/bean/helpers"
 	"github.com/retail-ai-inc/bean/middleware"
-	"github.com/retail-ai-inc/bean/options"
 	str "github.com/retail-ai-inc/bean/string"
 	"github.com/retail-ai-inc/bean/validator"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -74,6 +74,16 @@ type Bean struct {
 	errorHandlerFuncs []berror.ErrorHandlerFunc
 	validate          *validatorV10.Validate
 	Config            Config
+}
+
+type SentryConfig struct {
+	On               bool
+	Debug            bool
+	Dsn              string
+	Timeout          time.Duration
+	TracesSampleRate float64
+	ClientOptions    *sentry.ClientOptions
+	ConfigureScope   func(scope *sentry.Scope)
 }
 
 type Config struct {
@@ -118,7 +128,7 @@ type Config struct {
 		Redis  dbdrivers.RedisConfig
 		Badger dbdrivers.BadgerConfig
 	}
-	Sentry   options.SentryConfig
+	Sentry   SentryConfig
 	Security struct {
 		HTTP struct {
 			Header struct {
@@ -133,7 +143,11 @@ type Config struct {
 }
 
 // This is a global variable to hold the debug logger so that we can log data from service, repository or anywhere.
-var beanLogger echo.Logger
+var BeanLogger echo.Logger
+
+// This is a global variable to hold the sentry On/Off setting to check sentry is initialized or not very quickly
+// from handlers/services/repositories.
+var SentryOn bool
 
 func New(config Config) (b *Bean) {
 	// Parse bean system files and directories.
@@ -183,8 +197,8 @@ func NewEcho(config Config) *echo.Echo {
 	}
 	e.Logger.SetLevel(log.DEBUG)
 
-	// Initialize `beanLogger` global variable using `e.Logger`.
-	beanLogger = e.Logger
+	// Initialize `BeanLogger` global variable using `e.Logger`.
+	BeanLogger = e.Logger
 
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if config.AccessLog.On {
@@ -205,7 +219,7 @@ func NewEcho(config Config) *echo.Echo {
 
 	// IMPORTANT: Capturing error and send to sentry if needed.
 	// Sentry `panic` error handler and APM initialization if activated from `env.json`
-	if options.SentryOn {
+	if config.Sentry.On {
 		// Check the sentry client options is not nil
 		if config.Sentry.ClientOptions == nil {
 			e.Logger.Fatal("Sentry initialization failed: client options is empty")
@@ -228,6 +242,9 @@ func NewEcho(config Config) *echo.Echo {
 		if helpers.FloatInRange(config.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
 			e.Pre(middleware.Tracer())
 		}
+
+		// Initialize `SentryOn` global variable so that we can check the sentry is On/Off from handlers/services/repository.
+		SentryOn = true
 	}
 
 	// Some pre-build middleware initialization.
@@ -342,7 +359,7 @@ func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
 		for _, handle := range b.errorHandlerFuncs {
 			handled, err := handle(err, c)
 			if err != nil {
-				if options.SentryOn {
+				if SentryOn {
 					sentry.CaptureException(err)
 				} else {
 					c.Logger().Error(err)
@@ -399,7 +416,39 @@ func (b *Bean) InitDB() {
 
 // The bean Logger to have debug log from anywhere.
 func Logger() echo.Logger {
-	return beanLogger
+	return BeanLogger
+}
+
+// Modify event through beforeSend function.
+func DefaultBeforeSend(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
+	// Example: enriching the event by adding aditional data.
+	switch err := hint.OriginalException.(type) {
+	case *validator.ValidationError:
+		return event
+	case *berror.APIError:
+		if err.Ignorable {
+			return nil
+		}
+		event.Contexts["Error"] = map[string]interface{}{
+			"HTTPStatusCode": err.HTTPStatusCode,
+			"GlobalErrCode":  err.GlobalErrCode,
+			"Message":        err.Error(),
+		}
+		return event
+	case *echo.HTTPError:
+		return event
+	default:
+		return event
+	}
+}
+
+// Modify breadcrumbs through beforeBreadcrumb function.
+func DefaultBeforeBreadcrumb(breadcrumb *sentry.Breadcrumb, hint *sentry.BreadcrumbHint) *sentry.Breadcrumb {
+	// Example: discard the breadcrumb by return nil.
+	// if breadcrumb.Category == "example" {
+	// 	return nil
+	// }
+	return breadcrumb
 }
 
 // `prometheusUrlSkipper` ignores metrics route on some endpoints.
