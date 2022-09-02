@@ -425,14 +425,17 @@ func SentryCaptureException(c echo.Context, err error) {
 		return
 	}
 
-	// If someone call the function from service/repository.
-	if c == nil {
-		sentry.CurrentHub().Clone().CaptureException(err)
+	if c != nil {
+		// If the function get a proper context then push the request headers and URI along with other meaningful info.
+		if hub := sentryecho.GetHubFromContext(c); hub != nil {
+			hub.CaptureException(err)
+		}
+
 		return
 	}
 
-	// If the function get a proper context then push the request headers and URI along with other meaningful info.
-	sentryecho.GetHubFromContext(c).CaptureException(err)
+	// If someone call the function from service/repository.
+	sentry.CurrentHub().Clone().CaptureException(err)
 }
 
 // This is a global function to send sentry message if you configure the sentry through env.json.
@@ -441,14 +444,17 @@ func SentryCaptureMessage(c echo.Context, msg string) {
 		return
 	}
 
-	// If someone call the function from service/repository.
-	if c == nil {
-		sentry.CurrentHub().Clone().CaptureMessage(msg)
+	if c != nil {
+		// If the function get a proper context then push the request headers and URI along with other meaningful info.
+		if hub := sentryecho.GetHubFromContext(c); hub != nil {
+			hub.CaptureMessage(msg)
+		}
+
 		return
 	}
 
-	// If the function get a proper context then push the request headers and URI along with other meaningful info.
-	sentryecho.GetHubFromContext(c).CaptureMessage(msg)
+	// If someone call the function from service/repository.
+	sentry.CurrentHub().Clone().CaptureMessage(msg)
 }
 
 // Modify event through beforeSend function.
