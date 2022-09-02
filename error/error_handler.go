@@ -24,7 +24,7 @@ package error
 import (
 	"net/http"
 
-	"github.com/getsentry/sentry-go"
+	sentryecho "github.com/getsentry/sentry-go/echo"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/validator"
 	"github.com/spf13/viper"
@@ -59,7 +59,9 @@ func APIErrorHanderFunc(e error, c echo.Context) (bool, error) {
 	if he.HTTPStatusCode >= 404 {
 		// Send error event to sentry if configured.
 		if viper.GetBool("sentry.on") {
-			sentry.CaptureException(he)
+			if hub := sentryecho.GetHubFromContext(c); hub != nil {
+				hub.CaptureException(he)
+			}
 		}
 
 		c.Logger().Error(he)
@@ -81,7 +83,9 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 
 	// Send error event to sentry if configured.
 	if viper.GetBool("sentry.on") {
-		sentry.CaptureException(he)
+		if hub := sentryecho.GetHubFromContext(c); hub != nil {
+			hub.CaptureException(he)
+		}
 	}
 
 	c.Logger().Error(he)
@@ -112,7 +116,9 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
 	// Send error event to sentry if configured.
 	if viper.GetBool("sentry.on") {
-		sentry.CaptureException(err)
+		if hub := sentryecho.GetHubFromContext(c); hub != nil {
+			hub.CaptureException(err)
+		}
 	}
 
 	c.Logger().Error(err)
@@ -137,7 +143,9 @@ func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
 func OnTimeoutRouteErrorHandler(err error, c echo.Context) {
 	// Send error event to sentry if configured.
 	if viper.GetBool("sentry.on") {
-		sentry.CaptureException(err)
+		if hub := sentryecho.GetHubFromContext(c); hub != nil {
+			hub.CaptureException(err)
+		}
 	}
 
 	c.Logger().Error(err)

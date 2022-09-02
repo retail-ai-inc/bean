@@ -26,6 +26,7 @@ import (
 	"runtime"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/retail-ai-inc/bean"
 	"github.com/spf13/viper"
 )
 
@@ -74,7 +75,7 @@ func Start(c context.Context, operation string, spanOpts ...sentry.SpanOption) f
 		ctx.Push(span.Context())
 	} else {
 		span = sentry.StartSpan(c, operation, spanOpts...)
-		sentry.CaptureMessage(functionName + "not using a traceable context")
+		bean.SentryCaptureMessage(nil, functionName+"not using a traceable context")
 	}
 
 	span.Description = functionName
