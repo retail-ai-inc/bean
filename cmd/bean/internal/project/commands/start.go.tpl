@@ -13,7 +13,6 @@ import (
 	"github.com/retail-ai-inc/bean"
 	berror "github.com/retail-ai-inc/bean/error"
 	"github.com/retail-ai-inc/bean/helpers"
-	"github.com/retail-ai-inc/bean/options"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -56,12 +55,11 @@ func start(cmd *cobra.Command, args []string) {
 
 	// Prepare sentry options before initialize bean.
 	if config.Sentry.On {
-		options.SentryOn = true
 		config.Sentry.ClientOptions = &sentry.ClientOptions{
 			Debug:            config.Sentry.Debug,
 			Dsn:              config.Sentry.Dsn,
 			Environment:      config.Environment,
-			BeforeSend:       options.DefaultBeforeSend, // Custom beforeSend function
+			BeforeSend:       bean.DefaultBeforeSend, // Default beforeSend function. You can initialize your own custom function.
 			AttachStacktrace: true,
 			TracesSampleRate: helpers.FloatInRange(config.Sentry.TracesSampleRate, 0.0, 1.0),
 		}
