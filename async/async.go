@@ -7,19 +7,36 @@ package async
 import (
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
-	"github.com/spf13/viper"
+	"github.com/retail-ai-inc/bean"
 )
 
 type Task func(c echo.Context)
 
-// `Execute` provides a safe way to execute a function asynchronously, recovering if they panic
+// `Execute` provides a safe way to execute a function asynchronously without any context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
-func Execute(fn Task, e *echo.Echo) {
+func Execute(fn func()) {
 	go func() {
-		c := e.AcquireContext() // Acquire a context from echo.
-		c.Reset(nil, nil)       // IMPORTANT: It must be reset before use.
-		defer recoverPanic(c)
-		fn(c)
+		defer recoverPanic(nil)
+		fn()
+	}()
+}
+
+// `ExecuteWithContext` provides a safe way to execute a function asynchronously with a context, recovering if they panic
+// and provides all error stack aiming to facilitate fail causes discovery.
+func ExecuteWithContext(fn Task, c echo.Context) {
+	// Acquire a context from echo.
+	ctx := c.Echo().AcquireContext()
+
+	// IMPORTANT: Must reset before use.
+	ctx.Reset(c.Request(), nil)
+
+	go func() {
+		// Release the acquired context. This defer will be execute second.
+		defer ctx.Echo().ReleaseContext(ctx)
+
+		// This defer will be executed first.
+		defer recoverPanic(ctx)
+		fn(ctx)
 	}()
 }
 
@@ -27,16 +44,20 @@ func Execute(fn Task, e *echo.Echo) {
 func recoverPanic(c echo.Context) {
 	if err := recover(); err != nil {
 		// Create a new Hub by cloning the existing one.
-		if viper.GetBool("sentry.on") {
+		if bean.SentryOn {
 			localHub := sentry.CurrentHub().Clone()
+
+			if c != nil {
+				localHub.Scope().SetRequest(c.Request())
+			}
+
 			localHub.ConfigureScope(func(scope *sentry.Scope) {
 				scope.SetTag("goroutine", "true")
 			})
+
 			localHub.Recover(err)
 		}
-		c.Logger().Error(err)
-	}
 
-	// Release the acquired context.
-	c.Echo().ReleaseContext(c)
+		bean.Logger().Error(err)
+	}
 }
