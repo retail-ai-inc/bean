@@ -149,6 +149,9 @@ var BeanLogger echo.Logger
 // from handlers/services/repositories.
 var SentryOn bool
 
+// This key is inherited from `sentryecho` package as the package doesn't support the key for external use.
+const SentryHubContextKey = "sentry"
+
 func New(config Config) (b *Bean) {
 	// Parse bean system files and directories.
 	helpers.ParseBeanSystemFilesAndDirectorires()

@@ -30,6 +30,17 @@ func ExecuteWithContext(fn Task, c echo.Context) {
 	// IMPORTANT: Must reset before use.
 	ctx.Reset(c.Request(), nil)
 
+	// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
+	// can pull the right hub and send the exception message to sentry.
+	if bean.SentryOn {
+		hub := sentry.GetHubFromContext(ctx.Request().Context())
+		if hub == nil {
+			hub = sentry.CurrentHub().Clone()
+		}
+		hub.Scope().SetRequest(ctx.Request())
+		ctx.Set(bean.SentryHubContextKey, hub)
+	}
+
 	go func() {
 		// Release the acquired context. This defer will be execute second.
 		defer ctx.Echo().ReleaseContext(ctx)

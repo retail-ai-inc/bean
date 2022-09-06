@@ -10,7 +10,7 @@ build-race: ## build with race detactor
 	go build -race
 
 build-slim: ## build without symbol and DWARF table, smaller binary but no debugging and profiling ability
-	go build -trimpath -ldflags="-s -w"
+	go build -ldflags="-s -w"
 
 lint: ## run all the lint tools, install golangci-lint if not exist
 ifeq (,$(wildcard $(GOPATH)/bin/golangci-lint))
