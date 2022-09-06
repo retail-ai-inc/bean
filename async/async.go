@@ -5,6 +5,8 @@
 package async
 
 import (
+	"context"
+
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean"
@@ -28,7 +30,7 @@ func ExecuteWithContext(fn Task, c echo.Context) {
 	ctx := c.Echo().AcquireContext()
 
 	// IMPORTANT: Must reset before use.
-	ctx.Reset(c.Request(), nil)
+	ctx.Reset(c.Request().WithContext(context.TODO()), nil)
 
 	// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
 	// can pull the right hub and send the exception message to sentry.
