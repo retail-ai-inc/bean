@@ -81,13 +81,6 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 		return false, nil
 	}
 
-	// Send error event to sentry if configured.
-	if viper.GetBool("sentry.on") {
-		if hub := sentryecho.GetHubFromContext(c); hub != nil {
-			hub.CaptureException(he)
-		}
-	}
-
 	c.Logger().Error(he)
 
 	// Return different response base on some defined error.
@@ -108,6 +101,12 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 			ErrorCode: UNKNOWN_ERROR_CODE,
 			ErrorMsg:  he.Message,
 		})
+		// Send error event to sentry if configured.
+		if viper.GetBool("sentry.on") {
+			if hub := sentryecho.GetHubFromContext(c); hub != nil {
+				hub.CaptureException(he)
+			}
+		}
 	}
 
 	return ok, err
