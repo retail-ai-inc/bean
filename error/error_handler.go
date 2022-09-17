@@ -22,7 +22,9 @@
 package error
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	"github.com/labstack/echo/v4"
@@ -50,6 +52,7 @@ func ValidationErrorHanderFunc(e error, c echo.Context) (bool, error) {
 	return ok, err
 }
 
+// Default API error handler
 func APIErrorHanderFunc(e error, c echo.Context) (bool, error) {
 	he, ok := e.(*APIError)
 	if !ok {
@@ -57,14 +60,16 @@ func APIErrorHanderFunc(e error, c echo.Context) (bool, error) {
 	}
 
 	if he.HTTPStatusCode >= 404 {
-		// Send error event to sentry if configured.
-		if viper.GetBool("sentry.on") {
-			if hub := sentryecho.GetHubFromContext(c); hub != nil {
-				hub.CaptureException(he)
+		c.Logger().Error(he)
+
+		if he.HTTPStatusCode > 404 {
+			// Send error event to sentry if configured.
+			if viper.GetBool("sentry.on") {
+				if hub := sentryecho.GetHubFromContext(c); hub != nil {
+					hub.CaptureException(he)
+				}
 			}
 		}
-
-		c.Logger().Error(he)
 	}
 
 	err := c.JSON(he.HTTPStatusCode, errorResp{
@@ -83,35 +88,54 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 
 	c.Logger().Error(he)
 
-	// Return different response base on some defined error.
+	// Return different response based on some defined error.
 	var err error
 	switch he.Code {
 	case http.StatusNotFound:
-		err = c.JSON(he.Code, errorResp{
-			ErrorCode: RESOURCE_NOT_FOUND,
-			ErrorMsg:  he.Message,
-		})
+
+		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
+			err = c.Render(he.Code, "errors/html/404", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+		} else {
+			err = c.JSON(he.Code, errorResp{
+				ErrorCode: RESOURCE_NOT_FOUND,
+				ErrorMsg:  he.Message,
+			})
+		}
+
 	case http.StatusMethodNotAllowed:
-		err = c.JSON(he.Code, errorResp{
-			ErrorCode: METHOD_NOT_ALLOWED,
-			ErrorMsg:  he.Message,
-		})
+
+		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
+			err = c.Render(he.Code, "errors/html/405", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+		} else {
+			err = c.JSON(he.Code, errorResp{
+				ErrorCode: METHOD_NOT_ALLOWED,
+				ErrorMsg:  he.Message,
+			})
+		}
+
 	default:
-		err = c.JSON(he.Code, errorResp{
-			ErrorCode: UNKNOWN_ERROR_CODE,
-			ErrorMsg:  he.Message,
-		})
 		// Send error event to sentry if configured.
 		if viper.GetBool("sentry.on") {
 			if hub := sentryecho.GetHubFromContext(c); hub != nil {
 				hub.CaptureException(he)
 			}
 		}
+
+		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
+			err = c.Render(he.Code, "errors/html/500", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+		} else {
+			err = c.JSON(he.Code, errorResp{
+				ErrorCode: UNKNOWN_ERROR_CODE,
+				ErrorMsg:  he.Message,
+			})
+		}
 	}
 
 	return ok, err
 }
 
+// If any other error handler doesn't catch the error then finally `DefaultErrorHanderFunc` will
+// cactch the error and treat all those errors as `http.StatusInternalServerError`.
 func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
 	// Send error event to sentry if configured.
 	if viper.GetBool("sentry.on") {
@@ -124,13 +148,13 @@ func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
 
 	// Get Content-Type parameter from request header to identify the request content type. If the request is for
 	// html then we should display the error in html.
-	if c.Request().Header.Get("Content-Type") == "text/html" {
-		err := c.HTML(http.StatusInternalServerError, "<strong>Internal server error.</strong>")
-		return true, err
+	if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
+		return true, c.Render(http.StatusInternalServerError, "errors/html/500", echo.Map{
+			"stacktrace": fmt.Sprintf("%+v", err),
+		})
 	}
 
-	// All other uncaught errors.
-	// Sentry already captured the panic and send notification in sentry-recover middleware.
+	// If the Content-Type is `application/json` then return JSON response.
 	err = c.JSON(http.StatusInternalServerError, errorResp{
 		ErrorCode: INTERNAL_SERVER_ERROR,
 		ErrorMsg:  err.Error(),
