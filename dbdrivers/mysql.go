@@ -41,10 +41,11 @@ type SQLConfig struct {
 		Host     string
 		Port     string
 	}
-	MaxIdleConnections    int
-	MaxOpenConnections    int
-	MaxConnectionLifeTime time.Duration
-	Debug                 bool
+	MaxIdleConnections        int
+	MaxOpenConnections        int
+	MaxConnectionLifeTime     time.Duration
+	MaxIdleConnectionLifeTime time.Duration
+	Debug                     bool
 }
 
 // TenantConnections represent a tenant database configuration record in master database
@@ -73,8 +74,11 @@ func InitMysqlMasterConn(config SQLConfig) (*gorm.DB, string) {
 	masterCfg := config.Master
 
 	if masterCfg != nil && masterCfg.Database != "" {
-		return connectMysqlDB(masterCfg.Username, masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
-			config.MaxIdleConnections, config.MaxOpenConnections, config.MaxConnectionLifeTime, config.Debug)
+		return connectMysqlDB(
+			masterCfg.Username, masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
+			config.MaxIdleConnections, config.MaxOpenConnections, config.MaxConnectionLifeTime, config.MaxIdleConnectionLifeTime,
+			config.Debug,
+		)
 	}
 
 	return nil, ""
@@ -149,7 +153,9 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections, isCl
 
 			mysqlConns[t.TenantID], mysqlDBNames[t.TenantID] = connectMysqlDB(
 				userName, password, host, port, dbName, config.MaxIdleConnections,
-				config.MaxOpenConnections, config.MaxConnectionLifeTime, config.Debug)
+				config.MaxOpenConnections, config.MaxConnectionLifeTime, config.MaxIdleConnectionLifeTime,
+				config.Debug,
+			)
 
 		} else {
 			mysqlConns[t.TenantID], mysqlDBNames[t.TenantID] = nil, ""
@@ -160,7 +166,8 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections, isCl
 }
 
 func connectMysqlDB(userName, password, host, port, dbName string,
-	maxIdleConnections, maxOpenConnections int, maxConnectionLifeTime time.Duration, debug bool) (*gorm.DB, string) {
+	maxIdleConnections, maxOpenConnections int, maxConnectionLifeTime, maxIdleConnectionLifeTime time.Duration,
+	debug bool) (*gorm.DB, string) {
 
 	dsn := fmt.Sprintf(
 		"%s:%s@tcp(%s:%s)/%s?parseTime=true&multiStatements=true",
@@ -189,6 +196,10 @@ func connectMysqlDB(userName, password, host, port, dbName string,
 
 	if maxConnectionLifeTime > 0 {
 		sqlDB.SetConnMaxLifetime(maxConnectionLifeTime)
+	}
+
+	if maxIdleConnectionLifeTime > 0 {
+		sqlDB.SetConnMaxIdleTime(maxIdleConnectionLifeTime)
 	}
 
 	return db, dbName
