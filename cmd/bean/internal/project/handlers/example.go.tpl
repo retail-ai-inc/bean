@@ -8,6 +8,7 @@ import (
 	"{{ .PkgPath }}/services"
 
 	"github.com/labstack/echo/v4"
+	"github.com/retail-ai-inc/bean"
 	"github.com/retail-ai-inc/bean/async"
 	berror "github.com/retail-ai-inc/bean/error"
 	"github.com/retail-ai-inc/bean/trace"
@@ -39,14 +40,14 @@ func (handler *exampleHandler) JSONIndex(c echo.Context) error {
 
 	// IMPORTANT: Panic inside a goroutine will crash the whole application.
 	// Example: How to execute some asynchronous code safely instead of plain goroutine.
-	async.Execute(func(c echo.Context) {
-		c.Logger().Debug(dbName)
+	async.ExecuteWithContext(func(asyncC echo.Context) {
+		bean.Logger().Debug(dbName)
 		// IMPORTANT: Using sentry directly in goroutine may cause data race!
 		// Need to create a new hub by cloning the existing one.
 		// Example: How to use sentry safely in goroutine.
 		// localHub := sentry.CurrentHub().Clone()
 		// localHub.CaptureMessage(dbName)
-	}, c.Echo())
+	}, c)
 
 	return c.JSON(http.StatusOK, map[string]string{
 		"dbName": dbName,
