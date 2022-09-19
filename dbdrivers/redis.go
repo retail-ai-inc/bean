@@ -61,12 +61,12 @@ type RedisConfig struct {
 
 var cachePrefix string
 
-func InitRedisTenantConns(config RedisConfig, master *gorm.DB, tenantDBPassPhraseKey string) map[uint64]*RedisDBConn {
+func InitRedisTenantConns(config RedisConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string) map[uint64]*RedisDBConn {
 	cachePrefix = config.Prefix
 	tenantCfgs := GetAllTenantCfgs(master)
 
 	if len(tenantCfgs) > 0 {
-		return getAllRedisTenantDB(config, tenantCfgs, tenantDBPassPhraseKey)
+		return getAllRedisTenantDB(config, tenantCfgs, tenantAlterDbHostParam, tenantDBPassPhraseKey)
 	}
 
 	return nil
@@ -349,7 +349,7 @@ func RedisDelKey(c context.Context, clients *RedisDBConn, key string) error {
 }
 
 // getAllRedisTenantDB returns a singleton tenant db connection for each tenant.
-func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, tenantDBPassPhraseKey string) map[uint64]*RedisDBConn {
+func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string) map[uint64]*RedisDBConn {
 
 	tenantRedisDB := make(map[uint64]*RedisDBConn, len(tenantCfgs))
 
@@ -376,6 +376,14 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 			}
 
 			host := redisCfg["host"].(string)
+
+			// IMPORTANT - If a command or service wants to use a different `host` parameter for tenant database connection
+			// then it's easy to do just by passing that parameter string name using `bean.TenantAlterDbHostParam`.
+			// Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
+			if tenantAlterDbHostParam != "" && redisCfg[tenantAlterDbHostParam] != nil {
+				host = redisCfg[tenantAlterDbHostParam].(string)
+			}
+
 			port := redisCfg["port"].(string)
 			var dbName int
 			if dbName, ok = redisCfg["database"].(int); !ok {

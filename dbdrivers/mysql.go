@@ -64,7 +64,6 @@ type TenantConnections struct {
 }
 
 func (TenantConnections) TableName() string {
-
 	return "TenantConnections"
 }
 
@@ -84,7 +83,7 @@ func InitMysqlMasterConn(config SQLConfig) (*gorm.DB, string) {
 	return nil, ""
 }
 
-func InitMysqlTenantConns(config SQLConfig, master *gorm.DB, tenantDBPassPhraseKey string) (map[uint64]*gorm.DB, map[uint64]string) {
+func InitMysqlTenantConns(config SQLConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string) (map[uint64]*gorm.DB, map[uint64]string) {
 
 	err := createTenantConnectionsTableIfNotExist(master)
 	if err != nil {
@@ -93,7 +92,7 @@ func InitMysqlTenantConns(config SQLConfig, master *gorm.DB, tenantDBPassPhraseK
 
 	tenantCfgs := GetAllTenantCfgs(master)
 
-	return getAllMysqlTenantDB(config, tenantCfgs, false, tenantDBPassPhraseKey)
+	return getAllMysqlTenantDB(config, tenantCfgs, tenantAlterDbHostParam, tenantDBPassPhraseKey)
 }
 
 // GetAllTenantCfgs return all Tenant data from master db.
@@ -112,8 +111,8 @@ func GetAllTenantCfgs(db *gorm.DB) []*TenantConnections {
 }
 
 // getAllMysqlTenantDB returns all tenant db connection.
-func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections, isCloudFunction bool,
-	tenantDBPassPhraseKey string) (map[uint64]*gorm.DB, map[uint64]string) {
+func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
+	tenantAlterDbHostParam, tenantDBPassPhraseKey string) (map[uint64]*gorm.DB, map[uint64]string) {
 
 	mysqlConns := make(map[uint64]*gorm.DB, len(tenantCfgs))
 	mysqlDBNames := make(map[uint64]string, len(tenantCfgs))
@@ -143,9 +142,11 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections, isCl
 
 			host := mysqlCfg["host"].(string)
 
-			// Cloud function is running from a different default network.
-			if isCloudFunction {
-				host = mysqlCfg["gcpHost"].(string)
+			// IMPORTANT - If a command or service wants to use a different `host` parameter for tenant database connection
+			// then it's easy to do just by passing that parameter string name using `bean.TenantAlterDbHostParam`.
+			// Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
+			if tenantAlterDbHostParam != "" && mysqlCfg[tenantAlterDbHostParam] != nil {
+				host = mysqlCfg[tenantAlterDbHostParam].(string)
 			}
 
 			port := mysqlCfg["port"].(string)
