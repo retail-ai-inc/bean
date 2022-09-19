@@ -152,6 +152,11 @@ var SentryOn bool
 // This key is inherited from `sentryecho` package as the package doesn't support the key for external use.
 const SentryHubContextKey = "sentry"
 
+// If a command or service wants to use a different `host` parameter for tenant database connection
+// then it's easy to do just by passing that parameter string name using `bean.TenantAlterDbHostParam`.
+// Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
+var TenantAlterDbHostParam string
+
 func New(config Config) (b *Bean) {
 	// Parse bean system files and directories.
 	helpers.ParseBeanSystemFilesAndDirectorires()
@@ -390,10 +395,10 @@ func (b *Bean) InitDB() {
 
 	if b.Config.Database.Tenant.On {
 		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
-		tenantMySQLDBs, tenantMySQLDBNames = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, b.Config.Secret)
-		tenantMongoDBs, tenantMongoDBNames = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, b.Config.Secret)
+		tenantMySQLDBs, tenantMySQLDBNames = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
+		tenantMongoDBs, tenantMongoDBNames = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
 		masterRedisDB = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
-		tenantRedisDBs = dbdrivers.InitRedisTenantConns(b.Config.Database.Redis, masterMySQLDB, b.Config.Secret)
+		tenantRedisDBs = dbdrivers.InitRedisTenantConns(b.Config.Database.Redis, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
 	} else {
 		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
 		masterMongoDB, masterMongoDBName = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo)

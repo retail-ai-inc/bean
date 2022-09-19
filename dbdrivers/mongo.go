@@ -46,11 +46,11 @@ type MongoConfig struct {
 }
 
 // Init the mongo database connection map.
-func InitMongoTenantConns(config MongoConfig, master *gorm.DB, tenantDBPassPhraseKey string) (map[uint64]*mongo.Client, map[uint64]string) {
+func InitMongoTenantConns(config MongoConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string) (map[uint64]*mongo.Client, map[uint64]string) {
 
 	tenantCfgs := GetAllTenantCfgs(master)
 
-	return getAllMongoTenantDB(config, tenantCfgs, tenantDBPassPhraseKey)
+	return getAllMongoTenantDB(config, tenantCfgs, tenantAlterDbHostParam, tenantDBPassPhraseKey)
 }
 
 func InitMongoMasterConn(config MongoConfig) (*mongo.Client, string) {
@@ -64,7 +64,7 @@ func InitMongoMasterConn(config MongoConfig) (*mongo.Client, string) {
 	return nil, ""
 }
 
-func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, tenantDBPassPhraseKey string) (map[uint64]*mongo.Client, map[uint64]string) {
+func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string) (map[uint64]*mongo.Client, map[uint64]string) {
 
 	mongoConns := make(map[uint64]*mongo.Client, len(tenantCfgs))
 	mongoDBNames := make(map[uint64]string, len(tenantCfgs))
@@ -93,6 +93,14 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 			}
 
 			host := mongoCfg["host"].(string)
+
+			// IMPORTANT - If a command or service wants to use a different `host` parameter for tenant database connection
+			// then it's easy to do just by passing that parameter string name using `bean.TenantAlterDbHostParam`.
+			// Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
+			if tenantAlterDbHostParam != "" && mongoCfg[tenantAlterDbHostParam] != nil {
+				host = mongoCfg[tenantAlterDbHostParam].(string)
+			}
+
 			port := mongoCfg["port"].(string)
 			dbName := mongoCfg["database"].(string)
 
