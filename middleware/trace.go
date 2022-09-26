@@ -27,6 +27,8 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/helpers"
+	bstring "github.com/retail-ai-inc/bean/string"
+	"github.com/spf13/viper"
 )
 
 // Tracer attach a root sentry span context to the request.
@@ -39,6 +41,16 @@ func Tracer() echo.MiddlewareFunc {
 				sentry.ContinueFromRequest(c.Request()),
 			)
 			span.Description = helpers.CurrFuncName()
+
+			// If `skipTracesEndpoints` has some path(s) then let's skip performance sample for those URI.
+			skipTracesEndpoints := viper.GetStringSlice("sentry.skipTracesEndpoints")
+			if len(skipTracesEndpoints) > 0 {
+				_, matches := bstring.MatchAllSubstringsInAString(c.Request().URL.Path, skipTracesEndpoints...)
+				if matches > 0 {
+					span.Sampled = sentry.SampledFalse
+				}
+			}
+
 			defer span.Finish()
 			r := c.Request().Clone(span.Context())
 			c.SetRequest(r)

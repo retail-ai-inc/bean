@@ -77,13 +77,14 @@ type Bean struct {
 }
 
 type SentryConfig struct {
-	On               bool
-	Debug            bool
-	Dsn              string
-	Timeout          time.Duration
-	TracesSampleRate float64
-	ClientOptions    *sentry.ClientOptions
-	ConfigureScope   func(scope *sentry.Scope)
+	On                  bool
+	Debug               bool
+	Dsn                 string
+	Timeout             time.Duration
+	TracesSampleRate    float64
+	SkipTracesEndpoints []string
+	ClientOptions       *sentry.ClientOptions
+	ConfigureScope      func(scope *sentry.Scope)
 }
 
 type Config struct {

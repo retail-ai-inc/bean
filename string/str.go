@@ -31,25 +31,21 @@ import (
 
 // IsBlank Checks if a string is whitespace, empty ("").
 func IsBlank(str string) bool {
-
 	return len(strings.TrimSpace(str)) == 0
 }
 
 // IsNotBlank Checks if a string is not empty (""), not null and not whitespace only.
 func IsNotBlank(str string) bool {
-
 	return !IsBlank(str)
 }
 
 // IsEmpty Checks if a string is whitespace, empty ("").
 func IsEmpty(str string) bool {
-
 	return len(str) == 0
 }
 
 // IsNotEmpty Checks if a string is not empty ("").
 func IsNotEmpty(str string) bool {
-
 	return !IsEmpty(str)
 }
 
@@ -59,7 +55,6 @@ func IsEqualsAny(val string, vals ...string) bool {
 	for _, v := range vals {
 
 		if val == v {
-
 			return true
 		}
 	}
@@ -88,7 +83,6 @@ func IsValidUrl(urlString string) bool {
 func DefaultIfNil(str, defaultStr string) string {
 
 	if IsEmpty(str) {
-
 		return defaultStr
 	}
 
@@ -100,7 +94,6 @@ func DefaultIfNil(str, defaultStr string) string {
 func DefaultIfBlank(str, defaultStr string) string {
 
 	if IsBlank(str) {
-
 		return defaultStr
 	}
 
@@ -108,9 +101,7 @@ func DefaultIfBlank(str, defaultStr string) string {
 }
 
 func StringToPointer(str string) *string {
-
 	s := &str
-
 	return s
 }
 
@@ -118,7 +109,6 @@ func StringToPointer(str string) *string {
 func DerefString(s *string) string {
 
 	if s != nil {
-
 		return *s
 	}
 
@@ -132,12 +122,10 @@ func Substring(str string, i, j int) string {
 	runes := []rune(str)
 
 	if i >= len(str) {
-
 		return ""
 	}
 
 	if j > len(str) {
-
 		j = len(str)
 	}
 
@@ -147,7 +135,6 @@ func Substring(str string, i, j int) string {
 	if ld && rd {
 
 		if j <= i {
-
 			return ""
 		}
 
@@ -190,7 +177,6 @@ func MatchAllSubstringsInAString(str string, subs ...string) (bool, int) {
 
 		if strings.Contains(str, sub) {
 			matches += 1
-
 		} else {
 			isCompleteMatch = false
 		}
@@ -239,7 +225,6 @@ func AlphaNumericRandomString(length int) string {
 	b := make([]rune, length)
 
 	for i := range b {
-
 		b[i] = letter[rand.Intn(len(letter))]
 	}
 
@@ -253,10 +238,8 @@ func GenerateRandomBytes(n int) ([]byte, error) {
 	b := make([]byte, n)
 
 	_, err := rand.Read(b)
-
 	// Note that err == nil only if we read len(b) bytes.
 	if err != nil {
-
 		return nil, err
 	}
 
@@ -269,15 +252,12 @@ func GenerateRandomBytes(n int) ([]byte, error) {
 func GenerateRandomString(length int, isSpecialCharacter bool) (string, error) {
 
 	b, err := GenerateRandomBytes(length)
-
 	if err != nil {
-
 		return "", err
 	}
 
 	// This will keep `-` and `_`
 	if isSpecialCharacter {
-
 		return base64.RawURLEncoding.EncodeToString(b), nil
 
 	} else {
@@ -290,18 +270,14 @@ func GenerateRandomString(length int, isSpecialCharacter bool) (string, error) {
 		for len(encodedString) < length {
 
 			strlength := len(encodedString)
-
 			size := length - strlength
 
 			bytes, err := GenerateRandomBytes(size)
-
 			if err != nil {
-
 				return "", err
 			}
 
 			s := re.Replace(base64.RawURLEncoding.EncodeToString(bytes))
-
 			encodedString += Substring(s, 0, size)
 		}
 
@@ -321,12 +297,10 @@ func GenerateRandomString(length int, isSpecialCharacter bool) (string, error) {
 func RemoveLeadingZerosFromSlice(slice []string) []string {
 
 	if len(slice) == 0 {
-
 		return slice
 	}
 
 	for i, v := range slice {
-
 		slice = append(slice[:i], strings.TrimLeft(v, "0"))
 	}
 
@@ -348,16 +322,12 @@ func ToSnakeCase(s string) string {
 		} else if unicode.IsUpper(r) && i > 0 {
 
 			if unicode.IsLetter(p) && !unicode.IsUpper(p) || unicode.IsDigit(p) {
-
 				res = append(res, '_', unicode.ToLower(r))
-
 			} else {
-
 				res = append(res, unicode.ToLower(r))
 			}
 
 		} else {
-
 			res = append(res, unicode.ToLower(r))
 		}
 
