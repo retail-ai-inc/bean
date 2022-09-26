@@ -44,10 +44,18 @@ func Tracer() echo.MiddlewareFunc {
 
 			// If `skipTracesEndpoints` has some path(s) then let's skip performance sample for those URI.
 			skipTracesEndpoints := viper.GetStringSlice("sentry.skipTracesEndpoints")
+
 			if len(skipTracesEndpoints) > 0 {
-				_, matches := bstring.MatchAllSubstringsInAString(c.Request().URL.Path, skipTracesEndpoints...)
-				if matches > 0 {
-					span.Sampled = sentry.SampledFalse
+				path := c.Request().URL.Path
+				if path == "/" { // To avoid index matching for any URI path.
+					if bstring.Contains(skipTracesEndpoints, path) {
+						span.Sampled = sentry.SampledFalse
+					}
+				} else {
+					_, matches := bstring.MatchAllSubstringsInAString(path, skipTracesEndpoints...)
+					if matches > 0 {
+						span.Sampled = sentry.SampledFalse
+					}
 				}
 			}
 
