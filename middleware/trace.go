@@ -23,11 +23,11 @@ package middleware
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/helpers"
-	bstring "github.com/retail-ai-inc/bean/string"
 	"github.com/spf13/viper"
 )
 
@@ -35,32 +35,31 @@ import (
 func Tracer() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			var ctx = c.Request().Context()
+			hub := sentry.GetHubFromContext(ctx)
+			if hub == nil {
+				hub = sentry.CurrentHub().Clone()
+				ctx = sentry.SetHubOnContext(ctx, hub)
+			}
+			path := c.Request().URL.Path
 			// Start a sentry span for tracing.
-			span := sentry.StartSpan(c.Request().Context(), "http",
-				sentry.TransactionName(fmt.Sprintf(c.Request().RequestURI)),
+			span := sentry.StartSpan(ctx, "http",
+				sentry.TransactionName(fmt.Sprintf("%s %s", c.Request().Method, path)),
 				sentry.ContinueFromRequest(c.Request()),
 			)
 			span.Description = helpers.CurrFuncName()
 
 			// If `skipTracesEndpoints` has some path(s) then let's skip performance sample for those URI.
 			skipTracesEndpoints := viper.GetStringSlice("sentry.skipTracesEndpoints")
-
-			if len(skipTracesEndpoints) > 0 {
-				path := c.Request().URL.Path
-				if path == "/" { // To avoid index matching for any URI path.
-					if bstring.Contains(skipTracesEndpoints, path) {
-						span.Sampled = sentry.SampledFalse
-					}
-				} else {
-					_, matches := bstring.MatchAllSubstringsInAString(path, skipTracesEndpoints...)
-					if matches > 0 {
-						span.Sampled = sentry.SampledFalse
-					}
+			for _, endpoint := range skipTracesEndpoints {
+				if regexp.MustCompile(endpoint).MatchString(path) {
+					span.Sampled = sentry.SampledFalse
+					break
 				}
 			}
 
 			defer span.Finish()
-			r := c.Request().Clone(span.Context())
+			r := c.Request().WithContext(span.Context())
 			c.SetRequest(r)
 			return next(c)
 		}
