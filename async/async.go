@@ -6,10 +6,14 @@ package async
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean"
+	"github.com/retail-ai-inc/bean/helpers"
+	"github.com/spf13/viper"
 )
 
 type Task func(c echo.Context)
@@ -27,29 +31,57 @@ func Execute(fn func()) {
 // and provides all error stack aiming to facilitate fail causes discovery.
 func ExecuteWithContext(fn Task, c echo.Context) {
 	// Acquire a context from echo.
-	ctx := c.Echo().AcquireContext()
+	ec := c.Echo().AcquireContext()
 
 	// IMPORTANT: Must reset before use.
-	ctx.Reset(c.Request().WithContext(context.TODO()), nil)
-
-	// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
-	// can pull the right hub and send the exception message to sentry.
-	if bean.SentryOn {
-		hub := sentry.GetHubFromContext(ctx.Request().Context())
-		if hub == nil {
-			hub = sentry.CurrentHub().Clone()
-		}
-		hub.Scope().SetRequest(ctx.Request())
-		ctx.Set(bean.SentryHubContextKey, hub)
-	}
+	ec.Reset(c.Request().WithContext(context.TODO()), nil)
 
 	go func() {
-		// Release the acquired context. This defer will be execute second.
-		defer ctx.Echo().ReleaseContext(ctx)
+
+		// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
+		// can pull the right hub and send the exception message to sentry.
+		if bean.SentryOn {
+			ctx := ec.Request().Context()
+			hub := sentry.GetHubFromContext(ctx)
+			if hub == nil {
+				hub = sentry.CurrentHub().Clone()
+				ctx = sentry.SetHubOnContext(ctx, hub)
+			}
+			hub.Scope().SetRequest(ec.Request())
+			ec.Set(bean.SentryHubContextKey, hub)
+
+			if helpers.FloatInRange(viper.GetFloat64("sentry.tracesSampleRate"), 0.0, 1.0) > 0.0 {
+				path := ec.Request().URL.Path
+
+				span := sentry.StartSpan(ctx, "http",
+					sentry.TransactionName(fmt.Sprintf("%s %s", ec.Request().Method, path)),
+					sentry.ContinueFromRequest(ec.Request()),
+				)
+				span.Description = helpers.CurrFuncName()
+
+				// If `skipTracesEndpoints` has some path(s) then let's skip performance sample for those URI.
+				skipTracesEndpoints := viper.GetStringSlice("sentry.skipTracesEndpoints")
+
+				for _, endpoint := range skipTracesEndpoints {
+					if regexp.MustCompile(endpoint).MatchString(path) {
+						span.Sampled = sentry.SampledFalse
+						break
+					}
+				}
+
+				defer span.Finish()
+				r := ec.Request().WithContext(span.Context())
+				ec.SetRequest(r)
+			}
+		}
+
+		// Release the acquired context. This defer will be executed second.
+		defer ec.Echo().ReleaseContext(ec)
 
 		// This defer will be executed first.
-		defer recoverPanic(ctx)
-		fn(ctx)
+		defer recoverPanic(ec)
+
+		fn(ec)
 	}()
 }
 
