@@ -35,9 +35,16 @@ import (
 func Tracer() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			var ctx = c.Request().Context()
+			hub := sentry.GetHubFromContext(ctx)
+			if hub == nil {
+				hub = sentry.CurrentHub().Clone()
+				ctx = sentry.SetHubOnContext(ctx, hub)
+			}
+
 			// Start a sentry span for tracing.
-			span := sentry.StartSpan(c.Request().Context(), "http",
-				sentry.TransactionName(fmt.Sprintf(c.Request().RequestURI)),
+			span := sentry.StartSpan(ctx, "http",
+				sentry.TransactionName(fmt.Sprintf("%s %s", c.Request().Method, c.Request().URL.Path)),
 				sentry.ContinueFromRequest(c.Request()),
 			)
 			span.Description = helpers.CurrFuncName()
@@ -53,7 +60,7 @@ func Tracer() echo.MiddlewareFunc {
 			}
 
 			defer span.Finish()
-			r := c.Request().Clone(span.Context())
+			r := c.Request().WithContext(span.Context())
 			c.SetRequest(r)
 			return next(c)
 		}
