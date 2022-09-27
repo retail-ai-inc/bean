@@ -45,9 +45,9 @@ func ExecuteWithContext(fn Task, c echo.Context) {
 			hub := sentry.GetHubFromContext(ctx)
 			if hub == nil {
 				hub = sentry.CurrentHub().Clone()
-				ctx = sentry.SetHubOnContext(ctx, hub)
 			}
 			hub.Scope().SetRequest(ec.Request())
+			ctx = sentry.SetHubOnContext(ctx, hub)
 			ec.Set(bean.SentryHubContextKey, hub)
 
 			if helpers.FloatInRange(viper.GetFloat64("sentry.tracesSampleRate"), 0.0, 1.0) > 0.0 {
