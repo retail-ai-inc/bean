@@ -41,17 +41,16 @@ func Tracer() echo.MiddlewareFunc {
 				hub = sentry.CurrentHub().Clone()
 				ctx = sentry.SetHubOnContext(ctx, hub)
 			}
-
+			path := c.Request().URL.Path
 			// Start a sentry span for tracing.
 			span := sentry.StartSpan(ctx, "http",
-				sentry.TransactionName(fmt.Sprintf("%s %s", c.Request().Method, c.Request().URL.Path)),
+				sentry.TransactionName(fmt.Sprintf("%s %s", c.Request().Method, path)),
 				sentry.ContinueFromRequest(c.Request()),
 			)
 			span.Description = helpers.CurrFuncName()
 
 			// If `skipTracesEndpoints` has some path(s) then let's skip performance sample for those URI.
 			skipTracesEndpoints := viper.GetStringSlice("sentry.skipTracesEndpoints")
-			path := c.Request().URL.Path
 			for _, endpoint := range skipTracesEndpoints {
 				if regexp.MustCompile(endpoint).MatchString(path) {
 					span.Sampled = sentry.SampledFalse
