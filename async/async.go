@@ -54,7 +54,7 @@ func ExecuteWithContext(fn Task, c echo.Context) {
 				path := ec.Request().URL.Path
 
 				span := sentry.StartSpan(ctx, "http",
-					sentry.TransactionName(fmt.Sprintf("%s %s", ec.Request().Method, path)),
+					sentry.TransactionName(fmt.Sprintf("%s %s ASYNC", ec.Request().Method, path)),
 					sentry.ContinueFromRequest(ec.Request()),
 				)
 				span.Description = helpers.CurrFuncName()
