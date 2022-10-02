@@ -25,9 +25,7 @@ type CustomBinder struct{}
 func (cb *CustomBinder) Bind(i interface{}, c echo.Context) (err error) {
 
 	req := c.Request()
-
 	if req.ContentLength == 0 {
-
 		return
 	}
 
@@ -44,7 +42,6 @@ func (cb *CustomBinder) Bind(i interface{}, c echo.Context) (err error) {
 		jc.DisallowUnknownFields()
 
 		if err = jc.Decode(i); err != nil {
-
 			return err
 		}
 
@@ -54,13 +51,11 @@ func (cb *CustomBinder) Bind(i interface{}, c echo.Context) (err error) {
 		data, _ := helpers.PostDataStripTags(c, false)
 
 		for key := range data {
-
 			// We are ignoring the err. Here we are trying to match the actual JSON request parameter based on
 			// JSON-RPC (case sensetive - https://jsonrpc.org/historical/json-rpc-1-1-alt.html#service-procedure-and-parameter-names).
 			isTag, _ := structure.IsTagExist(key, "json", i)
 
 			if !isTag {
-
 				return errors.New("UnknownFieldsError")
 			}
 		}

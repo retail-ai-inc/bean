@@ -46,6 +46,7 @@ import (
 	"github.com/retail-ai-inc/bean/goview"
 	"github.com/retail-ai-inc/bean/helpers"
 	"github.com/retail-ai-inc/bean/middleware"
+	broute "github.com/retail-ai-inc/bean/route"
 	str "github.com/retail-ai-inc/bean/string"
 	"github.com/retail-ai-inc/bean/validator"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -209,6 +210,31 @@ func NewEcho(config Config) *echo.Echo {
 	// Initialize `BeanLogger` global variable using `e.Logger`.
 	BeanLogger = e.Logger
 
+	// Adds a `Server` header to the response.
+	e.Use(middleware.ServerHeader(config.ProjectName, helpers.CurrVersion()))
+
+	// Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
+	e.Use(echomiddleware.BodyLimit(config.HTTP.BodyLimit))
+
+	// CORS initialization and support only HTTP methods which are configured under `http.allowedMethod` parameters in `env.json`.
+	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
+		AllowOrigins: []string{"*"},
+		AllowMethods: config.HTTP.AllowedMethod,
+	}))
+
+	// Basic HTTP headers security like XSS protection...
+	e.Use(echomiddleware.SecureWithConfig(echomiddleware.SecureConfig{
+		XSSProtection:         config.Security.HTTP.Header.XssProtection,         // Adds the X-XSS-Protection header with the value `1; mode=block`.
+		ContentTypeNosniff:    config.Security.HTTP.Header.ContentTypeNosniff,    // Adds the X-Content-Type-Options header with the value `nosniff`.
+		XFrameOptions:         config.Security.HTTP.Header.XFrameOptions,         // The X-Frame-Options header value to be set with a custom value.
+		HSTSMaxAge:            config.Security.HTTP.Header.HstsMaxAge,            // HSTS header is only included when the connection is HTTPS.
+		ContentSecurityPolicy: config.Security.HTTP.Header.ContentSecurityPolicy, // Allows the Content-Security-Policy header value to be set with a custom value.
+	}))
+
+	// Return `405 Method Not Allowed` if a wrong HTTP method been called for an API route.
+	// Return `404 Not Found` if a wrong API route been called.
+	e.Use(middleware.MethodNotAllowedAndRouteNotFound())
+
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if config.AccessLog.On {
 		accessLogConfig := middleware.LoggerConfig{BodyDump: config.AccessLog.BodyDump}
@@ -269,27 +295,6 @@ func NewEcho(config Config) *echo.Echo {
 		Generator: uuid.NewString,
 	}))
 
-	// Adds a `Server` header to the response.
-	e.Use(middleware.ServerHeader(config.ProjectName, helpers.CurrVersion()))
-
-	// Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
-	e.Use(echomiddleware.BodyLimit(config.HTTP.BodyLimit))
-
-	// CORS initialization and support only HTTP methods which are configured under `http.allowedMethod` parameters in `env.json`.
-	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
-		AllowOrigins: []string{"*"},
-		AllowMethods: config.HTTP.AllowedMethod,
-	}))
-
-	// Basic HTTP headers security like XSS protection...
-	e.Use(echomiddleware.SecureWithConfig(echomiddleware.SecureConfig{
-		XSSProtection:         config.Security.HTTP.Header.XssProtection,         // Adds the X-XSS-Protection header with the value `1; mode=block`.
-		ContentTypeNosniff:    config.Security.HTTP.Header.ContentTypeNosniff,    // Adds the X-Content-Type-Options header with the value `nosniff`.
-		XFrameOptions:         config.Security.HTTP.Header.XFrameOptions,         // The X-Frame-Options header value to be set with a custom value.
-		HSTSMaxAge:            config.Security.HTTP.Header.HstsMaxAge,            // HSTS header is only included when the connection is HTTPS.
-		ContentSecurityPolicy: config.Security.HTTP.Header.ContentSecurityPolicy, // Allows the Content-Security-Policy header value to be set with a custom value.
-	}))
-
 	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
 	// This will help us to integrate `bean's` health into `k8s`.
 	if config.Prometheus.On {
@@ -321,6 +326,9 @@ func (b *Bean) ServeAt(host, port string) {
 	if b.BeforeServe != nil {
 		b.BeforeServe()
 	}
+
+	// Keep all the route information in route.Routes
+	broute.Init(b.Echo)
 
 	// Start the server
 	if b.Config.HTTP.SSL.On {

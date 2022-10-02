@@ -44,7 +44,7 @@ func PostDataStripTags(c echo.Context, trimSpace bool) (map[string]interface{}, 
 	// Get Content-Type parameter from request header
 	contentType := c.Request().Header.Get("Content-Type")
 
-	if strings.ToLower(contentType) == "application/json" {
+	if strings.Contains(strings.ToLower(contentType), "application/json") {
 
 		// XXX: IMPORTANT - c.Request().Body is a buffer, which means that once it has been read, it cannot be read again.
 		if c.Request().Body != nil {
@@ -54,7 +54,6 @@ func PostDataStripTags(c echo.Context, trimSpace bool) (map[string]interface{}, 
 			bodyBytes := bytes.NewBuffer(make([]byte, 0))
 
 			reader := io.TeeReader(c.Request().Body, bodyBytes)
-
 			if err = json.NewDecoder(reader).Decode(&data); err != nil {
 
 				var syntaxError *json.SyntaxError
@@ -100,7 +99,7 @@ func PostDataStripTags(c echo.Context, trimSpace bool) (map[string]interface{}, 
 		case map[string]interface{}:
 			postdatamap = v
 		default:
-			return nil, errors.New("ERROR: JSON syntax error.")
+			return nil, errors.New("ERROR: JSON syntax error")
 		}
 	}
 
@@ -112,21 +111,18 @@ func InterfaceStripTags(data interface{}, trimSpace bool) interface{} {
 	if values, ok := data.([]interface{}); ok {
 
 		for i := range values {
-
 			data.([]interface{})[i] = InterfaceStripTags(values[i], trimSpace)
 		}
 
 	} else if values, ok := data.(map[string]interface{}); ok {
 
 		for k, v := range values {
-
 			data.(map[string]interface{})[k] = InterfaceStripTags(v, trimSpace)
 		}
 
 	} else if value, ok := data.(string); ok {
 
 		if trimSpace {
-
 			value = strings.TrimSpace(value)
 		}
 
@@ -154,30 +150,23 @@ func InterfaceStripTags(data interface{}, trimSpace bool) interface{} {
 func StructStripTags(data interface{}, trimSpace bool) error {
 
 	bytes, err := json.Marshal(data)
-
 	if err != nil {
-
 		return err
 	}
 
 	var mapSI map[string]interface{}
-
 	if err := json.Unmarshal(bytes, &mapSI); err != nil {
-
 		return err
 	}
 
 	mapSI = InterfaceStripTags(mapSI, trimSpace).(map[string]interface{})
-
 	bytes2, err := json.Marshal(mapSI)
 
 	if err != nil {
-
 		return err
 	}
 
 	if err := json.Unmarshal(bytes2, data); err != nil {
-
 		return err
 	}
 
