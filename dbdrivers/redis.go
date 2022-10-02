@@ -348,6 +348,62 @@ func RedisDelKey(c context.Context, clients *RedisDBConn, key string) error {
 	return nil
 }
 
+func RedisExpireKey(c context.Context, clients *RedisDBConn, key string, ttl time.Duration) error {
+	if err := clients.Host.Expire(c, key, ttl).Err(); err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+func RedisHSet(c context.Context, clients *RedisDBConn, key string, field string, value interface{}) error {
+	jsonBytes, err := json.Marshal(value)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	if err := clients.Host.HSet(c, key, field, jsonBytes).Err(); err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+func RedisHGet(c context.Context, clients *RedisDBConn, key string, field string, dst interface{}) (string, error) {
+	var err error
+	var result string
+
+	noOfReadReplica := len(clients.Read)
+	// Check the read replicas are available or not.
+	if noOfReadReplica == 1 {
+		result, err = clients.Read[0].HGet(c, key, field).Result()
+		if err != nil {
+			result, err = clients.Host.HGet(c, key, field).Result()
+		}
+	} else if noOfReadReplica > 1 {
+		// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
+		rand.Seed(time.Now().UnixNano())
+		readHost := rand.Intn(noOfReadReplica)
+
+		result, err = clients.Read[uint64(readHost)].HGet(c, key, field).Result()
+		if err != nil {
+			result, err = clients.Host.HGet(c, key, field).Result()
+		}
+	} else {
+		// If there is no read replica then just hit the host server.
+		result, err = clients.Host.HGet(c, key, field).Result()
+	}
+
+	if err != nil {
+		if err == redis.Nil {
+			return "", nil
+		}
+		return "", errors.WithStack(err)
+	}
+
+	return result, nil
+}
+
 // getAllRedisTenantDB returns a singleton tenant db connection for each tenant.
 func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string) map[uint64]*RedisDBConn {
 
