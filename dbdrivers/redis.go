@@ -388,7 +388,7 @@ func RedisSRem(c context.Context, clients *RedisDBConn, key string, elements int
 }
 
 func RedisDelKey(c context.Context, clients *RedisDBConn, keys ...string) error {
-	if err := clients.Host.Del(c, keys).Err(); err != nil {
+	if err := clients.Host.Del(c, keys...).Err(); err != nil {
 		return errors.WithStack(err)
 	}
 
