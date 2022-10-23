@@ -57,36 +57,39 @@ func (c *TraceableContext) Pop() context.Context {
 
 // Start starts a span and return a finish() function to finish the corresponding span.
 func Start(c context.Context, operation string, spanOpts ...sentry.SpanOption) func() {
-	if !viper.GetBool("sentry.on") {
+	if viper.GetFloat64("sentry.tracesSampleRate") == 0 { // if trace sample rate is 0.0 or 0
 		return func() {}
-	}
-
-	functionName := "unknown function"
-	pc, _, _, ok := runtime.Caller(1)
-	if ok {
-		functionName = runtime.FuncForPC(pc).Name()
-	}
-
-	var span *sentry.Span
-
-	ctx, ok := c.(*TraceableContext)
-	if ok {
-		span = sentry.StartSpan(ctx.Context, operation, spanOpts...)
-		ctx.Push(span.Context())
+	} else if !viper.GetBool("sentry.on") { // if sentry is off
+		return func() {}
 	} else {
-		span = sentry.StartSpan(c, operation, spanOpts...)
-		bean.SentryCaptureMessage(nil, functionName+"not using a traceable context")
-	}
 
-	span.Description = functionName
-
-	finish := func() {
-		if ctx != nil {
-			ctx.Pop()
+		functionName := "unknown function"
+		pc, _, _, ok := runtime.Caller(1)
+		if ok {
+			functionName = runtime.FuncForPC(pc).Name()
 		}
-		span.Finish()
+
+		var span *sentry.Span
+
+		ctx, ok := c.(*TraceableContext)
+		if ok {
+			span = sentry.StartSpan(ctx.Context, operation, spanOpts...)
+			ctx.Push(span.Context())
+		} else {
+			span = sentry.StartSpan(c, operation, spanOpts...)
+			bean.SentryCaptureMessage(nil, functionName+"not using a traceable context")
+		}
+
+		span.Description = functionName
+
+		finish := func() {
+			if ctx != nil {
+				ctx.Pop()
+			}
+			span.Finish()
+		}
+		return finish
 	}
-	return finish
 }
 
 // NewTraceableContext return a traceable context which can hold different level of span information.
