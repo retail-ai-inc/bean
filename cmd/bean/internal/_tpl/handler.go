@@ -1,13 +1,15 @@
 package handlers
 
 import (
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"time"
-	
+
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/async"
 	berror "github.com/retail-ai-inc/bean/error"
-	//"github.com/retail-ai-inc/bean/trace"
+	"github.com/retail-ai-inc/bean/trace"
 	{{if .ServiceExists}}"{{.ProjectObject.PkgPath}}/services"{{end}}
 )
 
@@ -42,14 +44,30 @@ func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c
 
 	// IMPORTANT: Panic inside a goroutine will crash the whole application.
 	// Example: How to execute some asynchronous code safely instead of plain goroutine:
-	async.Execute(func(c echo.Context) {
+	// !!! Do not use the original echo context in the goroutine since it will be released after the handler returned.
+	// !!! https://github.com/labstack/echo/issues/1633
+	// However there is a recoverPanic function inside the ExecuteWithContext that will
+	// prevent this from happening and not crash the app.
+	async.ExecuteWithContext(func(asyncC echo.Context) {
 		c.Logger().Debug(output)
-		// IMPORTANT: Using sentry directly in goroutine may cause data race!
-		// Need to create a new hub by cloning the existing one.
-		// Example: How to use sentry safely in goroutine.
-		// localHub := sentry.CurrentHub().Clone()
-		// localHub.CaptureMessage(output)
-	}, c.Echo())
+		traceableContext := trace.NewTraceableContext(asyncC.Request().Context())
+		asyncFinish := trace.Start(traceableContext, "http.async")
+		defer asyncFinish()
+
+		// example function that you want to execute asynchronously.
+		files, err := ioutil.ReadDir("./")
+		for _, f := range files {
+            fmt.Println(f.Name())
+		}
+		// handling error
+		if err != nil {
+			fmt.Println(err)
+			// This is a global function to send sentry exception if you configure the sentry through env.json. 
+			// You cann pass a proper context or nil.
+			// bean.SentryCaptureException(asyncC, err)
+		}
+
+	},c)
 
 	return c.JSON(http.StatusOK, map[string]string{
 		"output": output,
