@@ -57,12 +57,10 @@ func (c *TraceableContext) Pop() context.Context {
 
 // Start starts a span and return a finish() function to finish the corresponding span.
 func Start(c context.Context, operation string, spanOpts ...sentry.SpanOption) func() {
-	if viper.GetFloat64("sentry.tracesSampleRate") == 0 { // if trace sample rate is 0.0 or 0
-		return func() {}
-	} else if !viper.GetBool("sentry.on") { // if sentry is off
+	// if trace sample rate is 0.0 or 0 or sentry is off
+	if viper.GetFloat64("sentry.tracesSampleRate") == 0 || !viper.GetBool("sentry.on") {
 		return func() {}
 	} else {
-
 		functionName := "unknown function"
 		pc, _, _, ok := runtime.Caller(1)
 		if ok {
