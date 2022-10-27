@@ -162,3 +162,8 @@ the value to the parameter. For instance, passing an int value to a function mak
 int, and passing a pointer value makes a copy of the pointer, but not the data it points to.
 ```
 For complicated object, pointer should be used as parameter instead of values to reduce the usage of copying the whole object. ref: [https://go.dev/doc/faq#pass_by_value](https://go.dev/doc/faq#pass_by_value)
+
+### Sample Project
+
+A CRUD project that you can refer to understand how bean works with service repository pattern.
+https://github.com/RohitChaurasia97/movie_tracker
