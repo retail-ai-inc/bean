@@ -24,6 +24,7 @@ package dbdrivers
 import (
 	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger/v3"
 )
@@ -63,19 +64,35 @@ func connectBadgerDB(config BadgerConfig) *badger.DB {
 	return badgerDBConn
 }
 
-// BadgerSetString saves a string key value pair to badgerdb.
-func BadgerSetString(client *badger.DB, key string, val string) error {
+// BadgerSetString saves a string key value pair to badgerdb. If you supply `ttl` greater than 0
+// then badger will save the key into the db for that many seconds. Once the TTL has elapsed,
+// the key will no longer be retrievable and will be eligible for garbage collection. Pass `ttl` as 0
+// if you want to keep the key forever into the db until the server restarted or crashed.
+func BadgerSetString(client *badger.DB, key string, val string, ttl time.Duration) error {
 
 	return client.Update(func(txn *badger.Txn) error {
+		if ttl > 0 {
+			e := badger.NewEntry([]byte(key), []byte(val)).WithTTL(ttl * time.Second)
+			return txn.SetEntry(e)
+		}
+
 		err := txn.Set([]byte(key), []byte(val))
 		return err
 	})
 }
 
-// BadgerSetBytes saves a string key and it's value in bytes into badgerdb.
-func BadgerSetBytes(client *badger.DB, key string, val []byte) error {
+// BadgerSetBytes saves a string key and it's value in bytes into  badgerdb. If you supply `ttl` greater than 0
+// then badger will save the key into the db for that many seconds. Once the TTL has elapsed,
+// the key will no longer be retrievable and will be eligible for garbage collection. Pass `ttl` as 0
+// if you want to keep the key forever into the db until the server restarted or crashed.
+func BadgerSetBytes(client *badger.DB, key string, val []byte, ttl time.Duration) error {
 
 	return client.Update(func(txn *badger.Txn) error {
+		if ttl > 0 {
+			e := badger.NewEntry([]byte(key), val).WithTTL(ttl * time.Second)
+			return txn.SetEntry(e)
+		}
+
 		err := txn.Set([]byte(key), val)
 		return err
 	})
