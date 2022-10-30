@@ -12,8 +12,8 @@ import (
 )
 
 type BadgerRepository interface {
-	SetString(c context.Context, key string, val string) error
-	SetBytes(c context.Context, key string, val []byte) error
+	SetString(c context.Context, key string, val string, ttl time.Duration) error
+	SetBytes(c context.Context, key string, val []byte, ttl time.Duration) error
 	GetString(c context.Context, key string) (string, error)
 	GetBytes(c context.Context, key string) ([]byte, error)
 	GetJson(c context.Context, key string) (map[string]interface{}, error)
