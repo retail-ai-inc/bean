@@ -24,6 +24,7 @@ package dbdrivers
 import (
 	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger/v3"
 )
@@ -33,8 +34,8 @@ type BadgerConfig struct {
 	InMemory bool
 }
 
-// Badger is a singleton connection.
-var badgerConn *badger.DB
+// badgerDBConn is a singleton connection.
+var badgerDBConn *badger.DB
 var badgerOnce sync.Once
 
 // Initialize the Badger database.
@@ -54,46 +55,62 @@ func connectBadgerDB(config BadgerConfig) *badger.DB {
 		// It will be created if it doesn't exist.
 		var err error
 
-		badgerConn, err = badger.Open(opt)
+		badgerDBConn, err = badger.Open(opt)
 		if err != nil {
 			panic(err)
 		}
 	})
 
-	return badgerConn
+	return badgerDBConn
 }
 
-// SetString saves a string key value pair to badgerdb.
-func SetString(key string, val string) error {
+// BadgerSetString saves a string key value pair to badgerdb. If you supply `ttl` greater than 0
+// then badger will save the key into the db for that many seconds. Once the TTL has elapsed,
+// the key will no longer be retrievable and will be eligible for garbage collection. Pass `ttl` as 0
+// if you want to keep the key forever into the db until the server restarted or crashed.
+func BadgerSetString(client *badger.DB, key string, val string, ttl time.Duration) error {
 
-	return badgerConn.Update(func(txn *badger.Txn) error {
+	return client.Update(func(txn *badger.Txn) error {
+		if ttl > 0 {
+			e := badger.NewEntry([]byte(key), []byte(val)).WithTTL(ttl)
+			return txn.SetEntry(e)
+		}
+
 		err := txn.Set([]byte(key), []byte(val))
 		return err
 	})
 }
 
-// SetBytes saves a string key and it's value in bytes into badgerdb.
-func SetBytes(key string, val []byte) error {
+// BadgerSetBytes saves a string key and it's value in bytes into  badgerdb. If you supply `ttl` greater than 0
+// then badger will save the key into the db for that many seconds. Once the TTL has elapsed,
+// the key will no longer be retrievable and will be eligible for garbage collection. Pass `ttl` as 0
+// if you want to keep the key forever into the db until the server restarted or crashed.
+func BadgerSetBytes(client *badger.DB, key string, val []byte, ttl time.Duration) error {
 
-	return badgerConn.Update(func(txn *badger.Txn) error {
+	return client.Update(func(txn *badger.Txn) error {
+		if ttl > 0 {
+			e := badger.NewEntry([]byte(key), val).WithTTL(ttl)
+			return txn.SetEntry(e)
+		}
+
 		err := txn.Set([]byte(key), val)
 		return err
 	})
 }
 
-// GetString returns a string val of associated key.
-func GetString(key string) (string, error) {
+// BadgerGetString returns a string val of associated key.
+func BadgerGetString(client *badger.DB, key string) (string, error) {
 
 	var data []byte
 
-	err := badgerConn.View(func(txn *badger.Txn) error {
+	err := client.View(func(txn *badger.Txn) error {
 
 		item, err := txn.Get([]byte(key))
 		if err != nil {
 			return err
 		}
 
-		_, err = item.ValueCopy(data)
+		data, err = item.ValueCopy(nil)
 
 		return err
 	})
@@ -105,12 +122,36 @@ func GetString(key string) (string, error) {
 	return string(data), nil
 }
 
-// GetJson returns a json representation of associated key.
-func GetJson(key string) (map[string]interface{}, error) {
+// BadgerGetBytes returns a byte val of associated key.
+func BadgerGetBytes(client *badger.DB, key string) ([]byte, error) {
+
+	var data []byte
+
+	err := client.View(func(txn *badger.Txn) error {
+
+		item, err := txn.Get([]byte(key))
+		if err != nil {
+			return err
+		}
+
+		data, err = item.ValueCopy(nil)
+
+		return err
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+// BadgerGetJson returns a json representation of associated key.
+func BadgerGetJson(client *badger.DB, key string) (map[string]interface{}, error) {
 
 	var data map[string]interface{}
 
-	err := badgerConn.View(func(txn *badger.Txn) error {
+	err := client.View(func(txn *badger.Txn) error {
 
 		item, err := txn.Get([]byte(key))
 		if err != nil {
