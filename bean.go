@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
@@ -47,7 +48,6 @@ import (
 	"github.com/retail-ai-inc/bean/helpers"
 	"github.com/retail-ai-inc/bean/middleware"
 	broute "github.com/retail-ai-inc/bean/route"
-	str "github.com/retail-ai-inc/bean/string"
 	"github.com/retail-ai-inc/bean/validator"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
@@ -507,10 +507,16 @@ func DefaultBeforeBreadcrumb(breadcrumb *sentry.Breadcrumb, hint *sentry.Breadcr
 }
 
 // `prometheusUrlSkipper` ignores metrics route on some endpoints.
-func prometheusUrlSkipper(skip []string) func(c echo.Context) bool {
+func prometheusUrlSkipper(skipEndpoints []string) func(c echo.Context) bool {
 	return func(c echo.Context) bool {
-		_, matches := str.MatchAllSubstringsInAString(c.Path(), skip...)
-		return matches > 0
+		path := c.Request().URL.Path
+		for _, endpoint := range skipEndpoints {
+			if regexp.MustCompile(endpoint).MatchString(path) {
+				return true
+			}
+		}
+
+		return false
 	}
 }
 
