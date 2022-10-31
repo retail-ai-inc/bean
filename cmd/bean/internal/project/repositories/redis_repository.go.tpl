@@ -100,7 +100,6 @@ func (r *redisRepository) SIsMember(c context.Context, tenantID uint64, key stri
 	return dbdrivers.RedisSIsMember(c, r.clients[tenantID], prefixKey, element)
 }
 
-// `ttl` is in seconds.
 func (r *redisRepository) SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error {
 	finish := trace.Start(c, "db")
 	defer finish()
