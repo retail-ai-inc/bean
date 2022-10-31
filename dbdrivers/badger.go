@@ -72,7 +72,7 @@ func BadgerSetString(client *badger.DB, key string, val string, ttl time.Duratio
 
 	return client.Update(func(txn *badger.Txn) error {
 		if ttl > 0 {
-			e := badger.NewEntry([]byte(key), []byte(val)).WithTTL(ttl * time.Second)
+			e := badger.NewEntry([]byte(key), []byte(val)).WithTTL(ttl)
 			return txn.SetEntry(e)
 		}
 
@@ -89,7 +89,7 @@ func BadgerSetBytes(client *badger.DB, key string, val []byte, ttl time.Duration
 
 	return client.Update(func(txn *badger.Txn) error {
 		if ttl > 0 {
-			e := badger.NewEntry([]byte(key), val).WithTTL(ttl * time.Second)
+			e := badger.NewEntry([]byte(key), val).WithTTL(ttl)
 			return txn.SetEntry(e)
 		}
 
@@ -134,7 +134,7 @@ func BadgerGetBytes(client *badger.DB, key string) ([]byte, error) {
 			return err
 		}
 
-		_, err = item.ValueCopy(data)
+		data, err = item.ValueCopy(nil)
 
 		return err
 	})
