@@ -110,7 +110,7 @@ func BadgerGetString(client *badger.DB, key string) (string, error) {
 			return err
 		}
 
-		_, err = item.ValueCopy(data)
+		data, err = item.ValueCopy(nil)
 
 		return err
 	})
