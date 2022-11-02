@@ -15,7 +15,7 @@ type RedisRepository interface {
 	GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error)
 	GetString(c context.Context, tenantID uint64, key string) (string, error)
 	MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error)
-	HGet(c context.Context, tenantID uint64, key string, field string, dst interface{}) (bool, error)
+	HGet(c context.Context, tenantID uint64, key string, field string) (bool, error)
 	LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error)
 	SMembers(c context.Context, tenantID uint64, key string) ([]string, error)
 	SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error)
@@ -77,6 +77,25 @@ func (r *redisRepository) MGet(c context.Context, tenantID uint64, keys ...strin
 	}
 
 	return dbdrivers.RedisMGet(c, r.clients[tenantID], prefixedKeysSlice...)
+}
+
+func (r *redisRepository) HGet(c context.Context, tenantID uint64, key string, field string, dst interface{}) (bool, error) {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	prefixKey := r.cachePrefix + "_" + key
+	result, err := dbdrivers.RedisHGet(c, r.clients[tenantID], prefixKey, field, dst)
+	if err != nil {
+		return false, err
+	} else if result == "" {
+		return false, nil
+	}
+
+	if err := json.Unmarshal([]byte(result), &dst); err != nil {
+		return false, errors.WithStack(err)
+	}
+
+	return true, nil
 }
 
 func (r *redisRepository) LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error) {
