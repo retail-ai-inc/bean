@@ -15,16 +15,19 @@ type RedisRepository interface {
 	GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error)
 	GetString(c context.Context, tenantID uint64, key string) (string, error)
 	MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error)
+	HGet(c context.Context, tenantID uint64, key string, field string, dst interface{}) (bool, error)
 	LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error)
 	SMembers(c context.Context, tenantID uint64, key string) ([]string, error)
 	SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error)
 	SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error
 	SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error
+	HSet(c context.Context, tenantID uint64, key string, field string, data interface{}) error
 	RPush(c context.Context, tenantID uint64, key string, valueList []string) error
 	IncrementValue(c context.Context, tenantID uint64, key string) error
 	SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error
 	SRem(c context.Context, tenantID uint64, key string, elements interface{}) error
 	DelKey(c context.Context, tenantID uint64, keys ...string) error
+	Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error
 }
 
 type redisRepository struct {
@@ -116,6 +119,14 @@ func (r *redisRepository) SetString(c context.Context, tenantID uint64, key stri
 	return dbdrivers.RedisSet(c, r.clients[tenantID], prefixKey, data, ttl)
 }
 
+func (r *redisRepository) HSet(c context.Context, tenantID uint64, key string, field string, data interface{}) error {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	prefixKey := r.cachePrefix + "_" + key
+	return dbdrivers.RedisHSet(c, r.clients[tenantID], prefixKey, field, data)
+}
+
 func (r *redisRepository) RPush(c context.Context, tenantID uint64, key string, valueList []string) error {
 	finish := trace.Start(c, "db")
 	defer finish()
@@ -158,4 +169,12 @@ func (r *redisRepository) DelKey(c context.Context, tenantID uint64, keys ...str
 	}
 
 	return dbdrivers.RedisDelKey(c, r.clients[tenantID], prefixKeys...)
+}
+
+func (r *redisRepository) Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	prefixKey := r.cachePrefix + "_" + key
+	return dbdrivers.RedisExpireKey(c, r.clients[tenantID], prefixKey, ttl)
 }

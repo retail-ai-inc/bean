@@ -184,7 +184,7 @@ func RedisMGet(c context.Context, clients *RedisDBConn, keys ...string) ([]inter
 	return result, nil
 }
 
-func RedisHGet(c context.Context, clients *RedisDBConn, key string, field string, dst interface{}) (string, error) {
+func RedisHGet(c context.Context, clients *RedisDBConn, key string, field string) (string, error) {
 	var err error
 	var result string
 
@@ -342,8 +342,8 @@ func RedisSet(c context.Context, clients *RedisDBConn, key string, data interfac
 	return nil
 }
 
-func RedisHSet(c context.Context, clients *RedisDBConn, key string, field string, value interface{}) error {
-	jsonBytes, err := json.Marshal(value)
+func RedisHSet(c context.Context, clients *RedisDBConn, key string, field string, data interface{}) error {
+	jsonBytes, err := json.Marshal(data)
 	if err != nil {
 		return errors.WithStack(err)
 	}
