@@ -24,7 +24,7 @@ type RedisRepository interface {
 	IncrementValue(c context.Context, tenantID uint64, key string) error
 	SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error
 	SRem(c context.Context, tenantID uint64, key string, elements interface{}) error
-	DelKey(c context.Context, tenantID uint64, key string) error
+	DelKey(c context.Context, tenantID uint64, keys ...string) error
 }
 
 type redisRepository struct {
@@ -148,10 +148,14 @@ func (r *redisRepository) SRem(c context.Context, tenantID uint64, key string, e
 	return dbdrivers.RedisSRem(c, r.clients[tenantID], prefixKey, elements)
 }
 
-func (r *redisRepository) DelKey(c context.Context, tenantID uint64, key string) error {
+func (r *redisRepository) DelKey(c context.Context, tenantID uint64, keys ...string) error {
 	finish := trace.Start(c, "db")
 	defer finish()
 
-	prefixKey := r.cachePrefix + "_" + key
-	return dbdrivers.RedisDelKey(c, r.clients[tenantID], prefixKey)
+	prefixKeys := make([]string, len(keys))
+	for i, key := range keys {
+		prefixKeys[i] = r.cachePrefix + "_" + key
+	}
+
+	return dbdrivers.RedisDelKey(c, r.clients[tenantID], prefixKeys...)
 }
