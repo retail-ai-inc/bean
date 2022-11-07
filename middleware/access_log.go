@@ -79,6 +79,7 @@ type (
 	bodyDumpResponseWriter struct {
 		io.Writer
 		http.ResponseWriter
+		Status int
 	}
 )
 
@@ -212,7 +213,7 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 				case "user_agent":
 					return buf.WriteString(req.UserAgent())
 				case "status":
-					n := res.Status
+					n := writer.Status
 					s := config.colorer.Green(n)
 					switch {
 					case n >= 500:
@@ -357,6 +358,7 @@ func (config LoggerConfig) logAccess(c echo.Context) (err error) {
 }
 
 func (w *bodyDumpResponseWriter) WriteHeader(code int) {
+	w.Status = code
 	w.ResponseWriter.WriteHeader(code)
 }
 
