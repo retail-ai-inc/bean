@@ -1,4 +1,4 @@
-package bnq
+package beanq
 
 import (
 	"fmt"

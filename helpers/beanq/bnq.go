@@ -1,9 +1,9 @@
-package bnq
+package beanq
 
 import (
 	"context"
 	"github.com/go-redis/redis/v8"
-	"github.com/retail-ai-inc/bean/helpers/bnq/json"
+	"github.com/retail-ai-inc/bean/helpers/beanq/json"
 	"log"
 	"sync"
 )
