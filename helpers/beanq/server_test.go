@@ -2,17 +2,22 @@ package beanq
 
 import (
 	"fmt"
+	"github.com/go-redis/redis/v8"
 	"testing"
 )
 
 func TestConsumer(t *testing.T) {
-	group := "ch-group"
-	queue := "ch"
-
-	rdb := NewRdb("localhost:6381", "secret", 1)
-	datas := rdb.Consumer(group, queue, "cs1")
-
-	for v := range datas {
-		fmt.Printf("%+v \n", v)
+	rdb := NewRdb(options)
+	for i := 0; i < 10; i++ {
+		go func() {
+			err := rdb.Consumer(group, queue, func(stream []redis.XStream, r *redis.Client) error {
+				fmt.Printf("%+v \n", stream)
+				return nil
+			})
+			if err != nil {
+				t.Log(err.Error())
+			}
+		}()
 	}
+	select {}
 }
