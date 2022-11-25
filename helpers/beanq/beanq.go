@@ -17,7 +17,7 @@ var (
 
 type DoConsumer func(*Task, *redis.Client) error
 
-type Rdb struct {
+type Beanq struct {
 	client *redis.Client
 	ctx    context.Context
 
@@ -26,32 +26,38 @@ type Rdb struct {
 	keepFailedJobsInHistory  time.Duration
 	keepSuccessJobsInHistory time.Duration
 
+	minWorkers  int
 	jobMaxRetry int
 	prefix      string
 	count       int64
 }
 
-func NewRdb(count int64, options *redis.Options) *Rdb {
+func NewBeanq(count int64, options *redis.Options) *Beanq {
 	ctx := context.Background()
 	once.Do(func() {
 		client = redis.NewClient(options)
 	})
-	return &Rdb{client: client, ctx: ctx, count: count}
+	return &Beanq{client: client, ctx: ctx, count: count}
 }
-func (t *Rdb) Publish(task *Task, option ...Option) (*redis.StringCmd, error) {
+func (t *Beanq) Publish(task *Task, option ...Option) (*redis.StringCmd, error) {
 
 	opt, err := composeOptions(option...)
 	if err != nil {
 		return nil, err
 	}
+	id := task.name
+	if id == "" {
+		id = "*"
+	}
 	strcmd := t.client.XAdd(t.ctx, &redis.XAddArgs{
 		Stream: opt.queue,
 		Limit:  0,
 		MaxLen: 0,
+		ID:     id,
 		Values: map[string]any{"payload": task.payload},
 	})
-	if strcmd.Err() != nil {
-		return nil, strcmd.Err()
+	if err := strcmd.Err(); err != nil {
+		return nil, err
 	}
 	if err := t.createGroup(opt.queue, opt.group); err != nil {
 		return nil, err
@@ -59,16 +65,26 @@ func (t *Rdb) Publish(task *Task, option ...Option) (*redis.StringCmd, error) {
 	return strcmd, nil
 
 }
+func (t *Beanq) Run(server *Server) {
+	consumers := server.consumers()
 
-func (t *Rdb) Consumer(group, queue string, f DoConsumer) error {
-
+	//need to control the number of goroutine
+	//will optimize
+	for _, v := range consumers {
+		go func() {
+			ch, _ := t.readGroups(v.queue, v.group)
+			t.consumerMsgs(ch, v.consumer)
+		}()
+	}
+	select {}
+}
+func (t *Beanq) readGroups(queue, group string) (<-chan redis.XStream, error) {
 	consumerUuid, err := uuid.NewUUID()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	ch := make(chan redis.XStream)
-
 	go func() {
 		for {
 			t.client.XInfoGroups(t.ctx, "")
@@ -82,7 +98,6 @@ func (t *Rdb) Consumer(group, queue string, f DoConsumer) error {
 			})
 			err = cmd.Err()
 			if err != nil {
-				fmt.Printf("CMD Error:%+v \n", err)
 				continue
 			}
 			if len(cmd.Val()) <= 0 {
@@ -93,6 +108,9 @@ func (t *Rdb) Consumer(group, queue string, f DoConsumer) error {
 			}
 		}
 	}()
+	return ch, nil
+}
+func (t *Beanq) consumerMsgs(ch <-chan redis.XStream, f DoConsumer) {
 	for v := range ch {
 		task := &Task{
 			name: v.Stream,
@@ -105,13 +123,14 @@ func (t *Rdb) Consumer(group, queue string, f DoConsumer) error {
 			now := time.Now()
 			err := f(task, t.client)
 			if err != nil {
+				//failed jobs
+				//....to do
 				continue
 			}
 			sub := time.Now().Sub(now)
 			fmt.Printf("ExecutionTime:%+v,Consumer:%s \n", sub, task.id)
 		}
 	}
-	return nil
 }
 
 /*
@@ -123,7 +142,7 @@ func (t *Rdb) Consumer(group, queue string, f DoConsumer) error {
   - @param group
   - @return error
 */
-func (t *Rdb) createGroup(queue, group string) error {
+func (t *Beanq) createGroup(queue, group string) error {
 	groupCmd := t.client.XInfoGroups(t.ctx, queue)
 	if groupCmd.Err() != nil {
 		return groupCmd.Err()
@@ -154,6 +173,6 @@ func (t *Rdb) createGroup(queue, group string) error {
   - @receiver t
   - @return error
 */
-func (t *Rdb) Close() error {
+func (t *Beanq) Close() error {
 	return t.client.Close()
 }

@@ -35,8 +35,9 @@ func TestPublish(t *testing.T) {
 		"v1",
 	}
 	d, _ := json.Json.Marshal(data)
+
 	task := NewTask("", d)
-	clt := NewRdb(2, options)
+	clt := NewBeanq(2, options)
 
 	for i := 0; i < 10; i++ {
 		cmd, err := clt.Publish(task, Queue("ch"), Group("g"))
@@ -51,7 +52,7 @@ func TestPublish(t *testing.T) {
 }
 func TestXInfo(t *testing.T) {
 	ctx := context.Background()
-	clt := NewRdb(2, options)
+	clt := NewBeanq(2, options)
 	cmd := clt.client.XInfoStream(ctx, queue)
 	fmt.Printf("%+v \n", cmd.Val())
 	groupCmd := clt.client.XInfoGroups(ctx, queue)
@@ -59,14 +60,14 @@ func TestXInfo(t *testing.T) {
 }
 func TestPending(t *testing.T) {
 	ctx := context.Background()
-	clt := NewRdb(2, options)
+	clt := NewBeanq(2, options)
 
 	cmd := clt.client.XPending(ctx, queue, group)
 	fmt.Printf("%+v \n", cmd.Val())
 }
 func TestInfo(t *testing.T) {
 	ctx := context.Background()
-	clt := NewRdb(2, options)
+	clt := NewBeanq(2, options)
 
 	cmd := clt.client.Info(ctx)
 

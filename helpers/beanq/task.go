@@ -16,36 +16,14 @@ func NewTask(name string, payload []byte) *Task {
 		payload: payload,
 	}
 }
-
-/*
-* Name
-*  @Description:
-		queue name
-*  @receiver t
-* @return string
-*/
 func (t Task) Name() string {
 	return t.name
 }
 
-/*
-* Payload
-*  @Description:
-
-*  @receiver t
-* @return string
- */
 func (t Task) Payload() string {
 	return stringx.ByteToString(t.payload)
 }
 
-/*
-* Id
-*  @Description:
-
-*  @receiver t
-* @return string
- */
 func (t Task) Id() string {
 	return t.id
 }

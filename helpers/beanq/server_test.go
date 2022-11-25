@@ -7,17 +7,16 @@ import (
 )
 
 func TestConsumer(t *testing.T) {
-	rdb := NewRdb(2, options)
-	//for i := 0; i < 10; i++ {
-	//	go func() {
-	err := rdb.Consumer(group, queue, func(task *Task, r *redis.Client) error {
-		fmt.Printf("%+v \n", task.Payload())
+	rdb := NewBeanq(2, options)
+	server := NewServer()
+	server.Register(group, queue, func(task *Task, r *redis.Client) error {
+		fmt.Printf("载荷：%+v \n", task.Payload())
 		return nil
 	})
-	if err != nil {
-		t.Log(err.Error())
-	}
-	//	}()
-	//}
-	//select {}
+	//add new job
+	//server.Register("group2","queue2", func(task *Task, r *redis.Client) error {
+	//	return nil
+	//})
+	rdb.Run(server)
+
 }
