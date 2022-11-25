@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
-	"github.com/retail-ai-inc/bean/helpers/beanq/json"
+	"github.com/retail-ai-inc/bean/helpers/beanq/stringx"
 	"sync"
 	"time"
 )
@@ -15,37 +15,45 @@ var (
 	client *redis.Client
 )
 
-type DoConsumer func([]redis.XStream, *redis.Client) error
+type DoConsumer func(*Task, *redis.Client) error
 
 type Rdb struct {
 	client *redis.Client
 	ctx    context.Context
+
+	broker                   string
+	keepJobInQueue           time.Duration
+	keepFailedJobsInHistory  time.Duration
+	keepSuccessJobsInHistory time.Duration
+
+	jobMaxRetry int
+	prefix      string
+	count       int64
 }
 
-func NewRdb(options *redis.Options) *Rdb {
+func NewRdb(count int64, options *redis.Options) *Rdb {
+	ctx := context.Background()
 	once.Do(func() {
 		client = redis.NewClient(options)
 	})
-
-	return &Rdb{client: client, ctx: context.Background()}
+	return &Rdb{client: client, ctx: ctx, count: count}
 }
-func (t *Rdb) Publish(queue, group string, data any) (*redis.StringCmd, error) {
+func (t *Rdb) Publish(task *Task, option ...Option) (*redis.StringCmd, error) {
 
-	d, err := json.Json.MarshalToString(data)
+	opt, err := composeOptions(option...)
 	if err != nil {
 		return nil, err
 	}
-
 	strcmd := t.client.XAdd(t.ctx, &redis.XAddArgs{
-		Stream: queue,
+		Stream: opt.queue,
 		Limit:  0,
 		MaxLen: 0,
-		Values: map[string]any{"arg": d},
+		Values: map[string]any{"payload": task.payload},
 	})
 	if strcmd.Err() != nil {
 		return nil, strcmd.Err()
 	}
-	if err := t.createGroup(queue, group); err != nil {
+	if err := t.createGroup(opt.queue, opt.group); err != nil {
 		return nil, err
 	}
 	return strcmd, nil
@@ -59,42 +67,50 @@ func (t *Rdb) Consumer(group, queue string, f DoConsumer) error {
 		return err
 	}
 
-	ch := make(chan []redis.XStream)
+	ch := make(chan redis.XStream)
 
 	go func() {
 		for {
+			t.client.XInfoGroups(t.ctx, "")
+
 			cmd := t.client.XReadGroup(t.ctx, &redis.XReadGroupArgs{
 				Group:    group,
 				Streams:  []string{queue, ">"},
 				Consumer: consumerUuid.String(),
-				Count:    2,
+				Count:    t.count,
 				Block:    0,
 			})
-			if cmd.Err() != nil {
-				err = cmd.Err()
+			err = cmd.Err()
+			if err != nil {
 				fmt.Printf("CMD Error:%+v \n", err)
 				continue
 			}
 			if len(cmd.Val()) <= 0 {
 				continue
 			}
-			ch <- cmd.Val()
+			for _, v := range cmd.Val() {
+				ch <- v
+			}
 		}
 	}()
-	if err != nil {
-		return err
-	}
 	for v := range ch {
-		now := time.Now()
-		err := f(v, t.client)
-		if err != nil {
-			fmt.Printf("Error:%+v \n", err)
-			continue
+		task := &Task{
+			name: v.Stream,
 		}
-		sub := time.Now().Sub(now)
-		fmt.Printf("ExecutionTime:%+v,Consumer:%s \n", sub, consumerUuid)
+		for _, vm := range v.Messages {
+			task.id = vm.ID
+			if payload, ok := vm.Values["payload"]; ok {
+				task.payload = stringx.StringToByte(payload.(string))
+			}
+			now := time.Now()
+			err := f(task, t.client)
+			if err != nil {
+				continue
+			}
+			sub := time.Now().Sub(now)
+			fmt.Printf("ExecutionTime:%+v,Consumer:%s \n", sub, task.id)
+		}
 	}
-
 	return nil
 }
 

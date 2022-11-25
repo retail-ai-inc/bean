@@ -7,17 +7,17 @@ import (
 )
 
 func TestConsumer(t *testing.T) {
-	rdb := NewRdb(options)
-	for i := 0; i < 10; i++ {
-		go func() {
-			err := rdb.Consumer(group, queue, func(stream []redis.XStream, r *redis.Client) error {
-				fmt.Printf("%+v \n", stream)
-				return nil
-			})
-			if err != nil {
-				t.Log(err.Error())
-			}
-		}()
+	rdb := NewRdb(2, options)
+	//for i := 0; i < 10; i++ {
+	//	go func() {
+	err := rdb.Consumer(group, queue, func(task *Task, r *redis.Client) error {
+		fmt.Printf("%+v \n", task.Payload())
+		return nil
+	})
+	if err != nil {
+		t.Log(err.Error())
 	}
-	select {}
+	//	}()
+	//}
+	//select {}
 }
