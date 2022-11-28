@@ -23,8 +23,19 @@ var (
 	queue    = "ch"
 	group    = "g"
 	consumer = "cs1"
+	clt      Beanq
 )
 
+func init() {
+	clt = NewBeanq("redis", Options{RedisOptions: options})
+}
+
+/*
+* TestPublish
+*  @Description:
+			publisher
+* @param t
+*/
 func TestPublish(t *testing.T) {
 
 	var data = struct {
@@ -35,24 +46,23 @@ func TestPublish(t *testing.T) {
 		"v1",
 	}
 	d, _ := json.Json.Marshal(data)
-
 	task := NewTask("", d)
-	clt := NewBeanq(2, options)
 
-	for i := 0; i < 10; i++ {
-		cmd, err := clt.Publish(task, Queue("ch"), Group("g"))
-		if err != nil {
-			log.Fatalln(err)
-		}
-		fmt.Printf("%+v \n", cmd)
+	//for i := 0; i < 10; i++ {
+	cmd, err := clt.Publish(task, Queue("ch"), Group("g"))
+	if err != nil {
+		log.Fatalln(err)
 	}
+	fmt.Printf("%+v \n", cmd)
+	//}
 
 	defer clt.Close()
 
 }
 func TestXInfo(t *testing.T) {
 	ctx := context.Background()
-	clt := NewBeanq(2, options)
+
+	clt := NewRedis(options)
 	cmd := clt.client.XInfoStream(ctx, queue)
 	fmt.Printf("%+v \n", cmd.Val())
 	groupCmd := clt.client.XInfoGroups(ctx, queue)
@@ -60,18 +70,24 @@ func TestXInfo(t *testing.T) {
 }
 func TestPending(t *testing.T) {
 	ctx := context.Background()
-	clt := NewBeanq(2, options)
+	clt := NewRedis(options)
 
 	cmd := clt.client.XPending(ctx, queue, group)
 	fmt.Printf("%+v \n", cmd.Val())
 }
 func TestInfo(t *testing.T) {
 	ctx := context.Background()
-	clt := NewBeanq(2, options)
+	clt := NewRedis(options)
 
 	cmd := clt.client.Info(ctx)
 
 	fmt.Printf("%+v \n", cmd.Val())
+}
+func TestMemoryUsage(t *testing.T) {
+	ctx := context.Background()
+	clt := NewRedis(options)
+	cmd := clt.client.MemoryUsage(ctx, "success")
+	fmt.Printf("%+v \n", cmd)
 }
 func TestRetry(t *testing.T) {
 
@@ -93,5 +109,4 @@ func retry(f func() bool, delayTime int) {
 		}
 		index++
 	}
-
 }

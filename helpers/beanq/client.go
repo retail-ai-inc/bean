@@ -4,6 +4,9 @@ const (
 	defaultQueueName = "default"
 	defaultRetry     = 0
 	defaultGroup     = "default-group"
+
+	defaultDelayQueueName = "default-delay-queue"
+	defaultDelayGroup     = "default-delay-group"
 )
 
 type OptionType int
