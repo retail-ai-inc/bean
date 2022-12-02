@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+type Message struct {
+	Id      string
+	Stream  string
+	Payload map[string]any
+}
+
 type Task struct {
 	id      string
 	name    string

@@ -1,26 +1,19 @@
 package beanq
 
-const (
-	defaultQueueName = "default"
-	defaultRetry     = 0
-	defaultGroup     = "default-group"
-
-	defaultDelayQueueName = "default-delay-queue"
-	defaultDelayGroup     = "default-delay-group"
-)
-
 type OptionType int
 
 const (
 	MaxRetryOpt OptionType = iota
 	QueueOpt
 	GroupOpt
+	MaxLenOpt
 )
 
 type option struct {
-	retry int
-	queue string
-	group string
+	retry  int
+	queue  string
+	group  string
+	maxLen int64
 }
 
 type Option interface {
@@ -30,11 +23,18 @@ type Option interface {
 }
 
 type (
-	retryOption int
-	queueOption string
-	groupOption string
+	retryOption  int
+	queueOption  string
+	groupOption  string
+	maxLenOption int64
 )
 
+/*
+* Queue
+*  @Description:
+* @param name
+* @return Option
+ */
 func Queue(name string) Option {
 	return queueOption(name)
 }
@@ -48,6 +48,12 @@ func (queue queueOption) Value() any {
 	return string(queue)
 }
 
+/*
+* Retry
+*  @Description:
+* @param retries
+* @return Option
+ */
 func Retry(retries int) Option {
 	return retryOption(retries)
 }
@@ -61,6 +67,12 @@ func (retry retryOption) Value() any {
 	return int(retry)
 }
 
+/*
+* Group
+*  @Description:
+* @param name
+* @return Option
+ */
 func Group(name string) Option {
 	return groupOption(name)
 }
@@ -74,11 +86,38 @@ func (group groupOption) Value() any {
 	return string(group)
 }
 
+/*
+* MaxLen
+*  @Description:
+* @param maxlen
+* @return Option
+ */
+func MaxLen(maxlen int) Option {
+	return maxLenOption(maxlen)
+}
+func (ml maxLenOption) String() string {
+	return ""
+}
+func (ml maxLenOption) OptType() OptionType {
+	return MaxLenOpt
+}
+func (ml maxLenOption) Value() any {
+	return int(ml)
+}
+
+/*
+* composeOptions
+*  @Description:
+* @param options
+* @return option
+* @return error
+ */
 func composeOptions(options ...Option) (option, error) {
 	res := option{
-		retry: defaultRetry,
-		queue: defaultQueueName,
-		group: defaultGroup,
+		retry:  defaultOptions.JobMaxRetry,
+		queue:  defaultOptions.defaultQueueName,
+		group:  defaultOptions.defaultGroup,
+		maxLen: defaultOptions.defaultMaxLen,
 	}
 	for _, f := range options {
 		switch opt := f.(type) {
@@ -88,6 +127,8 @@ func composeOptions(options ...Option) (option, error) {
 			res.retry = int(opt)
 		case groupOption:
 			res.group = string(opt)
+		case maxLenOption:
+			res.maxLen = int64(opt)
 		default:
 
 		}

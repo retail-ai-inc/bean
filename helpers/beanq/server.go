@@ -13,15 +13,19 @@ type Server struct {
 }
 
 func NewServer(count int64) *Server {
+	if count == 0 {
+		count = 10
+	}
 	return &Server{count: count}
 }
 func (t *Server) Register(group, queue string, consumer DoConsumer) {
-
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	if group == "" {
-		group = defaultGroup
+		group = defaultOptions.defaultGroup
 	}
 	if queue == "" {
-		queue = defaultQueueName
+		queue = defaultOptions.defaultQueueName
 	}
 	t.m = append(t.m, &consumerHandler{
 		group:    group,

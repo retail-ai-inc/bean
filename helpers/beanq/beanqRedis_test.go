@@ -5,60 +5,58 @@ import (
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	"github.com/retail-ai-inc/bean/helpers/beanq/json"
+	"github.com/spf13/cast"
 	"log"
 	"testing"
 	"time"
 )
 
 var (
-	options = &redis.Options{
-		Addr:      "localhost:6381",
-		Dialer:    nil,
-		OnConnect: nil,
-		Username:  "",
-		Password:  "secret",
-		DB:        1,
+	options = Options{
+		RedisOptions: &redis.Options{
+			Addr:      "localhost:6381",
+			Dialer:    nil,
+			OnConnect: nil,
+			Username:  "",
+			Password:  "secret",
+			DB:        2,
+		},
 	}
-
-	queue    = "ch"
-	group    = "g"
+	queue    = "ch2"
+	group    = "g2"
 	consumer = "cs1"
 	clt      Beanq
 )
 
 func init() {
-	clt = NewBeanq("redis", Options{RedisOptions: options})
+	clt = NewBeanq("redis", options)
 }
 
 /*
-* TestPublish
-*  @Description:
-			publisher
-* @param t
+  - TestPublish
+  - @Description:
+    publisher
+  - @param t
 */
-func TestPublish(t *testing.T) {
+func TestPublish1(t *testing.T) {
 
-	var data = struct {
-		Key string
-		Val string
-	}{
-		"k1",
-		"v1",
-	}
-	d, _ := json.Json.Marshal(data)
-	task := NewTask("", d)
+	for i := 0; i < 5; i++ {
+		m := make(map[int]string)
+		m[i] = "k" + cast.ToString(i)
 
-	//for i := 0; i < 10; i++ {
-	cmd, err := clt.Publish(task, Queue("ch"), Group("g"))
-	if err != nil {
-		log.Fatalln(err)
+		d, _ := json.Marshal(m)
+		task := NewTask("", d)
+		cmd, err := clt.Publish(task, Queue("ch2"), Group("g2"))
+		if err != nil {
+			log.Fatalln(err)
+		}
+		fmt.Printf("%+v \n", cmd)
 	}
-	fmt.Printf("%+v \n", cmd)
-	//}
 
 	defer clt.Close()
 
 }
+
 func TestXInfo(t *testing.T) {
 	ctx := context.Background()
 
@@ -90,7 +88,6 @@ func TestMemoryUsage(t *testing.T) {
 	fmt.Printf("%+v \n", cmd)
 }
 func TestRetry(t *testing.T) {
-
 }
 
 var retryFlag chan bool = make(chan bool)
