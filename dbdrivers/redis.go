@@ -403,6 +403,45 @@ func RedisExpireKey(c context.Context, clients *RedisDBConn, key string, ttl tim
 	return nil
 }
 
+type KeyFieldPairs struct {
+	Key   string `json:"key"`
+	Field string `json:"field"`
+}
+
+type KeyFieldValue struct {
+	Key   string `json:"key"`
+	Field string `json:"field"`
+	Value string `json:"value"`
+}
+
+// to get multiple redis hashes in one call to redis.
+func RedisPipelineMultipleHashesHget(c context.Context, clients *RedisDBConn, redisKeysWithField []KeyFieldPairs) ([]KeyFieldValue, error) {
+	pipe := clients.Host.Pipeline()
+	n := map[int]*redis.StringCmd{}
+	for ctr, keyField := range redisKeysWithField {
+		n[ctr] = pipe.HGet(c, keyField.Key, keyField.Field)
+	}
+	_, err := pipe.Exec(c)
+	if err != nil {
+		if err == redis.Nil {
+			// ignore redisNil error
+		} else {
+			panic(err)
+		}
+	}
+
+	var results []KeyFieldValue
+	for _, v := range n {
+		var kfv KeyFieldValue
+		args := v.Args()
+		kfv.Key = args[1].(string)
+		kfv.Field = args[2].(string)
+		kfv.Value = v.Val()
+		results = append(results, kfv)
+	}
+	return results, nil
+}
+
 // getAllRedisTenantDB returns a singleton tenant db connection for each tenant.
 func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string) map[uint64]*RedisDBConn {
 
