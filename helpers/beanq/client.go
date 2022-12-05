@@ -7,13 +7,15 @@ const (
 	QueueOpt
 	GroupOpt
 	MaxLenOpt
+	ExecuteTimeOpt
 )
 
 type option struct {
-	retry  int
-	queue  string
-	group  string
-	maxLen int64
+	retry       int
+	queue       string
+	group       string
+	maxLen      int64
+	executeTime int64
 }
 
 type Option interface {
@@ -27,6 +29,7 @@ type (
 	queueOption  string
 	groupOption  string
 	maxLenOption int64
+	executeTime  int64
 )
 
 /*
@@ -39,7 +42,7 @@ func Queue(name string) Option {
 	return queueOption(name)
 }
 func (queue queueOption) String() string {
-	return ""
+	return "queueOption"
 }
 func (queue queueOption) OptType() OptionType {
 	return QueueOpt
@@ -58,7 +61,7 @@ func Retry(retries int) Option {
 	return retryOption(retries)
 }
 func (retry retryOption) String() string {
-	return ""
+	return "retryOption"
 }
 func (retry retryOption) OptType() OptionType {
 	return MaxRetryOpt
@@ -77,7 +80,7 @@ func Group(name string) Option {
 	return groupOption(name)
 }
 func (group groupOption) String() string {
-	return ""
+	return "groupOption"
 }
 func (group groupOption) OptType() OptionType {
 	return GroupOpt
@@ -96,13 +99,32 @@ func MaxLen(maxlen int) Option {
 	return maxLenOption(maxlen)
 }
 func (ml maxLenOption) String() string {
-	return ""
+	return "maxLenOption"
 }
 func (ml maxLenOption) OptType() OptionType {
 	return MaxLenOpt
 }
 func (ml maxLenOption) Value() any {
 	return int(ml)
+}
+
+/*
+* ExecuteTime
+*  @Description:
+* @param tm
+* @return Option
+ */
+func ExecuteTime(unixTime int64) Option {
+	return executeTime(unixTime)
+}
+func (et executeTime) String() string {
+	return "executeTime"
+}
+func (et executeTime) OptType() OptionType {
+	return ExecuteTimeOpt
+}
+func (et executeTime) Value() any {
+	return int64(et)
 }
 
 /*
@@ -120,17 +142,17 @@ func composeOptions(options ...Option) (option, error) {
 		maxLen: defaultOptions.defaultMaxLen,
 	}
 	for _, f := range options {
-		switch opt := f.(type) {
-		case queueOption:
-			res.queue = string(opt)
-		case retryOption:
-			res.retry = int(opt)
-		case groupOption:
-			res.group = string(opt)
-		case maxLenOption:
-			res.maxLen = int64(opt)
-		default:
-
+		switch f.OptType() {
+		case QueueOpt:
+			res.queue = f.Value().(string)
+		case GroupOpt:
+			res.group = f.Value().(string)
+		case MaxRetryOpt:
+			res.retry = f.Value().(int)
+		case MaxLenOpt:
+			res.maxLen = f.Value().(int64)
+		case ExecuteTimeOpt:
+			res.executeTime = f.Value().(int64)
 		}
 	}
 	return res, nil

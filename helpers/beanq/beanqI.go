@@ -34,6 +34,8 @@ type ConsumerResult struct {
 
 	AddTime string
 	RunTime string
+
+	Queue, Group, Consumer string
 }
 
 // need more parameters

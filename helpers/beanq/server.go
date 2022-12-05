@@ -4,7 +4,7 @@ import "sync"
 
 type consumerHandler struct {
 	group, queue string
-	consumer     DoConsumer
+	consumerFun  DoConsumer
 }
 type Server struct {
 	mu    sync.RWMutex
@@ -18,7 +18,7 @@ func NewServer(count int64) *Server {
 	}
 	return &Server{count: count}
 }
-func (t *Server) Register(group, queue string, consumer DoConsumer) {
+func (t *Server) Register(group, queue string, consumerFun DoConsumer) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	if group == "" {
@@ -28,9 +28,9 @@ func (t *Server) Register(group, queue string, consumer DoConsumer) {
 		queue = defaultOptions.defaultQueueName
 	}
 	t.m = append(t.m, &consumerHandler{
-		group:    group,
-		queue:    queue,
-		consumer: consumer,
+		group:       group,
+		queue:       queue,
+		consumerFun: consumerFun,
 	})
 }
 func (t *Server) consumers() []*consumerHandler {

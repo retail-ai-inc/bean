@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-redis/redis/v8"
-	"github.com/google/uuid"
 	"github.com/retail-ai-inc/bean/helpers/beanq/json"
 	"github.com/retail-ai-inc/bean/helpers/beanq/stringx"
 	"github.com/retail-ai-inc/bean/helpers/beanq/timex"
@@ -24,6 +23,7 @@ type BeanqRedis struct {
 	client *redis.Client
 	ctx    context.Context
 	wg     *sync.WaitGroup
+	ch     chan redis.XStream
 
 	broker                   string
 	keepJobInQueue           time.Duration
@@ -43,6 +43,8 @@ func NewRedis(options Options) *BeanqRedis {
 	return &BeanqRedis{
 		client:                   client,
 		ctx:                      ctx,
+		wg:                       &sync.WaitGroup{},
+		ch:                       make(chan redis.XStream),
 		minWorkers:               options.MinWorkers,
 		jobMaxRetry:              options.JobMaxRetry,
 		prefix:                   options.Prefix,
@@ -52,7 +54,7 @@ func NewRedis(options Options) *BeanqRedis {
 	}
 }
 func (t *BeanqRedis) DelayPublish(task *Task, option ...Option) (*Result, error) {
-	return nil, nil
+	return t.Publish(task, option...)
 }
 func (t *BeanqRedis) Publish(task *Task, option ...Option) (*Result, error) {
 
@@ -64,6 +66,14 @@ func (t *BeanqRedis) Publish(task *Task, option ...Option) (*Result, error) {
 	if id == "" {
 		id = "*"
 	}
+	values := make(map[string]any)
+	values["payload"] = task.payload
+	values["addtime"] = time.Now()
+
+	if opt.executeTime != 0 {
+		values["executeTime"] = opt.executeTime
+	}
+
 	strcmd := t.client.XAdd(t.ctx, &redis.XAddArgs{
 		Stream:     opt.queue,
 		NoMkStream: false,
@@ -72,7 +82,7 @@ func (t *BeanqRedis) Publish(task *Task, option ...Option) (*Result, error) {
 		Approx:     false,
 		//Limit:      0,
 		ID:     id,
-		Values: map[string]any{"payload": task.payload, "addtime": time.Now()},
+		Values: values,
 	})
 	if err := strcmd.Err(); err != nil {
 		return nil, err
@@ -95,16 +105,19 @@ func (t *BeanqRedis) Run(server *Server) {
 
 		workers <- struct{}{}
 		go func(handler *consumerHandler) {
-			chs, err := t.readGroups(handler.queue, handler.group, server.count)
+			err := t.readGroups(handler.queue, handler.group, server.count)
 			if err != nil {
 				fmt.Printf("ReadGroup Error:%s \n", err.Error())
 				return
 			}
-			t.consumerMsgs(chs, handler.consumer, handler.group)
+			t.consumerMsgs(handler.consumerFun, handler.group)
 			<-workers
 		}(v)
 	}
-	//go t.claim(consumers)
+	//   https://redis.io/commands/xclaim/
+	//
+	go t.claim(consumers)
+
 	select {}
 }
 
@@ -116,84 +129,89 @@ func (t *BeanqRedis) Run(server *Server) {
   - @receiver t
 */
 func (t *BeanqRedis) claim(consumers []*consumerHandler) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			start := "-"
 			end := "+"
+
 			for _, consumer := range consumers {
-				for {
-					res, err := t.client.XPendingExt(t.ctx, &redis.XPendingExtArgs{
-						Stream: consumer.queue,
-						Group:  consumer.group,
-						Start:  start,
-						End:    end,
-						Count:  10,
-					}).Result()
-					if err != nil {
 
-					}
-					for _, v := range res {
-						if v.Idle.Seconds() >= 5 {
-							claims, err := t.client.XClaim(t.ctx, &redis.XClaimArgs{
-								Stream:   consumer.queue,
-								Group:    consumer.group,
-								Consumer: "",
-								MinIdle:  5 * time.Second,
-								Messages: []string{v.ID},
-							}).Result()
-							if err != nil {
-
-							}
-							fmt.Println(claims)
+				res, err := t.client.XPendingExt(t.ctx, &redis.XPendingExtArgs{
+					Stream: consumer.queue,
+					Group:  consumer.group,
+					Start:  start,
+					End:    end,
+					Count:  10,
+				}).Result()
+				if err != nil && err != redis.Nil {
+					fmt.Printf("PendError:%s \n", err.Error())
+					break
+				}
+				for _, v := range res {
+					if v.Idle.Seconds() >= 10 {
+						claims, err := t.client.XClaim(t.ctx, &redis.XClaimArgs{
+							Stream:   consumer.queue,
+							Group:    consumer.group,
+							Consumer: consumer.queue,
+							MinIdle:  10 * time.Second,
+							Messages: []string{v.ID},
+						}).Result()
+						if err != nil && err != redis.Nil {
+							fmt.Printf("ClaimError:%s \n", err.Error())
+							continue
 						}
-						start = v.ID
+						if err := t.client.XAck(t.ctx, consumer.queue, consumer.group, v.ID).Err(); err != nil {
+							continue
+						}
+						fmt.Printf("claim:%+v \n", claims)
+						t.ch <- redis.XStream{
+							Stream:   consumer.queue,
+							Messages: claims,
+						}
 					}
 				}
 			}
 		}
 	}
 }
-func (t *BeanqRedis) readGroups(queue, group string, count int64) (<-chan redis.XStream, error) {
-	consumerUuid, err := uuid.NewUUID()
-	if err != nil {
-		return nil, err
-	}
-
-	ch := make(chan redis.XStream)
+func (t *BeanqRedis) readGroups(queue, group string, count int64) error {
+	//consumerUuid, err := uuid.NewUUID()
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	go func() {
 
 		for {
 			select {
 			default:
-				cmd := t.client.XReadGroup(t.ctx, &redis.XReadGroupArgs{
+				streams, err := t.client.XReadGroup(t.ctx, &redis.XReadGroupArgs{
 					Group:    group,
 					Streams:  []string{queue, ">"},
-					Consumer: consumerUuid.String(),
+					Consumer: queue,
 					Count:    count,
 					Block:    0,
-				})
-				err := cmd.Err()
+				}).Result()
 				if err != nil {
 					fmt.Printf("readgroup:%+v \n", err.Error())
 					continue
 				}
-				if len(cmd.Val()) <= 0 {
+				if len(streams) <= 0 {
 					continue
 				}
 
-				for _, v := range cmd.Val() {
-					ch <- v
+				for _, v := range streams {
+					t.ch <- v
 				}
 			}
 		}
 	}()
-	return ch, nil
+	return nil
 }
-func (t *BeanqRedis) consumerMsgs(ch <-chan redis.XStream, f DoConsumer, group string) {
+func (t *BeanqRedis) consumerMsgs(f DoConsumer, group string) {
 	flag := SuccessInfo
 	result := &ConsumerResult{
 		Level:   InfoLevel,
@@ -204,7 +222,7 @@ func (t *BeanqRedis) consumerMsgs(ch <-chan redis.XStream, f DoConsumer, group s
 
 	for {
 		select {
-		case msg := <-ch:
+		case msg := <-t.ch:
 
 			task := &Task{
 				name: msg.Stream,
@@ -218,8 +236,14 @@ func (t *BeanqRedis) consumerMsgs(ch <-chan redis.XStream, f DoConsumer, group s
 				if addtime, ok := vm.Values["addtime"]; ok {
 					task.addTime = cast.ToTime(addtime)
 				}
+				fmt.Printf("task1:%+v \n", msg)
 				now = time.Now()
-
+				if executeT, ok := vm.Values["executeTime"]; ok {
+					if cast.ToInt64(executeT) > now.Unix() {
+						continue
+					}
+				}
+				fmt.Printf("task2:%+v \n", msg)
 				err := f(task, t.client)
 				if err != nil {
 					flag = FailedInfo
@@ -232,12 +256,15 @@ func (t *BeanqRedis) consumerMsgs(ch <-chan redis.XStream, f DoConsumer, group s
 				result.Payload = stringx.ByteToString(task.payload)
 				result.AddTime = time.Now().Format(timex.DateTime)
 				result.RunTime = sub.String()
+				result.Queue = msg.Stream
+				result.Group = group
 
 				b, err := json.Marshal(result)
 				if err != nil {
 					fmt.Printf("JsonMarshal Error:%s \n", err.Error())
 					continue
 				}
+
 				//ack
 				if err := t.client.XAck(t.ctx, msg.Stream, group, vm.ID).Err(); err != nil {
 					fmt.Printf("ACK Error:%s \n", err.Error())

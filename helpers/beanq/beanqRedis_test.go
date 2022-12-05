@@ -46,21 +46,30 @@ func TestPublish1(t *testing.T) {
 
 		d, _ := json.Marshal(m)
 		task := NewTask("", d)
-		cmd, err := clt.Publish(task, Queue("ch2"), Group("g2"))
+		cmd, err := clt.Publish(task, Queue("ch2"))
 		if err != nil {
 			log.Fatalln(err)
 		}
 		fmt.Printf("%+v \n", cmd)
 	}
-
 	defer clt.Close()
+}
+func TestDelayPublish(t *testing.T) {
+	m := make(map[string]string)
+	m["delayMsg"] = "delayMsg"
+	d, _ := json.Marshal(m)
+	task := NewTask("", d)
+	dua, _ := time.ParseDuration("20s")
 
+	clt.Publish(task, Queue("ch2"), ExecuteTime(time.Now().Add(dua).Unix()))
+	defer clt.Close()
 }
 
 func TestXInfo(t *testing.T) {
 	ctx := context.Background()
 
 	clt := NewRedis(options)
+
 	cmd := clt.client.XInfoStream(ctx, queue)
 	fmt.Printf("%+v \n", cmd.Val())
 	groupCmd := clt.client.XInfoGroups(ctx, queue)
@@ -88,6 +97,7 @@ func TestMemoryUsage(t *testing.T) {
 	fmt.Printf("%+v \n", cmd)
 }
 func TestRetry(t *testing.T) {
+
 }
 
 var retryFlag chan bool = make(chan bool)
