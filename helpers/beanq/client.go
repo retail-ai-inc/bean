@@ -1,5 +1,7 @@
 package beanq
 
+import "time"
+
 type OptionType int
 
 const (
@@ -29,7 +31,7 @@ type (
 	queueOption  string
 	groupOption  string
 	maxLenOption int64
-	executeTime  int64
+	executeTime  time.Time
 )
 
 /*
@@ -114,7 +116,7 @@ func (ml maxLenOption) Value() any {
 * @param tm
 * @return Option
  */
-func ExecuteTime(unixTime int64) Option {
+func ExecuteTime(unixTime time.Time) Option {
 	return executeTime(unixTime)
 }
 func (et executeTime) String() string {
@@ -124,7 +126,7 @@ func (et executeTime) OptType() OptionType {
 	return ExecuteTimeOpt
 }
 func (et executeTime) Value() any {
-	return int64(et)
+	return time.Time(et)
 }
 
 /*
@@ -144,15 +146,25 @@ func composeOptions(options ...Option) (option, error) {
 	for _, f := range options {
 		switch f.OptType() {
 		case QueueOpt:
-			res.queue = f.Value().(string)
+			if v, ok := f.Value().(string); ok {
+				res.queue = v
+			}
 		case GroupOpt:
-			res.group = f.Value().(string)
+			if v, ok := f.Value().(string); ok {
+				res.group = v
+			}
 		case MaxRetryOpt:
-			res.retry = f.Value().(int)
+			if v, ok := f.Value().(int); ok {
+				res.retry = v
+			}
 		case MaxLenOpt:
-			res.maxLen = f.Value().(int64)
+			if v, ok := f.Value().(int64); ok {
+				res.maxLen = v
+			}
 		case ExecuteTimeOpt:
-			res.executeTime = f.Value().(int64)
+			if v, ok := f.Value().(int64); ok {
+				res.executeTime = v
+			}
 		}
 	}
 	return res, nil

@@ -8,14 +8,15 @@ import (
 type Message struct {
 	Id      string
 	Stream  string
-	Payload map[string]any
+	Payload []byte
 }
 
 type Task struct {
-	id      string
-	name    string
-	payload []byte
-	addTime time.Time
+	id          string    `json:"id"`
+	name        string    `json:"name"`
+	payload     []byte    `json:"payload"`
+	addTime     string    `json:"addTime"`
+	executeTime time.Time `json:"executeTime"`
 }
 
 func NewTask(name string, payload []byte) *Task {
@@ -35,6 +36,6 @@ func (t Task) Payload() string {
 func (t Task) Id() string {
 	return t.id
 }
-func (t Task) AddTime() time.Time {
+func (t Task) AddTime() string {
 	return t.addTime
 }

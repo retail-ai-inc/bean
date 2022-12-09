@@ -8,6 +8,7 @@ import (
 
 type Beanq interface {
 	Publish(task *Task, option ...Option) (*Result, error)
+	DelayPublish(task *Task, delayTime time.Time, option ...Option) (*Result, error)
 	Run(server *Server)
 	Close() error
 }
@@ -30,7 +31,7 @@ const (
 type ConsumerResult struct {
 	Level   levelMsg
 	Info    flagInfo
-	Payload string
+	Payload any
 
 	AddTime string
 	RunTime string
