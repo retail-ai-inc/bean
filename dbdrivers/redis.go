@@ -59,6 +59,16 @@ type RedisConfig struct {
 	PoolTimeout        time.Duration
 }
 
+type KeyFieldPair struct {
+	Key   string `json:"key"`
+	Field string `json:"field"`
+}
+
+type FieldValuePair struct {
+	Field string `json:"field"`
+	Value string `json:"value"`
+}
+
 var cachePrefix string
 
 func InitRedisTenantConns(config RedisConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string) map[uint64]*RedisDBConn {
@@ -401,6 +411,48 @@ func RedisExpireKey(c context.Context, clients *RedisDBConn, key string, ttl tim
 	}
 
 	return nil
+}
+
+// to get multiple redis hashes' field in one call to redis.
+func RedisMultipleHashesHget(c context.Context, clients *RedisDBConn, redisKeysWithField []KeyFieldPair) (map[string]FieldValuePair, error) {
+	// Check the read replicas are available or not.
+	noOfReadReplica := len(clients.Read)
+
+	var pipe redis.Pipeliner
+	if noOfReadReplica == 1 {
+		pipe = clients.Read[0].Pipeline()
+	} else if noOfReadReplica > 1 {
+		// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
+		rand.Seed(time.Now().UnixNano())
+		readHost := rand.Intn(noOfReadReplica)
+		pipe = clients.Read[uint64(readHost)].Pipeline()
+	} else {
+		// If there is no read replica then just hit the host server.
+		pipe = clients.Host.Pipeline()
+	}
+
+	n := map[int]*redis.StringCmd{}
+	for ctr, keyField := range redisKeysWithField {
+		n[ctr] = pipe.HGet(c, keyField.Key, keyField.Field)
+	}
+	_, err := pipe.Exec(c)
+	if err != nil {
+		if err != redis.Nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+
+	var mappedKeyFieldValues = make(map[string]FieldValuePair)
+
+	for _, v := range n {
+		var fv FieldValuePair
+		args := v.Args()
+		fv.Field = args[2].(string)
+		fv.Value = v.Val()
+		redisKey := args[1].(string)
+		mappedKeyFieldValues[redisKey] = fv
+	}
+	return mappedKeyFieldValues, nil
 }
 
 // getAllRedisTenantDB returns a singleton tenant db connection for each tenant.
