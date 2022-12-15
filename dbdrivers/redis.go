@@ -229,8 +229,10 @@ func RedisHGet(c context.Context, clients *RedisDBConn, key string, field string
 	return result, nil
 }
 
-// To get multiple redis hash keys and fields in one call from redis.
-func RedisHgets(c context.Context, clients *RedisDBConn, redisKeysWithField []KeyFieldPair) (map[string]FieldValuePair, error) {
+// To get one field from multiple redis hashes in one call to redis.
+// Input is a map of keys and the respective field for those keys.
+// Output is a map of keys and the respective values for those keys in redis.
+func RedisHgets(c context.Context, clients *RedisDBConn, redisKeysWithField map[string]string) (map[string]string, error) {
 	// Check the read replicas are available or not.
 	noOfReadReplica := len(clients.Read)
 
@@ -247,10 +249,9 @@ func RedisHgets(c context.Context, clients *RedisDBConn, redisKeysWithField []Ke
 		pipe = clients.Host.Pipeline()
 	}
 
-	n := map[int]*redis.StringCmd{}
-
-	for ctr, keyField := range redisKeysWithField {
-		n[ctr] = pipe.HGet(c, keyField.Key, keyField.Field)
+	commandMapper := map[string]*redis.StringCmd{}
+	for key, field := range redisKeysWithField {
+		commandMapper[key] = pipe.HGet(c, key, field)
 	}
 	_, err := pipe.Exec(c)
 	if err != nil {
@@ -259,15 +260,12 @@ func RedisHgets(c context.Context, clients *RedisDBConn, redisKeysWithField []Ke
 		}
 	}
 
-	var mappedKeyFieldValues = make(map[string]FieldValuePair)
-
-	for _, v := range n {
-		var fv FieldValuePair
+	var mappedKeyFieldValues = make(map[string]string)
+	// iterate through the commands and their responses from the pipeline execution.
+	for _, v := range commandMapper {
 		args := v.Args()
-		fv.Field = args[2].(string)
-		fv.Value = v.Val()
 		redisKey := args[1].(string)
-		mappedKeyFieldValues[redisKey] = fv
+		mappedKeyFieldValues[redisKey] = v.Val()
 	}
 	return mappedKeyFieldValues, nil
 }
