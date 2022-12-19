@@ -254,10 +254,8 @@ func RedisHgets(c context.Context, clients *RedisDBConn, redisKeysWithField map[
 		commandMapper[key] = pipe.HGet(c, key, field)
 	}
 	_, err := pipe.Exec(c)
-	if err != nil {
-		if err != redis.Nil {
-			return nil, errors.WithStack(err)
-		}
+	if err != nil && err != redis.Nil {
+		return nil, errors.WithStack(err)
 	}
 
 	var mappedKeyFieldValues = make(map[string]string)
