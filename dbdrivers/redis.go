@@ -254,6 +254,9 @@ func RedisHgets(c context.Context, clients *RedisDBConn, redisKeysWithField map[
 		commandMapper[key] = pipe.HGet(c, key, field)
 	}
 	_, err := pipe.Exec(c)
+	// for a key in the pipline for which the hget operation is being done
+	// does not exist or the corresponding field for that key
+	// does not exist redis marks it as redis.Nil error
 	if err != nil && err != redis.Nil {
 		return nil, errors.WithStack(err)
 	}
