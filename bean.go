@@ -159,9 +159,14 @@ const SentryHubContextKey = "sentry"
 // Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
 var TenantAlterDbHostParam string
 
+// Hold the complete env.json configuration so that we can use it from anywhere.
+var BeanConfig Config
+
 func New(config Config) (b *Bean) {
 	// Parse bean system files and directories.
 	helpers.ParseBeanSystemFilesAndDirectorires()
+
+	BeanConfig = config
 
 	// Create a new echo instance
 	e := NewEcho(config)
@@ -472,6 +477,15 @@ func SentryCaptureMessage(c echo.Context, msg string) {
 
 	// If someone call the function from service/repository without a proper context.
 	sentry.CurrentHub().Clone().CaptureMessage(msg)
+}
+
+// To clean up any bean resources before the program terminates.
+// Call this function using `defer` like `defer Cleanup()`
+func Cleanup() {
+	if SentryOn {
+		// Flush buffered sentry events if any.
+		sentry.Flush(BeanConfig.Sentry.Timeout)
+	}
 }
 
 // Modify event through beforeSend function.

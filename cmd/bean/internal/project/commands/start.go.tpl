@@ -2,7 +2,6 @@
 package commands
 
 import (
-	"fmt"
 
 	"{{ .PkgPath }}/middlewares"
 	"{{ .PkgPath }}/routers"
@@ -14,7 +13,6 @@ import (
 	berror "github.com/retail-ai-inc/bean/error"
 	"github.com/retail-ai-inc/bean/helpers"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -35,8 +33,8 @@ var (
 
 func init() {
 	rootCmd.AddCommand(startCmd)
-	defaultHost := viper.GetString("http.host")
-	defaultPort := viper.GetString("http.port")
+	defaultHost := bean.BeanConfig.HTTP.Host
+	defaultPort := bean.BeanConfig.HTTP.Port
 	startCmd.Flags().StringVar(&host, "host", defaultHost, "host address")
 	startCmd.Flags().StringVar(&port, "port", defaultPort, "port number")
 	startCmd.Flags().BoolVarP(&startWeb, "web", "w", false, "start with web service")
@@ -44,29 +42,20 @@ func init() {
 }
 
 func start(cmd *cobra.Command, args []string) {
-	// Unmarshal the env.json into config object.
-	var config bean.Config
-	if err := viper.Unmarshal(&config); err != nil {
-		fmt.Println(err)
-	}
-
-	// Flush buffered sentry events before the program terminates.
-	defer sentry.Flush(config.Sentry.Timeout)
-
 	// Prepare sentry options before initialize bean.
-	if config.Sentry.On {
-		config.Sentry.ClientOptions = &sentry.ClientOptions{
-			Debug:            config.Sentry.Debug,
-			Dsn:              config.Sentry.Dsn,
-			Environment:      config.Environment,
+	if bean.BeanConfig.Sentry.On {		
+		bean.BeanConfig.Sentry.ClientOptions = &sentry.ClientOptions{
+			Debug:            bean.BeanConfig.Sentry.Debug,
+			Dsn:              bean.BeanConfig.Sentry.Dsn,
+			Environment:      bean.BeanConfig.Environment,
 			BeforeSend:       bean.DefaultBeforeSend, // Default beforeSend function. You can initialize your own custom function.
 			AttachStacktrace: true,
-			TracesSampleRate: helpers.FloatInRange(config.Sentry.TracesSampleRate, 0.0, 1.0),
+			TracesSampleRate: helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0),
 		}
 
 		// Example of setting a global scope, if you want to set the scope per event,
 		// please check `sentry.WithScope()`.
-		// config.Sentry.ConfigureScope = func(scope *sentry.Scope) {
+		// bean.BeanConfig.Sentry.ConfigureScope = func(scope *sentry.Scope) {
 		// scope.SetTag("my-tag", "my value")
 		// }
 	}
@@ -85,7 +74,7 @@ func start(cmd *cobra.Command, args []string) {
 		echomiddleware.TimeoutWithConfig(echomiddleware.TimeoutConfig{
 			ErrorMessage:               `{"errorCode": "100004", "errorMsg": "timeout"}`,
 			OnTimeoutRouteErrorHandler: berror.OnTimeoutRouteErrorHandler,
-			Timeout:                    config.HTTP.Timeout,
+			Timeout:                    bean.BeanConfig.HTTP.Timeout,
 		}),
 		// Example:
 		middlewares.Example("example middleware"),
