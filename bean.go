@@ -147,10 +147,6 @@ type Config struct {
 // This is a global variable to hold the debug logger so that we can log data from service, repository or anywhere.
 var BeanLogger echo.Logger
 
-// This is a global variable to hold the sentry On/Off setting to check sentry is initialized or not very quickly
-// from handlers/services/repositories.
-var SentryOn bool
-
 // This key is inherited from `sentryecho` package as the package doesn't support the key for external use.
 const SentryHubContextKey = "sentry"
 
@@ -159,7 +155,7 @@ const SentryHubContextKey = "sentry"
 // Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
 var TenantAlterDbHostParam string
 
-// Hold the complete env.json configuration so that we can use it from anywhere.
+// Hold the useful configuration settings of bean so that we can use it quickly from anywhere.
 var BeanConfig Config
 
 func New(config Config) (b *Bean) {
@@ -282,9 +278,6 @@ func NewEcho(config Config) *echo.Echo {
 		if helpers.FloatInRange(config.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
 			e.Pre(middleware.Tracer())
 		}
-
-		// Initialize `SentryOn` global variable so that we can check the sentry is On/Off from handlers/services/repository.
-		SentryOn = true
 	}
 
 	// Some pre-build middleware initialization.
@@ -381,7 +374,7 @@ func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
 		for _, handle := range b.errorHandlerFuncs {
 			handled, err := handle(err, c)
 			if err != nil {
-				if SentryOn {
+				if BeanConfig.Sentry.On {
 					SentryCaptureException(c, err)
 				} else {
 					c.Logger().Error(err)
@@ -443,7 +436,7 @@ func Logger() echo.Logger {
 
 // This is a global function to send sentry exception if you configure the sentry through env.json. You cann pass a proper context or nil.
 func SentryCaptureException(c echo.Context, err error) {
-	if !SentryOn {
+	if !BeanConfig.Sentry.On {
 		return
 	}
 
@@ -462,7 +455,7 @@ func SentryCaptureException(c echo.Context, err error) {
 
 // This is a global function to send sentry message if you configure the sentry through env.json. You cann pass a proper context or nil.
 func SentryCaptureMessage(c echo.Context, msg string) {
-	if !SentryOn {
+	if !BeanConfig.Sentry.On {
 		return
 	}
 
@@ -482,7 +475,7 @@ func SentryCaptureMessage(c echo.Context, msg string) {
 // To clean up any bean resources before the program terminates.
 // Call this function using `defer` like `defer Cleanup()`
 func Cleanup() {
-	if SentryOn {
+	if BeanConfig.Sentry.On {
 		// Flush buffered sentry events if any.
 		sentry.Flush(BeanConfig.Sentry.Timeout)
 	}
