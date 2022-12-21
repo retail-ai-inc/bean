@@ -49,7 +49,7 @@ func init() {
 		log.Fatalln(err)
 	}
 
-	// Unmarshal the env.json into global BeanConfig object.
+	// IMPORTANT: Unmarshal the env.json into global BeanConfig object.
 	if err := viper.Unmarshal(&bean.BeanConfig); err != nil {
 		log.Fatalln(err)
 	}

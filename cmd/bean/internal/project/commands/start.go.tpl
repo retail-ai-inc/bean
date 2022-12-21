@@ -61,7 +61,7 @@ func start(cmd *cobra.Command, args []string) {
 	}
 
 	// Create a bean object
-	b := bean.New(config)
+	b := bean.New()
 
 	// Add custom validation to the default validator.
 	b.UseValidation(

@@ -39,7 +39,7 @@ func init() {
 
 func routeList(cmd *cobra.Command, args []string) {
 	// Create a bean object
-	b := bean.New(bean.BeanConfig)
+	b := bean.New()
 
 	// Create an empty database dependency.
 	b.DBConn = &bean.DBDeps{}
