@@ -38,6 +38,15 @@ func init() {
 }
 
 func routeList(cmd *cobra.Command, args []string) {
+	// Just initialize a plain sentry client option structure if sentry is on.
+	if bean.BeanConfig.Sentry.On {
+		bean.BeanConfig.Sentry.ClientOptions = &sentry.ClientOptions{
+			Debug:       false,
+			Dsn:         bean.BeanConfig.Sentry.Dsn,
+			Environment: bean.BeanConfig.Environment,
+		}
+	}
+
 	// Create a bean object
 	b := bean.New()
 
