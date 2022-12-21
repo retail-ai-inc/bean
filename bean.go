@@ -147,10 +147,6 @@ type Config struct {
 // This is a global variable to hold the debug logger so that we can log data from service, repository or anywhere.
 var BeanLogger echo.Logger
 
-// This is a global variable to hold the sentry On/Off setting to check sentry is initialized or not very quickly
-// from handlers/services/repositories.
-var SentryOn bool
-
 // This key is inherited from `sentryecho` package as the package doesn't support the key for external use.
 const SentryHubContextKey = "sentry"
 
@@ -159,23 +155,24 @@ const SentryHubContextKey = "sentry"
 // Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
 var TenantAlterDbHostParam string
 
-func New(config Config) (b *Bean) {
-	// Parse bean system files and directories.
-	helpers.ParseBeanSystemFilesAndDirectorires()
+// Hold the useful configuration settings of bean so that we can use it quickly from anywhere.
+var BeanConfig Config
+
+func New() (b *Bean) {
 
 	// Create a new echo instance
-	e := NewEcho(config)
+	e := NewEcho()
 
 	b = &Bean{
 		Echo:     e,
 		validate: validatorV10.New(),
-		Config:   config,
+		Config:   BeanConfig,
 	}
 
 	return b
 }
 
-func NewEcho(config Config) *echo.Echo {
+func NewEcho() *echo.Echo {
 
 	e := echo.New()
 
@@ -186,7 +183,7 @@ func NewEcho(config Config) *echo.Echo {
 	e.Binder = &binder.CustomBinder{}
 
 	// Setup HTML view templating engine.
-	viewsTemplateCache := config.HTML.ViewsTemplateCache
+	viewsTemplateCache := BeanConfig.HTML.ViewsTemplateCache
 	e.Renderer = echoview.New(goview.Config{
 		Root:         "views",
 		Extension:    ".html",
@@ -198,8 +195,8 @@ func NewEcho(config Config) *echo.Echo {
 	})
 
 	// IMPORTANT: Configure debug log.
-	if config.DebugLogPath != "" {
-		if file, err := openFile(config.DebugLogPath); err != nil {
+	if BeanConfig.DebugLogPath != "" {
+		if file, err := openFile(BeanConfig.DebugLogPath); err != nil {
 			e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
 		} else {
 			e.Logger.SetOutput(file)
@@ -211,24 +208,24 @@ func NewEcho(config Config) *echo.Echo {
 	BeanLogger = e.Logger
 
 	// Adds a `Server` header to the response.
-	e.Use(middleware.ServerHeader(config.ProjectName, helpers.CurrVersion()))
+	e.Use(middleware.ServerHeader(BeanConfig.ProjectName, helpers.CurrVersion()))
 
 	// Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
-	e.Use(echomiddleware.BodyLimit(config.HTTP.BodyLimit))
+	e.Use(echomiddleware.BodyLimit(BeanConfig.HTTP.BodyLimit))
 
 	// CORS initialization and support only HTTP methods which are configured under `http.allowedMethod` parameters in `env.json`.
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
 		AllowOrigins: []string{"*"},
-		AllowMethods: config.HTTP.AllowedMethod,
+		AllowMethods: BeanConfig.HTTP.AllowedMethod,
 	}))
 
 	// Basic HTTP headers security like XSS protection...
 	e.Use(echomiddleware.SecureWithConfig(echomiddleware.SecureConfig{
-		XSSProtection:         config.Security.HTTP.Header.XssProtection,         // Adds the X-XSS-Protection header with the value `1; mode=block`.
-		ContentTypeNosniff:    config.Security.HTTP.Header.ContentTypeNosniff,    // Adds the X-Content-Type-Options header with the value `nosniff`.
-		XFrameOptions:         config.Security.HTTP.Header.XFrameOptions,         // The X-Frame-Options header value to be set with a custom value.
-		HSTSMaxAge:            config.Security.HTTP.Header.HstsMaxAge,            // HSTS header is only included when the connection is HTTPS.
-		ContentSecurityPolicy: config.Security.HTTP.Header.ContentSecurityPolicy, // Allows the Content-Security-Policy header value to be set with a custom value.
+		XSSProtection:         BeanConfig.Security.HTTP.Header.XssProtection,         // Adds the X-XSS-Protection header with the value `1; mode=block`.
+		ContentTypeNosniff:    BeanConfig.Security.HTTP.Header.ContentTypeNosniff,    // Adds the X-Content-Type-Options header with the value `nosniff`.
+		XFrameOptions:         BeanConfig.Security.HTTP.Header.XFrameOptions,         // The X-Frame-Options header value to be set with a custom value.
+		HSTSMaxAge:            BeanConfig.Security.HTTP.Header.HstsMaxAge,            // HSTS header is only included when the connection is HTTPS.
+		ContentSecurityPolicy: BeanConfig.Security.HTTP.Header.ContentSecurityPolicy, // Allows the Content-Security-Policy header value to be set with a custom value.
 	}))
 
 	// Return `405 Method Not Allowed` if a wrong HTTP method been called for an API route.
@@ -236,16 +233,16 @@ func NewEcho(config Config) *echo.Echo {
 	e.Use(middleware.MethodNotAllowedAndRouteNotFound())
 
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
-	if config.AccessLog.On {
-		accessLogConfig := middleware.LoggerConfig{BodyDump: config.AccessLog.BodyDump}
-		if config.AccessLog.Path != "" {
-			if file, err := openFile(config.AccessLog.Path); err != nil {
+	if BeanConfig.AccessLog.On {
+		accessLogConfig := middleware.LoggerConfig{BodyDump: BeanConfig.AccessLog.BodyDump}
+		if BeanConfig.AccessLog.Path != "" {
+			if file, err := openFile(BeanConfig.AccessLog.Path); err != nil {
 				e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
 			} else {
 				accessLogConfig.Output = file
 			}
-			if len(config.AccessLog.BodyDumpMaskParam) > 0 {
-				accessLogConfig.MaskedParameters = config.AccessLog.BodyDumpMaskParam
+			if len(BeanConfig.AccessLog.BodyDumpMaskParam) > 0 {
+				accessLogConfig.MaskedParameters = BeanConfig.AccessLog.BodyDumpMaskParam
 			}
 		}
 		accessLogger := middleware.AccessLoggerWithConfig(accessLogConfig)
@@ -254,37 +251,34 @@ func NewEcho(config Config) *echo.Echo {
 
 	// IMPORTANT: Capturing error and send to sentry if needed.
 	// Sentry `panic` error handler and APM initialization if activated from `env.json`
-	if config.Sentry.On {
+	if BeanConfig.Sentry.On {
 		// Check the sentry client options is not nil
-		if config.Sentry.ClientOptions == nil {
+		if BeanConfig.Sentry.ClientOptions == nil {
 			e.Logger.Fatal("Sentry initialization failed: client options is empty")
 		}
 
-		if err := sentry.Init(*config.Sentry.ClientOptions); err != nil {
+		if err := sentry.Init(*BeanConfig.Sentry.ClientOptions); err != nil {
 			e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
 		}
 
 		// Configure custom scope
-		if config.Sentry.ConfigureScope != nil {
-			sentry.ConfigureScope(config.Sentry.ConfigureScope)
+		if BeanConfig.Sentry.ConfigureScope != nil {
+			sentry.ConfigureScope(BeanConfig.Sentry.ConfigureScope)
 		}
 
 		e.Use(sentryecho.New(sentryecho.Options{
 			Repanic: true,
-			Timeout: config.Sentry.Timeout,
+			Timeout: BeanConfig.Sentry.Timeout,
 		}))
 
-		if helpers.FloatInRange(config.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
+		if helpers.FloatInRange(BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
 			e.Pre(middleware.Tracer())
 		}
-
-		// Initialize `SentryOn` global variable so that we can check the sentry is On/Off from handlers/services/repository.
-		SentryOn = true
 	}
 
 	// Some pre-build middleware initialization.
 	e.Pre(echomiddleware.RemoveTrailingSlash())
-	if config.HTTP.IsHttpsRedirect {
+	if BeanConfig.HTTP.IsHttpsRedirect {
 		e.Pre(echomiddleware.HTTPSRedirect())
 	}
 	e.Use(echomiddleware.Recover())
@@ -297,8 +291,8 @@ func NewEcho(config Config) *echo.Echo {
 
 	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
 	// This will help us to integrate `bean's` health into `k8s`.
-	if config.Prometheus.On {
-		p := prometheus.NewPrometheus("echo", prometheusUrlSkipper(config.Prometheus.SkipEndpoints))
+	if BeanConfig.Prometheus.On {
+		p := prometheus.NewPrometheus("echo", prometheusUrlSkipper(BeanConfig.Prometheus.SkipEndpoints))
 		p.Use(e)
 	}
 
@@ -376,7 +370,7 @@ func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
 		for _, handle := range b.errorHandlerFuncs {
 			handled, err := handle(err, c)
 			if err != nil {
-				if SentryOn {
+				if BeanConfig.Sentry.On {
 					SentryCaptureException(c, err)
 				} else {
 					c.Logger().Error(err)
@@ -438,7 +432,7 @@ func Logger() echo.Logger {
 
 // This is a global function to send sentry exception if you configure the sentry through env.json. You cann pass a proper context or nil.
 func SentryCaptureException(c echo.Context, err error) {
-	if !SentryOn {
+	if !BeanConfig.Sentry.On {
 		return
 	}
 
@@ -457,7 +451,7 @@ func SentryCaptureException(c echo.Context, err error) {
 
 // This is a global function to send sentry message if you configure the sentry through env.json. You cann pass a proper context or nil.
 func SentryCaptureMessage(c echo.Context, msg string) {
-	if !SentryOn {
+	if !BeanConfig.Sentry.On {
 		return
 	}
 
@@ -472,6 +466,15 @@ func SentryCaptureMessage(c echo.Context, msg string) {
 
 	// If someone call the function from service/repository without a proper context.
 	sentry.CurrentHub().Clone().CaptureMessage(msg)
+}
+
+// To clean up any bean resources before the program terminates.
+// Call this function using `defer` like `defer Cleanup()`
+func Cleanup() {
+	if BeanConfig.Sentry.On {
+		// Flush buffered sentry events if any.
+		sentry.Flush(BeanConfig.Sentry.Timeout)
+	}
 }
 
 // Modify event through beforeSend function.

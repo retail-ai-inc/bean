@@ -2,7 +2,6 @@
 package commands
 
 import (
-	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/retail-ai-inc/bean"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -40,14 +38,8 @@ func init() {
 }
 
 func routeList(cmd *cobra.Command, args []string) {
-	// Unmarshal the env.json into config object.
-	var config bean.Config
-	if err := viper.Unmarshal(&config); err != nil {
-		fmt.Println(err)
-	}
-
 	// Create a bean object
-	b := bean.New(config)
+	b := bean.New()
 
 	// Create an empty database dependency.
 	b.DBConn = &bean.DBDeps{}
@@ -56,7 +48,7 @@ func routeList(cmd *cobra.Command, args []string) {
 	routers.Init(b)
 
 	// Consider the allowed methods to display only URI path that's support it.
-	allowedMethod := viper.GetStringSlice("http.allowedMethod")
+	allowedMethod := bean.BeanConfig.HTTP.AllowedMethod
 
 	table := tablewriter.NewWriter(os.Stdout)
 	header := []string{"Path", "Method", "Handler"}

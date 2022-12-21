@@ -40,7 +40,7 @@ func ExecuteWithContext(fn Task, c echo.Context) {
 
 		// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
 		// can pull the right hub and send the exception message to sentry.
-		if bean.SentryOn {
+		if bean.BeanConfig.Sentry.On {
 			ctx := ec.Request().Context()
 			hub := sentry.GetHubFromContext(ctx)
 			if hub == nil {
@@ -89,7 +89,7 @@ func ExecuteWithContext(fn Task, c echo.Context) {
 func recoverPanic(c echo.Context) {
 	if err := recover(); err != nil {
 		// Create a new Hub by cloning the existing one.
-		if bean.SentryOn {
+		if bean.BeanConfig.Sentry.On {
 			localHub := sentry.CurrentHub().Clone()
 
 			if c != nil {

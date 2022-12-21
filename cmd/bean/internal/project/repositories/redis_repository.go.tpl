@@ -16,6 +16,7 @@ type RedisRepository interface {
 	GetString(c context.Context, tenantID uint64, key string) (string, error)
 	MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error)
 	HGet(c context.Context, tenantID uint64, key string, field string, dst interface{}) (bool, error)
+	HGets(c context.Context, tenantID uint64, keysWithFields map[string]string) (map[string]string, error)
 	LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error)
 	SMembers(c context.Context, tenantID uint64, key string) ([]string, error)
 	SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error)
@@ -96,6 +97,20 @@ func (r *redisRepository) HGet(c context.Context, tenantID uint64, key string, f
 	}
 
 	return true, nil
+}
+
+func (r *redisRepository) HGets(c context.Context, tenantID uint64, keysWithFields map[string]string) (map[string]string, error) {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	var mappedKeyFieldValues = make(map[string]string)
+
+	for key, field := range keysWithFields {
+		prefixKey := r.cachePrefix + "_" + key
+		mappedKeyFieldValues[prefixKey] = field
+	}
+
+	return dbdrivers.RedisHgets(c, r.clients[tenantID], mappedKeyFieldValues)
 }
 
 func (r *redisRepository) LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error) {
