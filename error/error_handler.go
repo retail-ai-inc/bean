@@ -60,7 +60,7 @@ func APIErrorHanderFunc(e error, c echo.Context) (bool, error) {
 	}
 
 	if he.HTTPStatusCode >= 404 {
-		c.Logger().Error(he)
+		c.Logger().Error(he.Error())
 
 		if he.HTTPStatusCode > 404 {
 			// Send error event to sentry if configured.
