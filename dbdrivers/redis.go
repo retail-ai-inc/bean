@@ -395,7 +395,7 @@ func RedisSet(c context.Context, clients *RedisDBConn, key string, data interfac
 	return nil
 }
 
-func RedisHSet(c context.Context, clients *RedisDBConn, key string, field string, data interface{}) error {
+func RedisHSet(c context.Context, clients *RedisDBConn, key string, field string, data interface{}, ttl time.Duration) error {
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
 		return errors.WithStack(err)
@@ -403,6 +403,12 @@ func RedisHSet(c context.Context, clients *RedisDBConn, key string, field string
 
 	if err := clients.Host.HSet(c, key, field, jsonBytes).Err(); err != nil {
 		return errors.WithStack(err)
+	}
+
+	if ttl > 0 {
+		if err := clients.Host.Expire(c, key, ttl).Err(); err != nil {
+			return errors.WithStack(err)
+		}
 	}
 
 	return nil
