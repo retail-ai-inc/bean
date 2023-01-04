@@ -22,7 +22,7 @@ type RedisRepository interface {
 	SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error)
 	SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error
 	SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error
-	HSet(c context.Context, tenantID uint64, key string, field string, data interface{}) error
+	HSet(c context.Context, tenantID uint64, key string, field string, data interface{}, ttl time.Duration) error
 	RPush(c context.Context, tenantID uint64, key string, valueList []string) error
 	IncrementValue(c context.Context, tenantID uint64, key string) error
 	SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error
@@ -142,12 +142,12 @@ func (r *redisRepository) SetString(c context.Context, tenantID uint64, key stri
 	return dbdrivers.RedisSet(c, r.clients[tenantID], prefixKey, data, ttl)
 }
 
-func (r *redisRepository) HSet(c context.Context, tenantID uint64, key string, field string, data interface{}) error {
+func (r *redisRepository) HSet(c context.Context, tenantID uint64, key string, field string, data interface{}, ttl time.Duration) error {
 	finish := trace.Start(c, "db")
 	defer finish()
 
 	prefixKey := r.cachePrefix + "_" + key
-	return dbdrivers.RedisHSet(c, r.clients[tenantID], prefixKey, field, data)
+	return dbdrivers.RedisHSet(c, r.clients[tenantID], prefixKey, field, data, ttl)
 }
 
 func (r *redisRepository) RPush(c context.Context, tenantID uint64, key string, valueList []string) error {
