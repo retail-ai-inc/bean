@@ -21,11 +21,28 @@ type Task func(c echo.Context)
 
 // `Execute` provides a safe way to execute a function asynchronously without any context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
-func Execute(fn func()) {
-	go func() {
-		defer recoverPanic(nil)
-		fn()
-	}()
+func Execute(fn func(), poolName ...string) {
+	var asyncFunc = func(task func()) {
+		go func() {
+			defer recoverPanic(nil)
+			task()
+		}()
+	}
+	if len(poolName) > 0 {
+		pool, err := gopool.GetPool(poolName[0])
+		if err == nil && pool != nil {
+			asyncFunc = func(task func()) {
+				defer recoverPanic(nil)
+				err = pool.Submit(task)
+				if err != nil {
+					panic(err)
+				}
+			}
+		} else {
+			bean.Logger().Warnf("async func will execute without goroutine pool, the pool name is %q\n", poolName[0])
+		}
+	}
+	asyncFunc(fn)
 }
 
 // `ExecuteWithContext` provides a safe way to execute a function asynchronously with a context, recovering if they panic
@@ -37,24 +54,7 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 	// IMPORTANT: Must reset before use.
 	ec.Reset(c.Request().WithContext(context.TODO()), nil)
 
-	var asyncFunc = func(task func()) {
-		go task()
-	}
-	if len(poolName) > 0 {
-		pool, err := gopool.GetPool(poolName[0])
-		if err == nil && pool != nil {
-			asyncFunc = func(task func()) {
-				err = pool.Submit(task)
-				if err != nil {
-					panic(err)
-				}
-			}
-		} else {
-			bean.Logger().Warnf("async func will execute without goroutine pool, the pool name is %q\n", poolName[0])
-		}
-	}
-
-	asyncFunc(func() {
+	Execute(func() {
 
 		// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
 		// can pull the right hub and send the exception message to sentry.
@@ -100,7 +100,7 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 		defer recoverPanic(ec)
 
 		fn(ec)
-	})
+	}, poolName...)
 }
 
 // Recover the panic and send the exception to sentry.

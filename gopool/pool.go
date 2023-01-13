@@ -1,10 +1,10 @@
 package gopool
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/panjf2000/ants/v2"
 )
@@ -14,28 +14,25 @@ var (
 	pools   = make(map[string]*ants.Pool)
 )
 
-// nowFunc returns the current time; it's overridden in tests.
-var nowFunc = time.Now
-
 // Register makes a goroutine pool available by the provided name.
 // If Register is called twice with the same name or if pool is nil,
-// it panics.
-func Register(name string, pool *ants.Pool) {
+// it returns error.
+func Register(name string, pool *ants.Pool) error {
 	poolsMu.Lock()
 	defer poolsMu.Unlock()
 	if pool == nil {
-		panic("gopool: Register pool is nil")
+		return errors.New("gopool: Register pool is nil")
 	}
 	if _, dup := pools[name]; dup {
-		panic("gopool: Register called twice for pool " + name)
+		return errors.New("gopool: Register called twice for pool " + name)
 	}
 	pools[name] = pool
+	return nil
 }
 
-func unregisterAllPools() {
+func UnregisterAllPools() {
 	poolsMu.Lock()
 	defer poolsMu.Unlock()
-	// For tests.
 	for _, pool := range pools {
 		pool.Release()
 	}
