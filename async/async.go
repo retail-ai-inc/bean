@@ -12,6 +12,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean"
+	"github.com/retail-ai-inc/bean/gopool"
 	"github.com/retail-ai-inc/bean/helpers"
 	"github.com/spf13/viper"
 )
@@ -29,14 +30,31 @@ func Execute(fn func()) {
 
 // `ExecuteWithContext` provides a safe way to execute a function asynchronously with a context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
-func ExecuteWithContext(fn Task, c echo.Context) {
+func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 	// Acquire a context from echo.
 	ec := c.Echo().AcquireContext()
 
 	// IMPORTANT: Must reset before use.
 	ec.Reset(c.Request().WithContext(context.TODO()), nil)
 
-	go func() {
+	var asyncFunc = func(task func()) {
+		go task()
+	}
+	if len(poolName) > 0 {
+		pool, err := gopool.GetPool(poolName[0])
+		if err == nil && pool != nil {
+			asyncFunc = func(task func()) {
+				err = pool.Submit(task)
+				if err != nil {
+					panic(err)
+				}
+			}
+		} else {
+			bean.Logger().Warnf("async func will execute without goroutine pool, the pool name is %q\n", poolName[0])
+		}
+	}
+
+	asyncFunc(func() {
 
 		// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
 		// can pull the right hub and send the exception message to sentry.
@@ -82,7 +100,7 @@ func ExecuteWithContext(fn Task, c echo.Context) {
 		defer recoverPanic(ec)
 
 		fn(ec)
-	}()
+	})
 }
 
 // Recover the panic and send the exception to sentry.
