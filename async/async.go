@@ -28,6 +28,7 @@ func Execute(fn func(), poolName ...string) {
 			task()
 		}()
 	}
+
 	if len(poolName) > 0 {
 		pool, err := gopool.GetPool(poolName[0])
 		if err == nil && pool != nil {
@@ -42,6 +43,7 @@ func Execute(fn func(), poolName ...string) {
 			bean.Logger().Warnf("async func will execute without goroutine pool, the pool name is %q\n", poolName[0])
 		}
 	}
+
 	asyncFunc(fn)
 }
 
@@ -64,6 +66,7 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 			if hub == nil {
 				hub = sentry.CurrentHub().Clone()
 			}
+
 			hub.Scope().SetRequest(ec.Request())
 			ctx = sentry.SetHubOnContext(ctx, hub)
 			ec.Set(bean.SentryHubContextKey, hub)

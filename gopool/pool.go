@@ -20,12 +20,15 @@ var (
 func Register(name string, pool *ants.Pool) error {
 	poolsMu.Lock()
 	defer poolsMu.Unlock()
+
 	if pool == nil {
 		return errors.New("gopool: Register pool is nil")
 	}
+
 	if _, dup := pools[name]; dup {
 		return errors.New("gopool: Register called twice for pool " + name)
 	}
+
 	pools[name] = pool
 	return nil
 }
@@ -33,9 +36,11 @@ func Register(name string, pool *ants.Pool) error {
 func UnregisterAllPools() {
 	poolsMu.Lock()
 	defer poolsMu.Unlock()
+
 	for _, pool := range pools {
 		pool.Release()
 	}
+
 	pools = make(map[string]*ants.Pool)
 }
 
@@ -43,10 +48,13 @@ func UnregisterAllPools() {
 func Pools() []string {
 	poolsMu.RLock()
 	defer poolsMu.RUnlock()
+
 	list := make([]string, 0, len(pools))
+
 	for name := range pools {
 		list = append(list, name)
 	}
+
 	sort.Strings(list)
 	return list
 }
@@ -55,6 +63,7 @@ func GetPool(poolName string) (*ants.Pool, error) {
 	poolsMu.RLock()
 	pool, ok := pools[poolName]
 	poolsMu.RUnlock()
+
 	if !ok {
 		return nil, fmt.Errorf("gopool: unknown pool name %q", poolName)
 	}
