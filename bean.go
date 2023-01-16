@@ -39,11 +39,12 @@ import (
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
+	"github.com/panjf2000/ants/v2"
 	"github.com/retail-ai-inc/bean/binder"
 	"github.com/retail-ai-inc/bean/dbdrivers"
 	"github.com/retail-ai-inc/bean/echoview"
-
 	berror "github.com/retail-ai-inc/bean/error"
+	"github.com/retail-ai-inc/bean/gopool"
 	"github.com/retail-ai-inc/bean/goview"
 	"github.com/retail-ai-inc/bean/helpers"
 	"github.com/retail-ai-inc/bean/middleware"
@@ -141,6 +142,11 @@ type Config struct {
 				ContentSecurityPolicy string
 			}
 		}
+	}
+	AsyncPool []struct {
+		Name       string
+		Size       *int
+		BlockAfter *int
 	}
 }
 
@@ -294,6 +300,33 @@ func NewEcho() *echo.Echo {
 	if BeanConfig.Prometheus.On {
 		p := prometheus.NewPrometheus("echo", prometheusUrlSkipper(BeanConfig.Prometheus.SkipEndpoints))
 		p.Use(e)
+	}
+
+	// Register goroutine pool
+	for _, asyncPool := range BeanConfig.AsyncPool {
+		if asyncPool.Name == "" {
+			continue
+		}
+
+		poolSize := -1
+		if asyncPool.Size != nil {
+			poolSize = *asyncPool.Size
+		}
+
+		blockAfter := 0
+		if asyncPool.BlockAfter != nil {
+			blockAfter = *asyncPool.BlockAfter
+		}
+
+		pool, err := ants.NewPool(poolSize, ants.WithMaxBlockingTasks(blockAfter))
+		if err != nil {
+			e.Logger.Fatal("ants pool initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
+		}
+
+		err = gopool.Register(asyncPool.Name, pool)
+		if err != nil {
+			e.Logger.Fatal("goroutine pool register failed: ", err, ". Server 🚀  crash landed. Exiting...")
+		}
 	}
 
 	return e
