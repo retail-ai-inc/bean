@@ -23,12 +23,15 @@
 package bean
 
 import (
+	"context"
 	"crypto/tls"
 	"html/template"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
@@ -51,6 +54,7 @@ import (
 	"github.com/retail-ai-inc/bean/middleware"
 	broute "github.com/retail-ai-inc/bean/route"
 	"github.com/retail-ai-inc/bean/validator"
+	"github.com/rs/dnscache"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
 )
@@ -120,6 +124,14 @@ type Config struct {
 			MinTLSVersion uint16
 		}
 	}
+	NetHttpFastTransporter struct {
+		On                  bool
+		MaxIdleConns        *int
+		MaxIdleConnsPerHost *int
+		MaxConnsPerHost     *int
+		IdleConnTimeout     *time.Duration
+		DNSCacheTimeout     *time.Duration
+	}
 	HTML struct {
 		ViewsTemplateCache bool
 	}
@@ -165,6 +177,9 @@ var TenantAlterDbHostParam string
 // Hold the useful configuration settings of bean so that we can use it quickly from anywhere.
 var BeanConfig Config
 
+// Support a DNS cache version of the net/http Transport.
+var NetHttpFastTransporter *http.Transport
+
 func New() (b *Bean) {
 
 	// Create a new echo instance
@@ -174,6 +189,62 @@ func New() (b *Bean) {
 		Echo:     e,
 		validate: validatorV10.New(),
 		Config:   BeanConfig,
+	}
+
+	// If `NetHttpFastTransporter` is on from env.json then initialize it.
+	if BeanConfig.NetHttpFastTransporter.On {
+		resolver := &dnscache.Resolver{}
+		if BeanConfig.NetHttpFastTransporter.MaxIdleConns == nil {
+			*BeanConfig.NetHttpFastTransporter.MaxIdleConns = 0
+		}
+
+		if BeanConfig.NetHttpFastTransporter.MaxIdleConnsPerHost == nil {
+			*BeanConfig.NetHttpFastTransporter.MaxIdleConnsPerHost = 0
+		}
+
+		if BeanConfig.NetHttpFastTransporter.MaxConnsPerHost == nil {
+			*BeanConfig.NetHttpFastTransporter.MaxConnsPerHost = 0
+		}
+
+		if BeanConfig.NetHttpFastTransporter.IdleConnTimeout == nil {
+			*BeanConfig.NetHttpFastTransporter.IdleConnTimeout = 0
+		}
+
+		if BeanConfig.NetHttpFastTransporter.DNSCacheTimeout == nil {
+			*BeanConfig.NetHttpFastTransporter.DNSCacheTimeout = 5 * time.Minute
+		}
+
+		NetHttpFastTransporter = &http.Transport{
+			DialContext: func(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
+				separator := strings.LastIndex(addr, ":")
+				ips, err := resolver.LookupHost(ctx, addr[:separator])
+				if err != nil {
+					return nil, err
+				}
+
+				for _, ip := range ips {
+					conn, err = net.Dial(network, ip+addr[separator:])
+					if err == nil {
+						break
+					}
+				}
+
+				return
+			},
+			MaxIdleConns:        *BeanConfig.NetHttpFastTransporter.MaxIdleConns,
+			MaxIdleConnsPerHost: *BeanConfig.NetHttpFastTransporter.MaxIdleConnsPerHost,
+			MaxConnsPerHost:     *BeanConfig.NetHttpFastTransporter.MaxConnsPerHost,
+			IdleConnTimeout:     *BeanConfig.NetHttpFastTransporter.IdleConnTimeout,
+		}
+
+		// IMPORTANT: Refresh unused DNS cache in every 5 minutes by default unless set via env.json.
+		go func() {
+			t := time.NewTicker(*BeanConfig.NetHttpFastTransporter.DNSCacheTimeout)
+			defer t.Stop()
+			for range t.C {
+				resolver.Refresh(true)
+			}
+		}()
 	}
 
 	return b
