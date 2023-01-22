@@ -14,6 +14,7 @@ require (
 	github.com/labstack/gommon v0.3.1
 	github.com/panjf2000/ants/v2 v2.7.1
 	github.com/pkg/errors v0.9.1
+	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
 	github.com/spf13/cobra v1.3.0
 	github.com/spf13/viper v1.10.1
 	github.com/stretchr/testify v1.8.1
