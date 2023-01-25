@@ -60,16 +60,12 @@ func APIErrorHanderFunc(e error, c echo.Context) (bool, error) {
 		return false, nil
 	}
 
-	if he.HTTPStatusCode >= 404 {
-		c.Logger().Error(he.Error())
+	c.Logger().Error(he.Error())
 
-		if he.HTTPStatusCode > 404 {
-			// Send error event to sentry if configured.
-			if viper.GetBool("sentry.on") {
-				if hub := sentryecho.GetHubFromContext(c); hub != nil {
-					hub.CaptureException(he)
-				}
-			}
+	// Send error event to sentry if configured.
+	if viper.GetBool("sentry.on") {
+		if hub := sentryecho.GetHubFromContext(c); hub != nil {
+			hub.CaptureException(he)
 		}
 	}
 
