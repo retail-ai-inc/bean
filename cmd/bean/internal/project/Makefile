@@ -3,6 +3,11 @@ GOLANGCI_LINT_VERSION=latest
 
 all: lint test build
 
+download:
+	go mod download
+	go mod tidy
+	go vet .
+
 build:
 	go build
 
@@ -26,4 +31,4 @@ test: ## run tests with race detactor
 clean: ## remove the output binary from go build, as well as go install and build cache
 	go clean -i -r -cache
 
-.PHONY: build build-race build-slim lint test clean
+.PHONY: download build build-race build-slim lint test clean
