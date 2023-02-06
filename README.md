@@ -13,12 +13,12 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [One Liner To Create Service And Repositories](#one-liner-to-create-service-and-repositories)
   - [How To Create Handler](#how-to-create-handler)
   - [Two Build Commands](#two-build-commands)
-  - [Built-In Logging](#built-in-logging)
-  - [Secret Key](#secret-key)
-  - [Useful Helper Functions](#useful-helper-functions)
+  - [Additional Features](#additional-features)
+    - [Built-In Logging](#built-in-logging)
+    - [Executable bin commands](#Executable-bin-Commands)
+    - [Useful Helper Functions](#useful-helper-functions)
   - [Do’s and Don’ts](#dos-and-donts)
     - [Context](#context)
-    - [Pointer](#pointer)
 
 ## How to use
 ### Initialize a project
@@ -98,6 +98,7 @@ Bean supporting 2 build commands:
 - `make build` - This is usual go build command.
 - `make build-slim` - This will create a slim down version of your binary by turning off the DWARF debugging information and Go symbol table. Furthemore, this will exclude file system paths from the resulting binary using `-trimpath`.
 
+# Additional Features
 ## Built-In Logging
 
 Bean has a pre-builtin logging system. If you open the `env.json` file from your project directory then you should see some configuration like below:
@@ -116,12 +117,50 @@ Bean has a pre-builtin logging system. If you open the `env.json` file from your
 - `path` - Set the log file path. You can set like `logs/console.log`. Empty log path allow bean to log into `stdout`
 - `bodyDumpMaskParam` - For security purpose if you don't wanna `bodyDump` some sensetive request parameter then you can add those as a string into the slice like `["password", "secret"]`. Default is empty.
 
-## Secret Key
+The logger in bean is an instance of log.Logger interface from the github.com/labstack/gommon/log package [compatible with the standard log.Logger interface], there are multiple levels of logging such as `Debug`, `Info`, `Warn`, `Error` and to customize the formatting of the log messages. The logger also supports like `Debugf`, `Infof`, `Warnf`, `Errorf`, `Debugj`, `Infoj`, `Warnj`, `Errorj`.
+The logger can be used in any of the layers `handler`, `service`, `repository`.
+
+Example:- 
+  ```
+  bean.Logger.Debugf("This is a debug message for request %s", c.Request().URL.Path)
+  ```
+
+## Executable bin Commands
+
+A project built with bean also provides the following executable commands alongside the `start` command :-
+1.  gen secret 
+2.  aes:encrypt/aes:decrypt
+3.  route list
+
+### Generating Secret Key using gen secret command
 
 In `env.json` file bean is maintaining a key called `secret`. This is a 32 character long random alphanumeric string. It's a multi purpose hash key or salt which you can use in your project to generate JWT, one way hash password, encrypt some private data or session. By default, `bean` is providing a secret however, you can generate a new one by entering the following command from your terminal:
 
 ```
 ./myproject gen secret
+```
+
+### Cryptography using the aes command
+
+This command has two subcommands encrypt and decrypt used for encrypting and decrypting files using the AES encryption algorithm.
+AES encryption is a symmetric encryption technique and it requires the use of a password to crypt the data, bean uses the password `secret` in `env.json` as the default password which is created when initializing the project. If you want to use a different password you can use `gen secret` command to update the key. 
+
+For encrypting data
+```
+./myproject aes:encrypt <string_to_encypt>
+```
+
+For decrypting data
+```
+./myproject aes:decrypt <string_to_decypt>
+```
+
+### Listing routes using the route list command
+
+This command enables us to list the routes that the web server is currently serving alongside the correspoding methods and handler functions supporting them.
+
+```
+./myproject route list
 ```
 
 ## Useful Helper Functions
@@ -154,14 +193,56 @@ if !helpers.HasStringInSlice(src, "ee", modifier) {
 ### Context
 Do not use `c.Get` and `c.Set` in `Service` and `Repository` layer to avoid confusion, because `c.Get` and `c.Set` is using hardcoded variable name for storing the data. Instead of storing the variable inside the `echo.Context`, just pass it explicitly through function parameters.
 
-### Pointer
-```
-As in all languages in the C family, everything in Go is passed by value. That is, a function
-always gets a copy of the thing being passed, as if there were an assignment statement assigning
-the value to the parameter. For instance, passing an int value to a function makes a copy of the
-int, and passing a pointer value makes a copy of the pointer, but not the data it points to.
-```
-For complicated object, pointer should be used as parameter instead of values to reduce the usage of copying the whole object. ref: [https://go.dev/doc/faq#pass_by_value](https://go.dev/doc/faq#pass_by_value)
+## Bean Config 
+
+Bean provides the `BeanConfig` struct to enable the user to tweak the configuration of their consumer project as per their requirement .
+Bean configs default values are picked from the `env.json` file, but can be updated during runtime as well.
+	https://pkg.go.dev/github.com/retail-ai-inc/bean#Config
+
+<details>
+  <summary>BeanConfig</summary>
+	
+  Some of the configurable parameters are :-
+
+	Environment: represents the environment in which the project is running (e.g. development, production, etc.)
+
+	DebugLogPath: represents the path of the debug log file.
+
+	Secret: represents a secret string key used for encryption and decryption in the project.
+	Example Usecase:- while encoding/decoding JWTs.
+
+	HTTP: represents a custom wrapper to deal with HTTP/HTTPS requests. 
+	The wrapper provides by default some common features but also some exclusive features like:-
+		BodyLimit: Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
+
+		IsHttpsRedirect: A boolean that represents whether to redirect HTTP requests to HTTPS or not.
+	
+		KeepAlive: A boolean that represents whether to keep the HTTP connection alive or not.
+
+		AllowedMethod: A slice of strings that represents the allowed HTTP methods.
+		Example:- ["DELETE","GET","POST","PUT"]
+
+	SSL: used when web server uses HTTPS for communication.
+	The SSL struct contains the following parameters:-
+		On: A boolean that represents whether SSL is enabled or not.
+
+		CertFile: represents the path of the certificate file.
+
+		PrivFile: represents the path of the private key file.
+
+		MinTLSVersion: represents the minimum TLS version required.
+	
+</details>
+
+## TenantAlterDbHostParam
+
+The `TenantAlterDbHostParam` is helful in multitenant scenarios when we need to run some 
+cloudfunction or cron and you cannot connect your memorystore/SQL/mongo server from 
+cloudfunction/VM using the usual `host` ip.
+
+  ```
+  bean.TenantAlterDbHostParam = "gcpHost"
+  ```
 
 ### Sample Project
 

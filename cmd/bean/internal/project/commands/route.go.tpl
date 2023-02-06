@@ -7,7 +7,8 @@ import (
 	"strings"
 
 	"{{ .PkgPath }}/routers"
-
+	
+	"github.com/getsentry/sentry-go"
 	"github.com/olekukonko/tablewriter"
 	"github.com/retail-ai-inc/bean"
 	"github.com/spf13/cobra"
