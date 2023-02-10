@@ -13,12 +13,18 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [One Liner To Create Service And Repositories](#one-liner-to-create-service-and-repositories)
   - [How To Create Handler](#how-to-create-handler)
   - [Two Build Commands](#two-build-commands)
-  - [Additional Features](#additional-features)
-    - [Built-In Logging](#built-in-logging)
-    - [Executable bin commands](#Executable-bin-Commands)
-    - [Useful Helper Functions](#useful-helper-functions)
+- [Additional Features](#additional-features)
+  - [Built-In Logging](#built-in-logging)
+  - [Executable bin Commands](#executable-bin-commands)
+    - [Generating Secret Key using gen secret command](#generating-secret-key-using-gen-secret-command)
+    - [Cryptography using the aes command](#cryptography-using-the-aes-command)
+    - [Listing routes using the route list command](#listing-routes-using-the-route-list-command)
+  - [Useful Helper Functions](#useful-helper-functions)
   - [Do’s and Don’ts](#dos-and-donts)
     - [Context](#context)
+  - [Bean Config](#bean-config)
+  - [TenantAlterDbHostParam](#tenantalterdbhostparam)
+    - [Sample Project](#sample-project)
 
 ## How to use
 ### Initialize a project
@@ -191,21 +197,30 @@ if !helpers.HasStringInSlice(src, "ee", modifier) {
 **helpers.DeleteStringFromSlice(slice []string, index int)** - This function delete a string from a specific index of a slice.
 
 ---
-**helpers.JitterBackoff(min, max time.Duration, attempt int) time.Duration** - This function returns capped exponential backoff with jitter. It is useful for http client when you want to retry request. For example:
+**helpers.JitterBackoff(min, max time.Duration, attempt int) time.Duration** - This function returns capped exponential backoff with jitter. It is useful for http client when you want to retry request. A good explanation about jitter & backoff can be found [here](http://www.awsarchitectureblog.com/2015/03/backoff.html).
+
+For example:
 ```
 for i := 0; i <= retryCount; i++ {
-		
-		...
+    resp, err := http.Get("https://retail-ai.jp")
+    if err == nil {
+      return nil
+    }
 
-		waitTime := helpers.JitterBackoff(time.Duration(100) * time.Millisecond, time.Duration(2000) * time.Millisecond, i)
-		
-		time.Sleep(waitTime)
-		
-		...
-	}
+    // Don't need to wait when no retries left.
+    if i == retryCount {
+      return err
+    }
+
+    waitTime := helpers.JitterBackoff(time.Duration(100) * time.Millisecond, time.Duration(2000) * time.Millisecond, i)
+
+    select {
+    case <-time.After(waitTime):
+    case <-c.Done():
+      return c.Err()
+    }
+}
 ```
-
-http://www.awsarchitectureblog.com/2015/03/backoff.html
 
 ## Do’s and Don’ts
 ### Context
