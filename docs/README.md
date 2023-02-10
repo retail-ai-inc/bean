@@ -20,8 +20,6 @@ A web framework written in GO on-top of `echo` to ease your application developm
     - [Cryptography using the aes command](#cryptography-using-the-aes-command)
     - [Listing routes using the route list command](#listing-routes-using-the-route-list-command)
   - [Useful Helper Functions](#useful-helper-functions)
-  - [Do’s and Don’ts](#dos-and-donts)
-    - [Context](#context)
   - [Bean Config](#bean-config)
   - [TenantAlterDbHostParam](#tenantalterdbhostparam)
     - [Sample Project](#sample-project)
@@ -221,10 +219,6 @@ for i := 0; i <= retryCount; i++ {
     }
 }
 ```
-
-## Do’s and Don’ts
-### Context
-Do not use `c.Get` and `c.Set` in `Service` and `Repository` layer to avoid confusion, because `c.Get` and `c.Set` is using hardcoded variable name for storing the data. Instead of storing the variable inside the `echo.Context`, just pass it explicitly through function parameters.
 
 ## Bean Config 
 
