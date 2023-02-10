@@ -170,7 +170,7 @@ Let's import the package first:
 ```
 import helpers "github.com/retail-ai-inc/bean/helpers"
 ```
-
+---
 **helpers.HasStringInSlice(slice []string, str string, modifier func(str string) string)** - This function tells whether a slice contains the `str` or not. If a `modifier` func is provided, it is called with the slice item before the comparation. For example:
 ```
 modifier := func(s string) string {
@@ -184,10 +184,28 @@ modifier := func(s string) string {
 if !helpers.HasStringInSlice(src, "ee", modifier) {
 }
 ```
-
+---
 **helpers.FindStringInSlice(slice []string, str string)** - This function returns the smallest index at which str == slice[index], or -1 if there is no such index.
 
+---
 **helpers.DeleteStringFromSlice(slice []string, index int)** - This function delete a string from a specific index of a slice.
+
+---
+**helpers.JitterBackoff(min, max time.Duration, attempt int) time.Duration** - This function returns capped exponential backoff with jitter. It is useful for http client when you want to retry request. For example:
+```
+for i := 0; i <= retryCount; i++ {
+		
+		...
+
+		waitTime := helpers.JitterBackoff(time.Duration(100) * time.Millisecond, time.Duration(2000) * time.Millisecond, i)
+		
+		time.Sleep(waitTime)
+		
+		...
+	}
+```
+
+http://www.awsarchitectureblog.com/2015/03/backoff.html
 
 ## Do’s and Don’ts
 ### Context
