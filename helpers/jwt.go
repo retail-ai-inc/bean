@@ -34,7 +34,15 @@ var (
 	errorMessageExpiredToken = "token is expired"
 )
 
-// ExtractUserInfoFromJWT extracts user info from JWT. It is faster than calling redis to get those info.
+// EncodeJWT will encode JWT `claims` using a secret string and return a signed token as string.
+func EncodeJWT(claims jwt.Claims, secret string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// Generate encoded token and send it as response.
+	return token.SignedString([]byte(secret))
+}
+
+// DecodeJWT will decode JWT string into `claims` structure using a secret string.
 func DecodeJWT(c echo.Context, claims jwt.Claims, secret string) error {
 
 	tokenString := ExtractJWTFromHeader(c)
@@ -61,14 +69,13 @@ func DecodeJWT(c echo.Context, claims jwt.Claims, secret string) error {
 	}
 
 	if !token.Valid {
-
 		return errors.New(errorMessageInvalidToken)
 	}
 
 	return nil
 }
 
-// ExtractJWTFromHeader returns the JWT token string from authorization header.
+// ExtractJWTFromHeader will extract JWT from `Authorization` HTTP header and returns as string.
 func ExtractJWTFromHeader(c echo.Context) string {
 
 	var tokenString string
@@ -84,11 +91,4 @@ func ExtractJWTFromHeader(c echo.Context) string {
 	}
 
 	return tokenString
-}
-
-func EncodeJWT(claims jwt.Claims, secret string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	// Generate encoded token and send it as response.
-	return token.SignedString([]byte(secret))
 }

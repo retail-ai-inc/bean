@@ -146,8 +146,6 @@ func InterfaceStripTags(data interface{}, trimSpace bool) interface{} {
 // 	}
 
 // 	helpers.StructStripTags(&test, true)
-
-// 	c.Logger().Info(test.Lastname)
 func StructStripTags(data interface{}, trimSpace bool) error {
 
 	bytes, err := json.Marshal(data)

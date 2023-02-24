@@ -33,6 +33,7 @@ import (
 type CopyableMap map[string]interface{}
 type CopyableSlice []interface{}
 
+// GetRandomNumberFromRange will generate and return a random integer from a range.
 func GetRandomNumberFromRange(min, max int) int {
 
 	rand.Seed(time.Now().UnixNano())
@@ -101,8 +102,10 @@ func (s CopyableSlice) DeepCopy() []interface{} {
 	return result
 }
 
-// `IsFilesExistInDirectory` function will check the files (filesToCheck) exist in a specific diretory or not.
-func IsFilesExistInDirectory(path string, filesToCheck []string) (bool, error) {
+// IsFilesExistInDirectory will check a file(s) is exist in a specific diretory or not.
+// If you pass multiple files into `filesToCheck` slice then this function will chcek the existence
+// of all those files. If one of the file doesn't exist, it will return `false`.
+func IsFilesExistInDirectory(dir string, filesToCheck []string) (bool, error) {
 
 	var matchCount int
 
@@ -112,7 +115,7 @@ func IsFilesExistInDirectory(path string, filesToCheck []string) (bool, error) {
 		return false, nil
 	}
 
-	files, err := ioutil.ReadDir(path)
+	files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		return false, err
 	}
