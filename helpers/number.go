@@ -22,7 +22,9 @@
 
 package helpers
 
-// TODO: Change to generic after go1.18 release
+// FloatInRange will return the floating point number provided in `i` if the number is between min and max.
+// If `i` is less than `min` then it will return min number. If `i` is greater than `max` then it will return
+// max.
 func FloatInRange(i, min, max float64) float64 {
 	switch {
 	case i < min:

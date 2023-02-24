@@ -22,7 +22,7 @@
 
 package helpers
 
-// `HasStringInSlice` function tells whether slice contains str or false
+// HasStringInSlice will tell whether slice contains str or false
 // If a modifier func is provided, it is called with the slice item before the comparation:
 // 	modifier := func(s string) string {
 // 		if s == "cc" {
@@ -62,7 +62,7 @@ func FindStringInSlice(slice []string, str string) int {
 	return -1
 }
 
-// Delete a string from a specific index of a slice.
+// DeleteStringFromSlice will delete a string from a specific index of a slice.
 func DeleteStringFromSlice(slice []string, index int) []string {
 	return append(slice[:index], slice[index+1:]...)
 }

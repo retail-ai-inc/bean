@@ -174,8 +174,60 @@ Let's import the package first:
 ```
 import helpers "github.com/retail-ai-inc/bean/helpers"
 ```
+
 ---
-**helpers.HasStringInSlice(slice []string, str string, modifier func(str string) string)** - This function tells whether a slice contains the `str` or not. If a `modifier` func is provided, it is called with the slice item before the comparation. For example:
+**helpers.GetRandomNumberFromRange(min, max int)** - This function will generate and return a random integer from a minimum and maximum range.
+
+example:
+```
+id := helpers.GetRandomNumberFromRange(1001, 1050)
+```
+
+---
+**helpers.(m CopyableMap) DeepCopy()** - This function will create a deep copy of a map. The depth of this copy is all inclusive. Both maps and slices will be considered when making the copy. Keep in mind that the slices in the resulting map will be of type []interface{}, so when using them, you will need to use type assertion to retrieve the value in the expected type.
+
+example:
+```
+amap := map[string]interface{}{
+  "a": "bbb",
+  "b": map[string]interface{}{
+      "c": 123,
+  },
+  "c": []interface{} {
+    "d", "e", map[string]interface{} {
+      "f": "g",
+    },
+  },
+}
+
+deepCopyData := helpers.CopyableMap(amap).DeepCopy()
+```
+
+---
+**helpers.IsFilesExistInDirectory(dir string, filesToCheck []string)** - This function will check a file(s) is exist in a specific diretory or not. If you pass multiple files into `filesToCheck` slice then this function will chcek the existence of all those files. If one of the file doesn't exist, it will return `false`. 
+
+example:
+```
+isExist, err := helpers.IsFilesExistInDirectory("/tmp", []string{"gopher.go", "hello.go"})
+if err != nil {
+  return err
+}
+```
+
+---
+**helpers.FloatInRange(i, min, max float64)** - This function will return the floating point number provided in `i` if the number is between min and max. If `i` is less than `min` then it will return min. If `i` is greater than `max` then it will return max.
+
+example:
+```
+if helpers.FloatInRange(0.3, 0.0, 1.0) > 0.0 {
+  // DO SOMETHING
+}
+```
+
+---
+**helpers.HasStringInSlice(slice []string, str string, modifier func(str string) string)** - This function tells whether a slice contains the `str` or not. If a `modifier` func is provided, it is called with the slice item before the comparation.
+
+example:
 ```
 modifier := func(s string) string {
   if s == "cc" {
@@ -188,16 +240,29 @@ modifier := func(s string) string {
 if !helpers.HasStringInSlice(src, "ee", modifier) {
 }
 ```
+
 ---
-**helpers.FindStringInSlice(slice []string, str string)** - This function returns the smallest index at which str == slice[index], or -1 if there is no such index.
+**helpers.FindStringInSlice(slice []string, str string)** - This function will return the smallest index of the `slice` where `str` match a string in the `slice`, otherwise -1 if there is no match.
+
+example:
+```
+i := helpers.FindStringInSlice([]string{"gopher", "go", "golang"}, "go")
+fmt.Println(i) // will print 1
+```
 
 ---
 **helpers.DeleteStringFromSlice(slice []string, index int)** - This function delete a string from a specific index of a slice.
 
+example:
+```
+s := helpers.DeleteStringFromSlice([]string{"gopher", "go", "golang"}, 1)
+fmt.Println(s) // will print [gopher golang]
+```
+
 ---
 **helpers.JitterBackoff(min, max time.Duration, attempt int) time.Duration** - This function returns capped exponential backoff with jitter. It is useful for http client when you want to retry request. A good explanation about jitter & backoff can be found [here](http://www.awsarchitectureblog.com/2015/03/backoff.html).
 
-For example:
+example:
 ```
 for i := 0; i <= retryCount; i++ {
     resp, err := http.Get("https://retail-ai.jp")
@@ -218,6 +283,58 @@ for i := 0; i <= retryCount; i++ {
       return c.Err()
     }
 }
+```
+
+---
+**helpers.EncodeJWT(claims jwt.Claims, secret string)** - This function will Encode JWT `claims` using a secret string and return a signed token as string.
+
+example:
+```
+type UserJWTTokenData struct {
+	ID                   uint64
+	UserID               string
+	jwt.StandardClaims
+}
+
+userClaims := &UserJWTTokenData{
+  ID:                   params.Id,
+  UserID:               params.UserID,
+  StandardClaims: jwt.StandardClaims{
+    ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+  },
+}
+
+tokenString, err := helpers.EncodeJWT(userClaims, secret)
+if err != nil {
+  return err
+}
+```
+
+---
+**helpers.DecodeJWT(c echo.Context, claims jwt.Claims, secret string)** - This function will Decode JWT string into `claims` structure using a secret string.
+
+example:
+```
+type UserJWTTokenData struct {
+	ID                   uint64
+	UserID               string
+	jwt.StandardClaims
+}
+
+var userClaims UserJWTTokenData
+
+err := helpers.DecodeJWT(c, &userClaims, secret)
+if err != nil {
+  return err
+}
+```
+
+---
+**helpers.DecodeJWT(c echo.Context, claims jwt.Claims, secret string)** - This function will Extract JWT from `Authorization` HTTP header and returns the token as string.
+
+example:
+```
+jwtString := helpers.ExtractJWTFromHeader(c)
 ```
 
 ## Bean Config 
