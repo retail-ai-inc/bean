@@ -16,7 +16,7 @@ func TestConvertInterfaceToArray(t *testing.T) {
 	}{
 		// TODO: Add test cases.
 		{name: "slice", args: args{value: []int{1, 2, 3}}, want: []int{1, 2, 3}},
-		//{name: "array", args: args{value: [...]int{1, 2, 3}}, want: [...]int{1, 2, 3}},
+		{name: "array", args: args{value: [...]int{1, 2, 3}}, want: [...]int{1, 2, 3}},
 		{name: "int", args: args{value: 1}, want: []interface{}{1}},
 		{name: "string", args: args{value: "Tom"}, want: []interface{}{"Tom"}},
 	}
