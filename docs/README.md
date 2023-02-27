@@ -337,6 +337,63 @@ example:
 jwtString := helpers.ExtractJWTFromHeader(c)
 ```
 
+---
+**helpers.ConvertInterfaceToSlice(value interface{})** - ConvertInterfaceToSlice will convert an interface `value` into slice. The `value` is also supporting pointer interface.
+
+example:
+```
+slice := helpers.ConvertInterfaceToSlice(1)
+fmt.Println(slice) // will print [1]
+
+slice := helpers.ConvertInterfaceToSlice([]int{1, 2, 3})
+fmt.Println(slice) // will print [1 2 3]
+```
+
+---
+**helpers.ConvertInterfaceToBool(value interface{})** - ConvertInterfaceToBool will convert an interface `value` into boolean. The `value` is also supporting pointer interface.
+
+example:
+```
+boolean, err := helpers.ConvertInterfaceToBool(true)
+fmt.Println(boolean) // will print true
+
+boolean, err := helpers.ConvertInterfaceToBool([]int{1, 2, 3})
+fmt.Println(boolean) // will print false
+
+boolean, err := helpers.ConvertInterfaceToBool("")
+fmt.Println(boolean) // will print false
+```
+
+---
+**helpers.ConvertInterfaceToFloat(value interface{})** - ConvertInterfaceToFloat will convert an interface `value` into float. The `value` is also supporting pointer interface.
+
+example:
+```
+float, err := helpers.ConvertInterfaceToFloat("1")
+fmt.Println(float) // will print 1
+
+float, err := helpers.ConvertInterfaceToFloat("2.234")
+fmt.Println(float) // will print 2.234
+
+float, err := helpers.ConvertInterfaceToFloat(0.1)
+fmt.Println(float) // will print 0.1
+```
+
+---
+**helpers.ConvertInterfaceToString(value interface{})** - ConvertInterfaceToString will convert an interface `value` into string. The `value` is also supporting pointer interface.
+
+example:
+```
+string, err := helpers.ConvertInterfaceToString("abc")
+fmt.Println(string) // will print abc
+
+string, err := helpers.ConvertInterfaceToString(true)
+fmt.Println(string) // will print true
+
+string, err := helpers.ConvertInterfaceToString(0.1)
+fmt.Println(string) // will print 0.1
+```
+
 ## Bean Config 
 
 Bean provides the `BeanConfig` struct to enable the user to tweak the configuration of their consumer project as per their requirement .

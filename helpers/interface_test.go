@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestConvertInterfaceToArray(t *testing.T) {
+func TestConvertInterfaceToSlice(t *testing.T) {
 	type args struct {
 		value interface{}
 	}
@@ -22,8 +22,8 @@ func TestConvertInterfaceToArray(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ConvertInterfaceToArray(tt.args.value); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ConvertInterfaceToArray() = %v, want %v", got, tt.want)
+			if got := ConvertInterfaceToSlice(tt.args.value); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ConvertInterfaceToSlice() = %v, want %v", got, tt.want)
 			}
 		})
 	}
