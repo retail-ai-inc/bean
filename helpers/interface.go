@@ -7,7 +7,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-func ConvertInterfaceToArray(value interface{}) interface{} {
+// ConvertInterfaceToSlice will convert an interface `value` into slice.
+// The `value` is also supporting pointer interface.
+func ConvertInterfaceToSlice(value interface{}) interface{} {
 	value = indirect(value)
 	vType := reflect.ValueOf(value)
 	switch vType.Kind() {
@@ -18,6 +20,8 @@ func ConvertInterfaceToArray(value interface{}) interface{} {
 	}
 }
 
+// ConvertInterfaceToBool will convert an interface `value` into boolean.
+// The `value` is also supporting pointer interface.
 func ConvertInterfaceToBool(value interface{}) (bool, error) {
 	value = indirect(value)
 	switch v := value.(type) {
@@ -54,6 +58,8 @@ func ConvertInterfaceToBool(value interface{}) (bool, error) {
 	}
 }
 
+// ConvertInterfaceToFloat will convert an interface `value` into float.
+// The `value` is also supporting pointer interface.
 func ConvertInterfaceToFloat(value interface{}) (float64, error) {
 	value = indirect(value)
 	switch v := value.(type) {
@@ -88,6 +94,8 @@ func ConvertInterfaceToFloat(value interface{}) (float64, error) {
 	}
 }
 
+// ConvertInterfaceToString will convert an interface `value` into string.
+// The `value` is also supporting pointer interface.
 func ConvertInterfaceToString(value interface{}) (string, error) {
 	value = indirect(value)
 	switch v := value.(type) {
