@@ -8,6 +8,7 @@ import (
 )
 
 func ConvertInterfaceToArray(value interface{}) interface{} {
+	value = indirect(value)
 	vType := reflect.ValueOf(value)
 	switch vType.Kind() {
 	case reflect.Array, reflect.Slice:
@@ -18,6 +19,7 @@ func ConvertInterfaceToArray(value interface{}) interface{} {
 }
 
 func ConvertInterfaceToBool(value interface{}) (bool, error) {
+	value = indirect(value)
 	switch v := value.(type) {
 	case bool:
 		return v, nil
@@ -53,6 +55,7 @@ func ConvertInterfaceToBool(value interface{}) (bool, error) {
 }
 
 func ConvertInterfaceToFloat(value interface{}) (float64, error) {
+	value = indirect(value)
 	switch v := value.(type) {
 	case string:
 		return strconv.ParseFloat(v, 64)
@@ -86,6 +89,7 @@ func ConvertInterfaceToFloat(value interface{}) (float64, error) {
 }
 
 func ConvertInterfaceToString(value interface{}) (string, error) {
+	value = indirect(value)
 	switch v := value.(type) {
 	case string:
 		return v, nil
@@ -118,4 +122,23 @@ func ConvertInterfaceToString(value interface{}) (string, error) {
 	default:
 		return "", errors.New("wrong parameter type")
 	}
+}
+
+// From html/template/content.go
+// Copyright 2011 The Go Authors. All rights reserved.
+// indirect returns the value, after dereferencing as many times
+// as necessary to reach the base type (or nil).
+func indirect(i interface{}) interface{} {
+	if i == nil {
+		return nil
+	}
+	if t := reflect.TypeOf(i); t.Kind() != reflect.Ptr {
+		// Avoid creating a reflect.Value if it's not a pointer.
+		return i
+	}
+	v := reflect.ValueOf(i)
+	for v.Kind() == reflect.Ptr && !v.IsNil() {
+		v = v.Elem()
+	}
+	return v.Interface()
 }
