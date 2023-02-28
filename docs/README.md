@@ -3,8 +3,6 @@
 # BEAN (豆)
 A web framework written in GO on-top of `echo` to ease your application development. Our main goal is not to compete with other `Go` framework instead we are mainly focusing on `tooling` and `structuring` a project to make developers life a bit easier and less stressful to maintain their project more in a lean way.
 
-**We are `heavily` working on a separate documentation page. Please stay tune and we will keep you updated here.**
-
 - [BEAN (豆)](#bean-豆)
   - [How to use](#how-to-use)
     - [Initialize a project](#initialize-a-project)
