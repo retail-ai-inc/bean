@@ -15,10 +15,11 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [Two Build Commands](#two-build-commands)
 - [Additional Features](#additional-features)
   - [Built-In Logging](#built-in-logging)
-  - [Executable bin Commands](#executable-bin-commands)
+  - [Out of the Box Commands](#out-of-the-box-commands)
     - [Generating Secret Key using gen secret command](#generating-secret-key-using-gen-secret-command)
     - [Cryptography using the aes command](#cryptography-using-the-aes-command)
     - [Listing routes using the route list command](#listing-routes-using-the-route-list-command)
+  - [Make your own Commands](#make-your-own-commands)
   - [Useful Helper Functions](#useful-helper-functions)
   - [Bean Config](#bean-config)
   - [TenantAlterDbHostParam](#tenantalterdbhostparam)
@@ -129,7 +130,7 @@ Example:-
   bean.Logger.Debugf("This is a debug message for request %s", c.Request().URL.Path)
   ```
 
-## Executable bin Commands
+## Out of the Box Commands
 
 A project built with bean also provides the following executable commands alongside the `start` command :-
 1.  gen secret 
@@ -166,6 +167,64 @@ This command enables us to list the routes that the web server is currently serv
 ```
 ./myproject route list
 ```
+
+## Make your own Commands
+
+After initializing your project using `bean` you should able to see a directory like `commands/gopher/`. Inside this directory there is a file called `gopher.go`. This file represents the command as below:
+
+```
+./myproject gopher
+```
+
+Usually you don't need to modify `gopher.go` file. Now, let's create a new command file as `commands/gopher/helloworld.go` and paste the following codes:
+
+```
+package gopher
+
+import (
+	"errors"
+	"fmt"
+
+	"github.com/retail-ai-inc/bean"
+	"github.com/spf13/cobra"
+)
+
+func init() {
+	cmd := &cobra.Command{
+		Use:   "helloworld",
+		Short: "Hello world!",
+		Long:  `This command will just print hello world otherwise hello mars`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			NewHellowWorld()
+			err := helloWorld("hello")
+			if err != nil {
+				// If you turn on `sentry` via env.json then the error will be captured by sentry otherwise ignore.
+				bean.SentryCaptureException(nil, err)
+			}
+
+			return err
+		},
+	}
+
+	GopherCmd.AddCommand(cmd)
+}
+
+func NewHellowWorld() {
+	// IMPORTANT: If you pass `false` then database connection will not be initialized.
+	_ = initBean(false)
+}
+
+func helloWorld(h string) error {
+	if h == "hello" {
+		fmt.Println("hellow world")
+		return nil
+	}
+
+	return errors.New("hello mars")
+}
+```
+
+Now, compile your project and run the command as `./myproject gopher helloworld`. The command will just print the `hellow world`.
 
 ## Useful Helper Functions
 

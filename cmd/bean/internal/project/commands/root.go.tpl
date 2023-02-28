@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 
+	"{{ .PkgName }}/commands/gopher"
+
 	"github.com/retail-ai-inc/bean"
 	"github.com/retail-ai-inc/bean/helpers"
 	"github.com/spf13/cobra"
@@ -53,4 +55,6 @@ func init() {
 	if err := viper.Unmarshal(&bean.BeanConfig); err != nil {
 		log.Fatalln(err)
 	}
+
+	rootCmd.AddCommand(gopher.GopherCmd)
 }
