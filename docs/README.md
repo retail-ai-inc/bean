@@ -55,7 +55,7 @@ https://user-images.githubusercontent.com/61860255/155534942-b9ee6b70-ccf3-4cd6-
 ## Service-Repository Pattern
 Bean is using service repository pattern for any database, file or external transaction. The `repository` provides a collection of interfaces to access data stored in a database, file system or external service. Data is returned in the form of `structs` or `interface`. The main idea to use `Repository Pattern` is to create a bridge between models and handlers. Here is a simple pictorial map to understand the service-repository pattern in a simple manner:
 
-![Service_Repository_Pattern](docs/static/service_repository_pattern.png)
+![Service_Repository_Pattern](static/service_repository_pattern.png)
 
 ## How To Create Repository File(s)
 
