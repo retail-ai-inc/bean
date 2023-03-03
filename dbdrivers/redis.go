@@ -127,7 +127,7 @@ func InitRedisMasterConn(config RedisConfig) map[uint64]*RedisDBConn {
 	return masterRedisDB
 }
 
-func RedisExists(c context.Context, clients *RedisDBConn, key string) (bool, error) {
+func RedisIsKeyExists(c context.Context, clients *RedisDBConn, key string) (bool, error) {
 	result, err := clients.Host.Exists(c, key).Result()
 	if err != nil {
 		return false, errors.WithStack(err)
