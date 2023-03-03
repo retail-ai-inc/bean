@@ -127,6 +127,19 @@ func InitRedisMasterConn(config RedisConfig) map[uint64]*RedisDBConn {
 	return masterRedisDB
 }
 
+func RedisIsKeyExists(c context.Context, clients *RedisDBConn, key string) (bool, error) {
+	result, err := clients.Host.Exists(c, key).Result()
+	if err != nil {
+		return false, errors.WithStack(err)
+	}
+	if result == 1 {
+		// if the key exists in redis.
+		return true, nil
+	}
+	// if the key does not exist in redis.
+	return false, nil
+}
+
 func RedisGetString(c context.Context, clients *RedisDBConn, key string) (string, error) {
 	var err error
 	var str string
@@ -373,6 +386,34 @@ func RedisSIsMember(c context.Context, clients *RedisDBConn, key string, element
 	}
 
 	return found, nil
+}
+
+func RedisSRandMemberN(c context.Context, clients *RedisDBConn, key string, count int64) ([]string, error) {
+	var err error
+	var result []string
+
+	noOfReadReplica := len(clients.Read)
+
+	// Check the read replicas are available or not.
+	if noOfReadReplica == 1 {
+		result, err = clients.Read[0].SRandMemberN(c, key, count).Result()
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+	} else if noOfReadReplica > 1 {
+		// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
+		rand.Seed(time.Now().UnixNano())
+		readHost := rand.Intn(noOfReadReplica)
+		result, err = clients.Read[uint64(readHost)].SRandMemberN(c, key, count).Result()
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+	} else {
+		// If there is no read replica then just hit the host server.
+		result, err = clients.Host.SRandMemberN(c, key, count).Result()
+	}
+
+	return result, err
 }
 
 func RedisSetJSON(c context.Context, clients *RedisDBConn, key string, data interface{}, ttl time.Duration) error {
