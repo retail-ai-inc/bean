@@ -132,10 +132,12 @@ func RedisIsKeyExists(c context.Context, clients *RedisDBConn, key string) (bool
 	if err != nil {
 		return false, errors.WithStack(err)
 	}
+
 	if result == 1 {
 		// if the key exists in redis.
 		return true, nil
 	}
+
 	// if the key does not exist in redis.
 	return false, nil
 }
