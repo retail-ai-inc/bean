@@ -12,6 +12,7 @@ import (
 )
 
 type RedisRepository interface {
+	KeyExists(c context.Context, tenantID uint64, key string) (bool, error)
 	GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error)
 	GetString(c context.Context, tenantID uint64, key string) (string, error)
 	MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error)
@@ -26,6 +27,7 @@ type RedisRepository interface {
 	RPush(c context.Context, tenantID uint64, key string, valueList []string) error
 	IncrementValue(c context.Context, tenantID uint64, key string) error
 	SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error
+	SRandMemberN(c context.Context, tenantID uint64, key string, count int64) ([]string, error)
 	SRem(c context.Context, tenantID uint64, key string, elements interface{}) error
 	DelKey(c context.Context, tenantID uint64, keys ...string) error
 	Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error
@@ -38,6 +40,14 @@ type redisRepository struct {
 
 func NewRedisRepository(clients map[uint64]*dbdrivers.RedisDBConn, cachePrefix string) *redisRepository {
 	return &redisRepository{clients, cachePrefix}
+}
+
+func (r *redisRepository) KeyExists(c context.Context, tenantID uint64, key string) (bool, error) {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	prefixKey := r.cachePrefix + "_" + key
+	return dbdrivers.RedisIsKeyExists(c, r.clients[tenantID], prefixKey)
 }
 
 func (r *redisRepository) GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error) {
@@ -180,6 +190,14 @@ func (r *redisRepository) SRem(c context.Context, tenantID uint64, key string, e
 
 	prefixKey := r.cachePrefix + "_" + key
 	return dbdrivers.RedisSRem(c, r.clients[tenantID], prefixKey, elements)
+}
+
+func (r *redisRepository) SRandMemberN(c context.Context, tenantID uint64, key string, count int64) ([]string, error) {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	prefixKey := r.cachePrefix + "_" + key
+	return dbdrivers.RedisSRandMemberN(c, r.clients[tenantID], prefixKey, count)
 }
 
 func (r *redisRepository) DelKey(c context.Context, tenantID uint64, keys ...string) error {

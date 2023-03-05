@@ -23,84 +23,94 @@
 package dbdrivers
 
 import (
-	"encoding/json"
 	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/pkg/errors"
 )
 
-type BadgerConfig struct {
-	Path     string
-	InMemory bool
+type MemoryConfig struct {
+	Dir string
+	On  bool
 }
 
-// badgerDBConn is a singleton connection.
-var badgerDBConn *badger.DB
-var badgerOnce sync.Once
+// memoryDBConn is a singleton memory database connection.
+var memoryDBConn *badger.DB
+var memoryOnce sync.Once
 
-// Initialize the Badger database.
-func InitBadgerConn(config BadgerConfig) *badger.DB {
-	return connectBadgerDB(config)
+// Initialize the Memory database.
+func InitMemoryConn(config MemoryConfig) *badger.DB {
+	return connectMemoryDB(config)
 }
 
-// connectBadgerDB returns the singleton badger connection
-func connectBadgerDB(config BadgerConfig) *badger.DB {
+// connectMemoryDB returns the singleton memory database connection
+func connectMemoryDB(config MemoryConfig) *badger.DB {
 
-	badgerOnce.Do(func() {
+	memoryOnce.Do(func() {
 		// IMPORTANT: InMemory mode can only use with empty "" dir
-		opt := badger.DefaultOptions(config.Path).WithInMemory(config.InMemory)
+		opt := badger.DefaultOptions(config.Dir).WithInMemory(config.On)
 		opt.Logger = nil
 
 		// Open the Badger database located in the opt directory.
 		// It will be created if it doesn't exist.
 		var err error
 
-		badgerDBConn, err = badger.Open(opt)
+		memoryDBConn, err = badger.Open(opt)
 		if err != nil {
 			panic(err)
 		}
 	})
 
-	return badgerDBConn
+	return memoryDBConn
 }
 
-// BadgerSetString saves a string key value pair to badgerdb. If you supply `ttl` greater than 0
-// then badger will save the key into the db for that many seconds. Once the TTL has elapsed,
+// MemorySetString saves a string key value pair into memory. If you supply `ttl` greater than 0
+// then this will save the key into the memory for that many seconds. Once the TTL has elapsed,
 // the key will no longer be retrievable and will be eligible for garbage collection. Pass `ttl` as 0
 // if you want to keep the key forever into the db until the server restarted or crashed.
-func BadgerSetString(client *badger.DB, key string, val string, ttl time.Duration) error {
+func MemorySetString(client *badger.DB, key string, val string, ttl time.Duration) error {
 
-	return client.Update(func(txn *badger.Txn) error {
+	err := client.Update(func(txn *badger.Txn) error {
 		if ttl > 0 {
 			e := badger.NewEntry([]byte(key), []byte(val)).WithTTL(ttl)
 			return txn.SetEntry(e)
 		}
 
-		err := txn.Set([]byte(key), []byte(val))
-		return err
+		return txn.Set([]byte(key), []byte(val))
 	})
+
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
 }
 
-// BadgerSetBytes saves a string key and it's value in bytes into  badgerdb. If you supply `ttl` greater than 0
-// then badger will save the key into the db for that many seconds. Once the TTL has elapsed,
+// MemorySetBytes saves a string key and it's value in bytes into memory. If you supply `ttl` greater than 0
+// then this will save the key into the memory for that many seconds. Once the TTL has elapsed,
 // the key will no longer be retrievable and will be eligible for garbage collection. Pass `ttl` as 0
 // if you want to keep the key forever into the db until the server restarted or crashed.
-func BadgerSetBytes(client *badger.DB, key string, val []byte, ttl time.Duration) error {
+func MemorySetBytes(client *badger.DB, key string, val []byte, ttl time.Duration) error {
 
-	return client.Update(func(txn *badger.Txn) error {
+	err := client.Update(func(txn *badger.Txn) error {
 		if ttl > 0 {
 			e := badger.NewEntry([]byte(key), val).WithTTL(ttl)
 			return txn.SetEntry(e)
 		}
 
-		err := txn.Set([]byte(key), val)
-		return err
+		return txn.Set([]byte(key), val)
 	})
+
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
 }
 
-// BadgerGetString returns a string val of associated key.
-func BadgerGetString(client *badger.DB, key string) (string, error) {
+// MemoryGetString returns a string val of associated key from memory.
+func MemoryGetString(client *badger.DB, key string) (string, error) {
 
 	var data []byte
 
@@ -117,14 +127,14 @@ func BadgerGetString(client *badger.DB, key string) (string, error) {
 	})
 
 	if err != nil {
-		return "", err
+		return "", errors.WithStack(err)
 	}
 
 	return string(data), nil
 }
 
-// BadgerGetBytes returns a byte val of associated key.
-func BadgerGetBytes(client *badger.DB, key string) ([]byte, error) {
+// MemoryGetBytes returns a byte val of associated key from memory.
+func MemoryGetBytes(client *badger.DB, key string) ([]byte, error) {
 
 	var data []byte
 
@@ -141,38 +151,7 @@ func BadgerGetBytes(client *badger.DB, key string) ([]byte, error) {
 	})
 
 	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
-// BadgerGetJson returns a json representation of associated key.
-func BadgerGetJson(client *badger.DB, key string) (map[string]interface{}, error) {
-
-	var data map[string]interface{}
-
-	err := client.View(func(txn *badger.Txn) error {
-
-		item, err := txn.Get([]byte(key))
-		if err != nil {
-			return err
-		}
-
-		s, err := item.ValueCopy(nil)
-		if err != nil {
-			return err
-		}
-
-		if err = json.Unmarshal(s, &data); err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	return data, nil
