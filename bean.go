@@ -71,7 +71,7 @@ type DBDeps struct {
 	TenantMongoDBNames map[uint64]string
 	MasterRedisDB      map[uint64]*dbdrivers.RedisDBConn
 	TenantRedisDBs     map[uint64]*dbdrivers.RedisDBConn
-	BadgerDB           *badger.DB
+	MemoryDB           *badger.DB
 }
 
 type Bean struct {
@@ -142,7 +142,7 @@ type Config struct {
 		MySQL  dbdrivers.SQLConfig
 		Mongo  dbdrivers.MongoConfig
 		Redis  dbdrivers.RedisConfig
-		Badger dbdrivers.BadgerConfig
+		Memory dbdrivers.MemoryConfig
 	}
 	Sentry   SentryConfig
 	Security struct {
@@ -513,7 +513,7 @@ func (b *Bean) InitDB() {
 		masterRedisDB = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
 	}
 
-	masterBadgerDB := dbdrivers.InitBadgerConn(b.Config.Database.Badger)
+	masterMemoryDB := dbdrivers.InitMemoryConn(b.Config.Database.Memory)
 
 	b.DBConn = &DBDeps{
 		MasterMySQLDB:      masterMySQLDB,
@@ -526,7 +526,7 @@ func (b *Bean) InitDB() {
 		TenantMongoDBNames: tenantMongoDBNames,
 		MasterRedisDB:      masterRedisDB,
 		TenantRedisDBs:     tenantRedisDBs,
-		BadgerDB:           masterBadgerDB,
+		MemoryDB:           masterMemoryDB,
 	}
 }
 
