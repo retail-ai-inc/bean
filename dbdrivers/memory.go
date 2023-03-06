@@ -110,6 +110,8 @@ func MemorySetBytes(client *badger.DB, key string, val []byte, ttl time.Duration
 }
 
 // MemoryGetString returns a string val of associated key from memory.
+// If the key doesn't exist in memory then this function will return
+// `nil` error with empty string.
 func MemoryGetString(client *badger.DB, key string) (string, error) {
 
 	var data []byte
@@ -118,6 +120,10 @@ func MemoryGetString(client *badger.DB, key string) (string, error) {
 
 		item, err := txn.Get([]byte(key))
 		if err != nil {
+			if err == badger.ErrKeyNotFound {
+				return nil
+			}
+
 			return err
 		}
 
@@ -134,6 +140,8 @@ func MemoryGetString(client *badger.DB, key string) (string, error) {
 }
 
 // MemoryGetBytes returns a byte val of associated key from memory.
+// If the key doesn't exist in memory then this function will return
+// `nil` error with empty byte slice.
 func MemoryGetBytes(client *badger.DB, key string) ([]byte, error) {
 
 	var data []byte
@@ -142,6 +150,10 @@ func MemoryGetBytes(client *badger.DB, key string) ([]byte, error) {
 
 		item, err := txn.Get([]byte(key))
 		if err != nil {
+			if err == badger.ErrKeyNotFound {
+				return nil
+			}
+
 			return err
 		}
 
