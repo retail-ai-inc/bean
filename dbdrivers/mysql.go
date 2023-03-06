@@ -106,7 +106,7 @@ func GetAllTenantCfgs(db *gorm.DB) []*TenantConnections {
 		panic(err)
 	}
 
-	// TODO: save the config in badger
+	// TODO: save the config in memory
 
 	return tt
 }
