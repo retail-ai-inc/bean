@@ -19,6 +19,7 @@ type MemoryRepository interface {
 	SetString(c context.Context, key string, val string, ttl time.Duration) error
 	SetBytes(c context.Context, key string, val []byte, ttl time.Duration) error
 	SetJSON(c context.Context, key string, data interface{}, ttl time.Duration) error
+	DelKey(c context.Context, key string) error
 }
 
 type memoryRepository struct {
@@ -118,6 +119,19 @@ func (r *memoryRepository) SetJSON(c context.Context, key string, data interface
 	}
 
 	err = dbdrivers.MemorySetBytes(r.client, key, jsonBytes, ttl)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DelKey will just delete a key from memory if it is exist.
+func (r *memoryRepository) DelKey(c context.Context, key string) error {
+	finish := trace.Start(c, "db")
+	defer finish()
+
+	err := dbdrivers.MemoryDelKey(r.client, key)
 	if err != nil {
 		return err
 	}

@@ -79,13 +79,20 @@ directory. the suffix of the package_name should match the current directory.`,
 				log.Fatalln(err)
 			}
 
+			// Generate a 36 character long random token string.
+			bearerToken, err := str.GenerateRandomString(36, false)
+			if err != nil {
+				log.Fatalln(err)
+			}
+
 			p := &Project{
-				Copyright: copyright,
-				PkgPath:   pkgPath,
-				PkgName:   pkgName,
-				RootDir:   wd,
-				Secret:    secret,
-				JWTSecret: jwtSecret,
+				Copyright:   copyright,
+				PkgPath:     pkgPath,
+				PkgName:     pkgName,
+				RootDir:     wd,
+				Secret:      secret,
+				JWTSecret:   jwtSecret,
+				BearerToken: bearerToken,
 			}
 
 			// Set the relative root path of the internal FS.
