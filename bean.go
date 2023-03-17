@@ -247,6 +247,35 @@ func New() (b *Bean) {
 		}()
 	}
 
+	// If `memory` database is on and `delKeyAPI` end point along with bearer token are properly set.
+	if BeanConfig.Database.Memory.On && BeanConfig.Database.Memory.DelKeyAPI.EndPoint != "" {
+		e.DELETE(BeanConfig.Database.Memory.DelKeyAPI.EndPoint, func(c echo.Context) error {
+			// If you set empty `authBearerToken` string in env.json then bean will not check the `Authorization` header.
+			if BeanConfig.Database.Memory.DelKeyAPI.AuthBearerToken != "" {
+				tokenString := helpers.ExtractJWTFromHeader(c)
+				if tokenString != BeanConfig.Database.Memory.DelKeyAPI.AuthBearerToken {
+					return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+						"message": "Unauthorized!",
+					})
+				}
+			}
+
+			key := c.Param("key")
+			err := b.DBConn.MemoryDB.Update(func(txn *badger.Txn) error {
+				return txn.Delete([]byte(key))
+			})
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+					"message": err.Error(),
+				})
+			}
+
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"message": "Done",
+			})
+		})
+	}
+
 	return b
 }
 
@@ -500,6 +529,7 @@ func (b *Bean) InitDB() {
 	var tenantMongoDBs map[uint64]*mongo.Client
 	var tenantMongoDBNames map[uint64]string
 	var tenantRedisDBs map[uint64]*dbdrivers.RedisDBConn
+	var masterMemoryDB *badger.DB
 
 	if b.Config.Database.Tenant.On {
 		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
@@ -513,7 +543,9 @@ func (b *Bean) InitDB() {
 		masterRedisDB = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
 	}
 
-	masterMemoryDB := dbdrivers.InitMemoryConn(b.Config.Database.Memory)
+	if b.Config.Database.Memory.On {
+		masterMemoryDB = dbdrivers.InitMemoryConn(b.Config.Database.Memory)
+	}
 
 	b.DBConn = &DBDeps{
 		MasterMySQLDB:      masterMySQLDB,

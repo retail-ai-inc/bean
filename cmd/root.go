@@ -54,6 +54,8 @@ type Project struct {
 	Secret string
 	// JWT secret/salt
 	JWTSecret string
+	// API Authorization: bearer token to delete a key from Memory database via API call.
+	BearerToken string
 }
 
 // rootCmd represents the base command when called without any subcommands

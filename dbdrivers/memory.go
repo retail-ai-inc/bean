@@ -31,8 +31,12 @@ import (
 )
 
 type MemoryConfig struct {
-	Dir string
-	On  bool
+	On        bool
+	Dir       string
+	DelKeyAPI struct {
+		EndPoint        string
+		AuthBearerToken string
+	}
 }
 
 // memoryDBConn is a singleton memory database connection.
@@ -63,50 +67,6 @@ func connectMemoryDB(config MemoryConfig) *badger.DB {
 	})
 
 	return memoryDBConn
-}
-
-// MemorySetString saves a string key value pair into memory. If you supply `ttl` greater than 0
-// then this will save the key into the memory for that many seconds. Once the TTL has elapsed,
-// the key will no longer be retrievable and will be eligible for garbage collection. Pass `ttl` as 0
-// if you want to keep the key forever into the db until the server restarted or crashed.
-func MemorySetString(client *badger.DB, key string, val string, ttl time.Duration) error {
-
-	err := client.Update(func(txn *badger.Txn) error {
-		if ttl > 0 {
-			e := badger.NewEntry([]byte(key), []byte(val)).WithTTL(ttl)
-			return txn.SetEntry(e)
-		}
-
-		return txn.Set([]byte(key), []byte(val))
-	})
-
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
-}
-
-// MemorySetBytes saves a string key and it's value in bytes into memory. If you supply `ttl` greater than 0
-// then this will save the key into the memory for that many seconds. Once the TTL has elapsed,
-// the key will no longer be retrievable and will be eligible for garbage collection. Pass `ttl` as 0
-// if you want to keep the key forever into the db until the server restarted or crashed.
-func MemorySetBytes(client *badger.DB, key string, val []byte, ttl time.Duration) error {
-
-	err := client.Update(func(txn *badger.Txn) error {
-		if ttl > 0 {
-			e := badger.NewEntry([]byte(key), val).WithTTL(ttl)
-			return txn.SetEntry(e)
-		}
-
-		return txn.Set([]byte(key), val)
-	})
-
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
 }
 
 // MemoryGetString returns a string val of associated key from memory.
@@ -167,4 +127,62 @@ func MemoryGetBytes(client *badger.DB, key string) ([]byte, error) {
 	}
 
 	return data, nil
+}
+
+// MemorySetString saves a string key value pair into memory. If you supply `ttl` greater than 0
+// then this will save the key into the memory for that many seconds. Once the TTL has elapsed,
+// the key will no longer be retrievable and will be eligible for garbage collection. Pass `ttl` as 0
+// if you want to keep the key forever into the db until the server restarted or crashed.
+func MemorySetString(client *badger.DB, key string, val string, ttl time.Duration) error {
+
+	err := client.Update(func(txn *badger.Txn) error {
+		if ttl > 0 {
+			e := badger.NewEntry([]byte(key), []byte(val)).WithTTL(ttl)
+			return txn.SetEntry(e)
+		}
+
+		return txn.Set([]byte(key), []byte(val))
+	})
+
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+// MemorySetBytes saves a string key and it's value in bytes into memory. If you supply `ttl` greater than 0
+// then this will save the key into the memory for that many seconds. Once the TTL has elapsed,
+// the key will no longer be retrievable and will be eligible for garbage collection. Pass `ttl` as 0
+// if you want to keep the key forever into the db until the server restarted or crashed.
+func MemorySetBytes(client *badger.DB, key string, val []byte, ttl time.Duration) error {
+
+	err := client.Update(func(txn *badger.Txn) error {
+		if ttl > 0 {
+			e := badger.NewEntry([]byte(key), val).WithTTL(ttl)
+			return txn.SetEntry(e)
+		}
+
+		return txn.Set([]byte(key), val)
+	})
+
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+// MemoryDelKey will just delete a key from memory if it is exist.
+func MemoryDelKey(client *badger.DB, key string) error {
+
+	err := client.Update(func(txn *badger.Txn) error {
+		return txn.Delete([]byte(key))
+	})
+
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
 }
