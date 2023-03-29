@@ -254,7 +254,6 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 						if err == nil {
 							return buf.Write(reqBody)
 						}
-						return buf.WriteString(`null`)
 					}
 					return buf.WriteString(`null`)
 				case "response_body":
