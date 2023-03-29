@@ -104,6 +104,7 @@ type Config struct {
 		BodyDump          bool
 		Path              string
 		BodyDumpMaskParam []string
+		ReqHeaderParam    []string
 	}
 	Prometheus struct {
 		On            bool
@@ -341,7 +342,7 @@ func NewEcho() *echo.Echo {
 
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if BeanConfig.AccessLog.On {
-		accessLogConfig := middleware.LoggerConfig{BodyDump: BeanConfig.AccessLog.BodyDump}
+		accessLogConfig := middleware.LoggerConfig{BodyDump: BeanConfig.AccessLog.BodyDump, RequestHeader: BeanConfig.AccessLog.ReqHeaderParam}
 		if BeanConfig.AccessLog.Path != "" {
 			if file, err := openFile(BeanConfig.AccessLog.Path); err != nil {
 				e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
