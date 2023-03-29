@@ -71,6 +71,9 @@ type (
 		// Optional. Default value [].
 		MaskedParameters []string
 
+		// RequestHeader is a slice of HTTP request header parameters which user wants to log.
+		RequestHeader []string
+
 		accessLogTemplate *fasttemplate.Template
 		bodyDumpTemplate  *fasttemplate.Template
 		colorer           *color.Color
@@ -85,6 +88,15 @@ type (
 )
 
 var (
+	accessLogFormat = `{"time":"${time_rfc3339_nano}","level":"ACCESS","id":"${id}","remote_ip":"${remote_ip}",` +
+		`"host":"${host}","method":"${method}","uri":"${uri}","user_agent":"${user_agent}",` +
+		`"X-Forwarded-For":"${header:X-Forwarded-For}","bytes_in":${bytes_in},"request_header":${req_header}}` + "\n"
+
+	bodyDumpFormat = `{"time":"${time_rfc3339_nano}","level":"DUMP","id":"${id}","uri":"${uri}","status":${status},` +
+		`"error":"${error}","latency":${latency},"latency_human":"${latency_human}",` +
+		`"bytes_in":${bytes_in},"request_body":${request_body},` +
+		`"bytes_out":${bytes_out},"response_body":${response_body},"request_header":${req_header}}` + "\n"
+
 	// DefaultLoggerConfig is the default Logger middleware config.
 	DefaultLoggerConfig = LoggerConfig{
 		Skipper:          middleware.DefaultSkipper,
@@ -93,15 +105,6 @@ var (
 		CustomTimeFormat: "2006-01-02 15:04:05.00000",
 		colorer:          color.New(),
 	}
-
-	accessLogFormat = `{"time":"${time_rfc3339_nano}","level":"ACCESS","id":"${id}","remote_ip":"${remote_ip}",` +
-		`"host":"${host}","method":"${method}","uri":"${uri}","user_agent":"${user_agent}",` +
-		`"X-Forwarded-For":"${header:X-Forwarded-For}","bytes_in":${bytes_in}}` + "\n"
-
-	bodyDumpFormat = `{"time":"${time_rfc3339_nano}","level":"DUMP","id":"${id}","uri":"${uri}","status":${status},` +
-		`"error":"${error}","latency":${latency},"latency_human":"${latency_human}",` +
-		`"bytes_in":${bytes_in},"request_body":${request_body},` +
-		`"bytes_out":${bytes_out},"response_body":${response_body}}` + "\n"
 )
 
 // AccessLoggerWithConfig returns a Logger middleware with config.
@@ -247,12 +250,34 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 					return buf.WriteString(strconv.FormatInt(res.Size, 10))
 				case "request_body":
 					if len(reqBody) > 0 {
-						reqBody, _ = maskSensitiveInfo(reqBody, config.MaskedParameters)
-						return buf.Write(reqBody)
+						reqBody, err = maskSensitiveInfo(reqBody, config.MaskedParameters)
+						if err == nil {
+							return buf.Write(reqBody)
+						}
+						return buf.WriteString(`null`)
 					}
-					return buf.WriteString(`""`)
+					return buf.WriteString(`null`)
 				case "response_body":
-					return buf.WriteString(strings.TrimSuffix(resBody.String(), "\n"))
+					res_body := strings.TrimSuffix(resBody.String(), "\n")
+					if res_body != "" {
+						return buf.WriteString(res_body)
+					}
+					return buf.WriteString(`null`)
+				case "req_header":
+					if len(config.RequestHeader) > 0 {
+						reqHeader := make(map[string]interface{})
+						for _, param := range config.RequestHeader {
+							v := c.Request().Header.Get(param)
+							if v != "" {
+								reqHeader[param] = c.Request().Header.Get(param)
+							}
+						}
+						reqHeaderByte, err := json.Marshal(reqHeader)
+						if err == nil {
+							return buf.Write(reqHeaderByte)
+						}
+					}
+					return buf.WriteString(`null`)
 				default:
 					switch {
 					case strings.HasPrefix(tag, "header:"):
@@ -330,6 +355,21 @@ func (config LoggerConfig) logAccess(c echo.Context) (err error) {
 				cl = "0"
 			}
 			return buf.WriteString(cl)
+		case "req_header":
+			if len(config.RequestHeader) > 0 {
+				reqHeader := make(map[string]interface{})
+				for _, param := range config.RequestHeader {
+					v := c.Request().Header.Get(param)
+					if v != "" {
+						reqHeader[param] = c.Request().Header.Get(param)
+					}
+				}
+				reqHeaderByte, err := json.Marshal(reqHeader)
+				if err == nil {
+					return buf.Write(reqHeaderByte)
+				}
+			}
+			return buf.WriteString(`null`)
 		default:
 			switch {
 			case strings.HasPrefix(tag, "header:"):
