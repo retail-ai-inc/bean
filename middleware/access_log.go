@@ -269,7 +269,7 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 						for _, param := range config.RequestHeader {
 							v := c.Request().Header.Get(param)
 							if v != "" {
-								reqHeader[param] = c.Request().Header.Get(param)
+								reqHeader[param] = v
 							}
 						}
 						reqHeaderByte, err := json.Marshal(reqHeader)
@@ -361,7 +361,7 @@ func (config LoggerConfig) logAccess(c echo.Context) (err error) {
 				for _, param := range config.RequestHeader {
 					v := c.Request().Header.Get(param)
 					if v != "" {
-						reqHeader[param] = c.Request().Header.Get(param)
+						reqHeader[param] = v
 					}
 				}
 				reqHeaderByte, err := json.Marshal(reqHeader)
