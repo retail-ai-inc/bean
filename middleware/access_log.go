@@ -142,13 +142,18 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 				defer span.Finish()
 			}
 
-			// Log the access before processing the request.
+			// Skip the logging if skipper is configured via `skipEndpoints` parameter in env.json.
+			if config.Skipper(c) {
+				return next(c)
+			}
+
+			// Logging into the access log before processing the request.
 			if err = config.logAccess(c); err != nil {
 				return
 			}
 
-			// Skip the body dumper if skipper is configured or body dumper is off.
-			if config.Skipper(c) || !config.BodyDump {
+			// Skip the body dumper log if `bodyDump == false` means when the body dumper is off.
+			if !config.BodyDump {
 				return next(c)
 			}
 

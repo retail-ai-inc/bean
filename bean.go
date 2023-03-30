@@ -105,6 +105,7 @@ type Config struct {
 		Path              string
 		BodyDumpMaskParam []string
 		ReqHeaderParam    []string
+		SkipEndpoints     []string
 	}
 	Prometheus struct {
 		On            bool
@@ -342,7 +343,12 @@ func NewEcho() *echo.Echo {
 
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if BeanConfig.AccessLog.On {
-		accessLogConfig := middleware.LoggerConfig{BodyDump: BeanConfig.AccessLog.BodyDump, RequestHeader: BeanConfig.AccessLog.ReqHeaderParam}
+		accessLogConfig := middleware.LoggerConfig{
+			Skipper:       endPointsSkipper(BeanConfig.AccessLog.SkipEndpoints),
+			BodyDump:      BeanConfig.AccessLog.BodyDump,
+			RequestHeader: BeanConfig.AccessLog.ReqHeaderParam,
+		}
+
 		if BeanConfig.AccessLog.Path != "" {
 			if file, err := openFile(BeanConfig.AccessLog.Path); err != nil {
 				e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
@@ -400,7 +406,7 @@ func NewEcho() *echo.Echo {
 	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
 	// This will help us to integrate `bean's` health into `k8s`.
 	if BeanConfig.Prometheus.On {
-		p := prometheus.NewPrometheus("echo", prometheusUrlSkipper(BeanConfig.Prometheus.SkipEndpoints))
+		p := prometheus.NewPrometheus("echo", endPointsSkipper(BeanConfig.Prometheus.SkipEndpoints))
 		p.Use(e)
 	}
 
@@ -647,8 +653,8 @@ func DefaultBeforeBreadcrumb(breadcrumb *sentry.Breadcrumb, hint *sentry.Breadcr
 	return breadcrumb
 }
 
-// `prometheusUrlSkipper` ignores metrics route on some endpoints.
-func prometheusUrlSkipper(skipEndpoints []string) func(c echo.Context) bool {
+// `endPointsSkipper` ignores metrics route on some endpoints.
+func endPointsSkipper(skipEndpoints []string) func(c echo.Context) bool {
 	return func(c echo.Context) bool {
 		path := c.Request().URL.Path
 		for _, endpoint := range skipEndpoints {
