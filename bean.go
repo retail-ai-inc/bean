@@ -653,7 +653,8 @@ func DefaultBeforeBreadcrumb(breadcrumb *sentry.Breadcrumb, hint *sentry.Breadcr
 	return breadcrumb
 }
 
-// `endPointsSkipper` ignores metrics route on some endpoints.
+// `endPointsSkipper` ignores endpoints which are listed in skipEndpoints for logging or
+// metrics data collection.
 func endPointsSkipper(skipEndpoints []string) func(c echo.Context) bool {
 	return func(c echo.Context) bool {
 		path := c.Request().URL.Path
