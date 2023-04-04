@@ -69,6 +69,11 @@ func Execute(fn func(), poolName ...string) {
 // `ExecuteWithContext` provides a safe way to execute a function asynchronously with a context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
 func ExecuteWithContext(fn Task, request *http.Request, poolName ...string) {
+	if request == nil {
+		// TODO
+	}
+
+	// TODO there may be performance issues
 	// clone request
 	req := request.Clone(context.TODO())
 
