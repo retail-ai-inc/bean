@@ -505,7 +505,7 @@ func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
 			handled, err := handle(err, c)
 			if err != nil {
 				if BeanConfig.Sentry.On {
-					SentryCaptureException(c, err)
+					SentryCaptureException(c.Request().Context(), err)
 				} else {
 					c.Logger().Error(err)
 				}
@@ -568,14 +568,14 @@ func Logger() echo.Logger {
 }
 
 // This is a global function to send sentry exception if you configure the sentry through env.json. You cann pass a proper context or nil.
-func SentryCaptureException(c echo.Context, err error) {
+func SentryCaptureException(c context.Context, err error) {
 	if !BeanConfig.Sentry.On {
 		return
 	}
 
 	if c != nil {
 		// If the function get a proper context then push the request headers and URI along with other meaningful info.
-		if hub := sentryecho.GetHubFromContext(c); hub != nil {
+		if hub := sentry.GetHubFromContext(c); hub != nil {
 			hub.CaptureException(err)
 		}
 
