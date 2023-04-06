@@ -55,7 +55,7 @@ type (
 		Reset(r *http.Request, w http.ResponseWriter)
 	}
 
-	bContext struct {
+	beanContext struct {
 		request  *http.Request
 		response http.ResponseWriter
 	}
@@ -72,75 +72,75 @@ func init() {
 	}
 }
 
-func (c *bContext) Request() *http.Request {
+func (c *beanContext) Request() *http.Request {
 	return c.request
 }
 
-func (c *bContext) SetRequest(r *http.Request) {
+func (c *beanContext) SetRequest(r *http.Request) {
 	c.request = r
 }
 
-func (c *bContext) Response() http.ResponseWriter {
+func (c *beanContext) Response() http.ResponseWriter {
 	return c.response
 }
 
-func (c *bContext) Get(key string) interface{} {
+func (c *beanContext) Get(key string) interface{} {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (c *bContext) Set(key string, val interface{}) {
+func (c *beanContext) Set(key string, val interface{}) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (c *bContext) Bind(i interface{}) error {
+func (c *beanContext) Bind(i interface{}) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (c *bContext) Validate(i interface{}) error {
+func (c *beanContext) Validate(i interface{}) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (c *bContext) Render(code int, name string, data interface{}) error {
+func (c *beanContext) Render(code int, name string, data interface{}) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (c *bContext) HTML(code int, html string) error {
+func (c *beanContext) HTML(code int, html string) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (c *bContext) HTMLBlob(code int, b []byte) error {
+func (c *beanContext) HTMLBlob(code int, b []byte) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (c *bContext) String(code int, s string) error {
+func (c *beanContext) String(code int, s string) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (c *bContext) JSON(code int, i interface{}) error {
+func (c *beanContext) JSON(code int, i interface{}) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (c *bContext) Error(err error) {
+func (c *beanContext) Error(err error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (c *bContext) Reset(r *http.Request, w http.ResponseWriter) {
+func (c *beanContext) Reset(r *http.Request, w http.ResponseWriter) {
 	c.request = r
 	c.response = w
 }
 
 func NewContext(r *http.Request, w http.ResponseWriter) Context {
-	return &bContext{
+	return &beanContext{
 		request:  r,
 		response: w,
 	}
