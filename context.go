@@ -16,23 +16,24 @@ type (
 		// Response returns `http.ResponseWriter`.
 		Response() http.ResponseWriter
 
-		// Get retrieves data from the context.
-		Get(key string) interface{}
+		// Get returns the value for the given key string from the context.
+		// If the value doesn't exist it returns nil.
+		Get(key string) any
 
 		// Set saves data in the context.
-		Set(key string, val interface{})
+		Set(key string, val any)
 
 		// Bind binds the request body into provided type `i`. The default binder
 		// does it based on Content-Type header.
-		Bind(i interface{}) error
+		Bind(i any) error
 
 		// Validate validates provided `i`. It is usually called after `Context#Bind()`.
 		// Validator must be registered using `Echo#Validator`.
-		Validate(i interface{}) error
+		Validate(i any) error
 
 		// Render renders a template with data and sends a text/html response with status
 		// code. Renderer must be registered using `Echo.Renderer`.
-		Render(code int, name string, data interface{}) error
+		Render(code int, name string, data any) error
 
 		// HTML sends an HTTP response with status code.
 		HTML(code int, html string) error
@@ -44,7 +45,7 @@ type (
 		String(code int, s string) error
 
 		// JSON sends a JSON response with status code.
-		JSON(code int, i interface{}) error
+		JSON(code int, i any) error
 
 		// Error invokes the registered HTTP error handler. Generally used by middleware.
 		Error(err error)
@@ -58,6 +59,8 @@ type (
 	beanContext struct {
 		request  *http.Request
 		response http.ResponseWriter
+		mu       sync.RWMutex
+		keys     map[string]any
 	}
 
 	HandlerFunc    func(c Context) error
@@ -67,7 +70,7 @@ type (
 var pool sync.Pool
 
 func init() {
-	pool.New = func() interface{} {
+	pool.New = func() any {
 		return NewContext(nil, nil)
 	}
 }
@@ -84,27 +87,37 @@ func (bc *beanContext) Response() http.ResponseWriter {
 	return bc.response
 }
 
-func (bc *beanContext) Get(key string) interface{} {
+// Get returns the value for the given key string from the context.
+// If the value doesn't exist it returns nil.
+func (bc *beanContext) Get(key string) any {
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
+	return bc.keys[key]
+}
+
+// Set is saving a new key-value pair exclusively for this context.
+// It also initializes `bc.keys` if it was not initialized previously.
+func (bc *beanContext) Set(key string, val any) {
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+	if bc.keys == nil {
+		bc.keys = make(map[string]any)
+	}
+
+	bc.keys[key] = val
+}
+
+func (bc *beanContext) Bind(i any) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (bc *beanContext) Set(key string, val interface{}) {
+func (bc *beanContext) Validate(i any) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (bc *beanContext) Bind(i interface{}) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (bc *beanContext) Validate(i interface{}) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (bc *beanContext) Render(code int, name string, data interface{}) error {
+func (bc *beanContext) Render(code int, name string, data any) error {
 	// TODO implement me
 	panic("implement me")
 }
@@ -124,7 +137,7 @@ func (bc *beanContext) String(code int, s string) error {
 	panic("implement me")
 }
 
-func (bc *beanContext) JSON(code int, i interface{}) error {
+func (bc *beanContext) JSON(code int, i any) error {
 	// TODO implement me
 	panic("implement me")
 }
