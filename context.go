@@ -17,8 +17,8 @@ type (
 		Response() http.ResponseWriter
 
 		// Get returns the value for the given key string from the context.
-		// If the value doesn't exist it returns nil.
-		Get(key string) any
+		// If the value doesn't exist it returns (nil, false).
+		Get(key string) (any, bool)
 
 		// Set saves data in the context.
 		Set(key string, val any)
@@ -88,11 +88,12 @@ func (bc *beanContext) Response() http.ResponseWriter {
 }
 
 // Get returns the value for the given key string from the context.
-// If the value doesn't exist it returns nil.
-func (bc *beanContext) Get(key string) any {
+// If the value doesn't exist it returns (nil, false).
+func (bc *beanContext) Get(key string) (value any, e bool) {
 	bc.mu.RLock()
 	defer bc.mu.RUnlock()
-	return bc.keys[key]
+	value, e = bc.keys[key]
+	return
 }
 
 // Set is saving a new key-value pair exclusively for this context.
