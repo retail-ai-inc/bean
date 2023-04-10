@@ -3,6 +3,8 @@ package bean
 import (
 	"net/http"
 	"sync"
+
+	"github.com/retail-ai-inc/bean/binder"
 )
 
 type (
@@ -109,8 +111,7 @@ func (bc *beanContext) Set(key string, value any) {
 }
 
 func (bc *beanContext) Bind(i any) error {
-	// TODO implement me
-	panic("implement me")
+	return binder.Bind(i, bc.Request())
 }
 
 func (bc *beanContext) Validate(i any) error {
