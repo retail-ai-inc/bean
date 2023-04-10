@@ -23,9 +23,11 @@ type (
 		// Set saves data in the context.
 		Set(key string, val any)
 
+		Keys() map[string]any
+
 		// Bind binds the request body into provided type `i`. The default binder
 		// does it based on Content-Type header.
-		Bind(i any) error
+		Bind(i any, _ Context) error
 
 		// Validate validates provided `i`. It is usually called after `Context#Bind()`.
 		// Validator must be registered using `Echo#Validator`.
@@ -56,22 +58,39 @@ type (
 		Reset(r *http.Request, w http.ResponseWriter)
 	}
 
+	Binder interface {
+		Bind(i interface{}) error
+	}
+	
 	beanContext struct {
 		request  *http.Request
 		response http.ResponseWriter
 		mu       sync.RWMutex
 		keys     map[string]any
+		binder   Binder
 	}
 
 	HandlerFunc    func(c Context) error
 	MiddlewareFunc func(HandlerFunc) HandlerFunc
 )
 
-var pool sync.Pool
+// beanContext must implement the Context interface
+var _ Context = (*beanContext)(nil)
+
+var (
+	pool sync.Pool
+)
 
 func init() {
 	pool.New = func() any {
 		return NewContext(nil, nil)
+	}
+}
+
+func NewContext(r *http.Request, w http.ResponseWriter) *beanContext {
+	return &beanContext{
+		request:  r,
+		response: w,
 	}
 }
 
@@ -85,6 +104,10 @@ func (bc *beanContext) SetRequest(r *http.Request) {
 
 func (bc *beanContext) Response() http.ResponseWriter {
 	return bc.response
+}
+
+func (bc *beanContext) Keys() map[string]any {
+	return bc.keys
 }
 
 // Get returns the value for the given key string from the context.
@@ -108,9 +131,12 @@ func (bc *beanContext) Set(key string, val any) {
 	bc.keys[key] = val
 }
 
-func (bc *beanContext) Bind(i any) error {
-	// TODO implement me
-	panic("implement me")
+func (bc *beanContext) Bind(i any, _ Context) error {
+	return bc.binder.Bind(i)
+}
+
+func (bc *beanContext) SetBinder(binder Binder) {
+	bc.binder = binder
 }
 
 func (bc *beanContext) Validate(i any) error {
@@ -151,11 +177,4 @@ func (bc *beanContext) Error(err error) {
 func (bc *beanContext) Reset(r *http.Request, w http.ResponseWriter) {
 	bc.request = r
 	bc.response = w
-}
-
-func NewContext(r *http.Request, w http.ResponseWriter) Context {
-	return &beanContext{
-		request:  r,
-		response: w,
-	}
 }
