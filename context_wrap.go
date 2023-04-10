@@ -6,7 +6,9 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-const beanContextKey = "beanContextKey"
+type contextKey string
+
+const beanContextKey = contextKey("beanContextKey")
 
 // WrapEchoHandler wraps `HandlerFunc` into `echo.HandlerFunc`.
 func WrapEchoHandler(h HandlerFunc) echo.HandlerFunc {

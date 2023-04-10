@@ -28,13 +28,11 @@ import (
 	"errors"
 	"html"
 	"io"
-	"io/ioutil"
+	"net/http"
 	"strings"
-
-	"github.com/labstack/echo/v4"
 )
 
-func PostDataStripTags(c echo.Context, trimSpace bool) (map[string]interface{}, error) {
+func PostDataStripTags(req *http.Request, trimSpace bool) (map[string]interface{}, error) {
 
 	// Hold the POST json parameters as an interface
 	var data interface{}
@@ -43,18 +41,18 @@ func PostDataStripTags(c echo.Context, trimSpace bool) (map[string]interface{}, 
 	var postdatamap map[string]interface{}
 
 	// Get Content-Type parameter from request header
-	contentType := c.Request().Header.Get("Content-Type")
+	contentType := req.Header.Get("Content-Type")
 
 	if strings.Contains(strings.ToLower(contentType), "application/json") {
 
 		// XXX: IMPORTANT - c.Request().Body is a buffer, which means that once it has been read, it cannot be read again.
-		if c.Request().Body != nil {
+		if req.Body != nil {
 
 			var err error
 
 			bodyBytes := bytes.NewBuffer(make([]byte, 0))
 
-			reader := io.TeeReader(c.Request().Body, bodyBytes)
+			reader := io.TeeReader(req.Body, bodyBytes)
 			if err = json.NewDecoder(reader).Decode(&data); err != nil {
 
 				var syntaxError *json.SyntaxError
@@ -85,7 +83,7 @@ func PostDataStripTags(c echo.Context, trimSpace bool) (map[string]interface{}, 
 			}
 
 			// Restore the io.ReadCloser to its original state so that we can read c.Request().Body somewhere else
-			c.Request().Body = ioutil.NopCloser(bodyBytes)
+			req.Body = io.NopCloser(bodyBytes)
 
 		} else {
 
@@ -145,7 +143,7 @@ func InterfaceStripTags(data interface{}, trimSpace bool) interface{} {
 // 		Age: 40,
 // 	}
 
-// 	helpers.StructStripTags(&test, true)
+// helpers.StructStripTags(&test, true)
 func StructStripTags(data interface{}, trimSpace bool) error {
 
 	bytes, err := json.Marshal(data)

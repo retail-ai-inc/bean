@@ -61,7 +61,7 @@ type (
 	Binder interface {
 		Bind(i interface{}) error
 	}
-	
+
 	beanContext struct {
 		request  *http.Request
 		response http.ResponseWriter
@@ -121,14 +121,14 @@ func (bc *beanContext) Get(key string) (value any, e bool) {
 
 // Set is saving a new key-value pair exclusively for this context.
 // It also initializes `bc.keys` if it was not initialized previously.
-func (bc *beanContext) Set(key string, val any) {
+func (bc *beanContext) Set(key string, value any) {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 	if bc.keys == nil {
 		bc.keys = make(map[string]any)
 	}
 
-	bc.keys[key] = val
+	bc.keys[key] = value
 }
 
 func (bc *beanContext) Bind(i any, _ Context) error {
