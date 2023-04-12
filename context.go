@@ -3,6 +3,9 @@ package bean
 import (
 	"net/http"
 	"sync"
+
+	"github.com/go-playground/validator/v10"
+	bvalidator "github.com/retail-ai-inc/bean/validator"
 )
 
 type (
@@ -68,6 +71,7 @@ type (
 		mu       sync.RWMutex
 		keys     map[string]any
 		binder   Binder
+		bean     *Bean
 	}
 
 	HandlerFunc    func(c Context) error
@@ -140,8 +144,17 @@ func (bc *beanContext) SetBinder(binder Binder) {
 }
 
 func (bc *beanContext) Validate(i any) error {
-	// TODO implement me
-	panic("implement me")
+	if bc.bean.validate == nil {
+		return nil
+	}
+	if err := bc.bean.validate.Struct(i); err != nil {
+		// Checking any invalid data passed to the validator.
+		if err, ok := err.(*validator.InvalidValidationError); ok {
+			panic(err)
+		}
+		return &bvalidator.ValidationError{Err: err}
+	}
+	return nil
 }
 
 func (bc *beanContext) Render(code int, name string, data any) error {

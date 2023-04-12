@@ -439,8 +439,6 @@ func (b *Bean) ServeAt(host, port string) {
 	b.UseErrorHandlerFuncs(berror.DefaultErrorHanderFunc)
 	b.Echo.HTTPErrorHandler = b.DefaultHTTPErrorHandler()
 
-	b.Echo.Validator = &validator.DefaultValidator{Validator: b.validate}
-
 	s := http.Server{
 		Addr:    host + ":" + port,
 		Handler: b.Echo,
