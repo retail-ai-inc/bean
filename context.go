@@ -2,6 +2,7 @@ package bean
 
 import (
 	"net/http"
+	"net/url"
 	"sync"
 
 	"github.com/go-playground/validator/v10"
@@ -30,9 +31,15 @@ type (
 
 		// Param returns path parameter by name.
 		Param(name string) string
-		
+
 		// AddParam adds param to context and
 		AddParam(name, value string)
+
+		// Query returns the query param for the provided name.
+		Query(name string) string
+
+		// QueryParams returns the query parameters as `url.Values`.
+		QueryParams() url.Values
 
 		// Bind binds the request body into provided type `i`. The default binder
 		// does it based on Content-Type header.
@@ -79,6 +86,7 @@ type (
 		binder   Binder
 		bean     *Bean
 		params   [][2]string
+		query    url.Values
 	}
 
 	HandlerFunc    func(c Context) error
@@ -138,6 +146,17 @@ func (bc *beanContext) Param(name string) string {
 
 func (bc *beanContext) AddParam(name, value string) {
 	bc.params = append(bc.params, [2]string{name, value})
+}
+
+func (bc *beanContext) Query(name string) string {
+	return bc.QueryParams().Get(name)
+}
+
+func (bc *beanContext) QueryParams() url.Values {
+	if bc.query == nil {
+		bc.query = bc.request.URL.Query()
+	}
+	return bc.query
 }
 
 func (bc *beanContext) Bind(i any, _ Context) error {

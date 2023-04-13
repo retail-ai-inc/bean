@@ -445,6 +445,7 @@ func (b *Bean) NewContext(r *http.Request, w http.ResponseWriter) *beanContext {
 		response: w,
 		keys:     make(map[string]interface{}),
 		bean:     b,
+		params:   make([][2]string, 0),
 	}
 }
 
