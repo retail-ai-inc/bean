@@ -1,9 +1,11 @@
 package bean
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 	bvalidator "github.com/retail-ai-inc/bean/validator"
@@ -93,8 +95,12 @@ type (
 	MiddlewareFunc func(HandlerFunc) HandlerFunc
 )
 
-// beanContext must implement the Context interface
-var _ Context = (*beanContext)(nil)
+var (
+	// beanContext implement the Context interface
+	_ Context = (*beanContext)(nil)
+	// beanContext implement the context.Context interface
+	_ context.Context = (*beanContext)(nil)
+)
 
 func (bc *beanContext) Request() *http.Request {
 	return bc.request
@@ -214,4 +220,47 @@ func (bc *beanContext) Error(err error) {
 func (bc *beanContext) Reset(r *http.Request, w http.ResponseWriter) {
 	bc.request = r
 	bc.response = w
+}
+
+// Deadline returns that there is no deadline (ok==false) when c.Request has no Context.
+func (bc *beanContext) Deadline() (deadline time.Time, ok bool) {
+	if bc.request == nil || bc.request.Context() == nil {
+		return
+	}
+	return bc.request.Context().Deadline()
+}
+
+// Done returns nil (chan which will wait forever) when c.Request has no Context.
+func (bc *beanContext) Done() <-chan struct{} {
+	if bc.request == nil || bc.request.Context() == nil {
+		return nil
+	}
+	return bc.request.Context().Done()
+}
+
+// Err returns nil when c.Request has no Context.
+func (bc *beanContext) Err() error {
+	if bc.request == nil || bc.request.Context() == nil {
+		return nil
+	}
+	return bc.request.Context().Err()
+}
+
+// Value returns the value associated with this context for key, or nil
+// if no value is associated with key. Successive calls to Value with
+// the same key returns the same result.
+func (bc *beanContext) Value(key any) any {
+	if key == 0 {
+		return bc.request
+	}
+
+	if keyAsString, ok := key.(string); ok {
+		if val, exists := bc.Get(keyAsString); exists {
+			return val
+		}
+	}
+	if bc.request == nil || bc.request.Context() == nil {
+		return nil
+	}
+	return bc.request.Context().Value(key)
 }
