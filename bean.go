@@ -32,6 +32,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
@@ -75,6 +76,7 @@ type DBDeps struct {
 }
 
 type Bean struct {
+	pool              sync.Pool
 	DBConn            *DBDeps
 	Echo              *echo.Echo
 	BeforeServe       func()
@@ -189,6 +191,10 @@ func New() (b *Bean) {
 		Echo:     e,
 		validate: validatorV10.New(),
 		Config:   BeanConfig,
+	}
+
+	b.pool.New = func() any {
+		return b.NewContext(nil, nil)
 	}
 
 	// If `NetHttpFastTransporter` is on from env.json then initialize it.
@@ -431,6 +437,15 @@ func NewEcho() *echo.Echo {
 	}
 
 	return e
+}
+
+func (b *Bean) NewContext(r *http.Request, w http.ResponseWriter) *beanContext {
+	return &beanContext{
+		request:  r,
+		response: w,
+		keys:     make(map[string]interface{}),
+		bean:     b,
+	}
 }
 
 func (b *Bean) ServeAt(host, port string) {

@@ -81,23 +81,6 @@ type (
 // beanContext must implement the Context interface
 var _ Context = (*beanContext)(nil)
 
-var (
-	pool sync.Pool
-)
-
-func init() {
-	pool.New = func() any {
-		return NewContext(nil, nil)
-	}
-}
-
-func NewContext(r *http.Request, w http.ResponseWriter) *beanContext {
-	return &beanContext{
-		request:  r,
-		response: w,
-	}
-}
-
 func (bc *beanContext) Request() *http.Request {
 	return bc.request
 }
@@ -111,6 +94,8 @@ func (bc *beanContext) Response() http.ResponseWriter {
 }
 
 func (bc *beanContext) Keys() map[string]any {
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
 	return bc.keys
 }
 

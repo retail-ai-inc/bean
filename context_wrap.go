@@ -51,7 +51,7 @@ func genBeanContextFromEcho(c echo.Context) *beanContext {
 		return bc
 	}
 
-	bc := pool.Get().(*beanContext)
+	bc := &beanContext{}
 	response := c.Response()
 	request = request.WithContext(context.WithValue(request.Context(), beanContextKey, bc))
 	bc.Reset(request, response)
