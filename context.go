@@ -28,6 +28,12 @@ type (
 
 		Keys() map[string]any
 
+		// Param returns path parameter by name.
+		Param(name string) string
+		
+		// AddParam adds param to context and
+		AddParam(name, value string)
+
 		// Bind binds the request body into provided type `i`. The default binder
 		// does it based on Content-Type header.
 		Bind(i any, _ Context) error
@@ -72,6 +78,7 @@ type (
 		keys     map[string]any
 		binder   Binder
 		bean     *Bean
+		params   [][2]string
 	}
 
 	HandlerFunc    func(c Context) error
@@ -118,6 +125,19 @@ func (bc *beanContext) Set(key string, value any) {
 	}
 
 	bc.keys[key] = value
+}
+
+func (bc *beanContext) Param(name string) string {
+	for _, data := range bc.params {
+		if data[0] == name {
+			return data[1]
+		}
+	}
+	return ""
+}
+
+func (bc *beanContext) AddParam(name, value string) {
+	bc.params = append(bc.params, [2]string{name, value})
 }
 
 func (bc *beanContext) Bind(i any, _ Context) error {
