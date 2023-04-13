@@ -72,6 +72,15 @@ type (
 		// with `Echo#AcquireContext()` and `Echo#ReleaseContext()`.
 		// See `Echo#ServeHTTP()`
 		Reset(r *http.Request, w http.ResponseWriter)
+
+		// Cookie returns the named cookie provided in the request.
+		Cookie(name string) (*http.Cookie, error)
+
+		// SetCookie adds a `Set-Cookie` header in HTTP response.
+		SetCookie(cookie *http.Cookie)
+
+		// Cookies returns the HTTP cookies sent with the request.
+		Cookies() []*http.Cookie
 	}
 
 	Binder interface {
@@ -214,4 +223,16 @@ func (bc *beanContext) Error(err error) {
 func (bc *beanContext) Reset(r *http.Request, w http.ResponseWriter) {
 	bc.request = r
 	bc.response = w
+}
+
+func (bc *beanContext) Cookie(name string) (*http.Cookie, error) {
+	return bc.request.Cookie(name)
+}
+
+func (bc *beanContext) SetCookie(cookie *http.Cookie) {
+	http.SetCookie(bc.Response(), cookie)
+}
+
+func (bc *beanContext) Cookies() []*http.Cookie {
+	return bc.request.Cookies()
 }
