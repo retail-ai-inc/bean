@@ -245,7 +245,7 @@ func (bc *beanContext) Cookies() []*http.Cookie {
 
 // Deadline returns that there is no deadline (ok==false) when c.Request has no Context.
 func (bc *beanContext) Deadline() (deadline time.Time, ok bool) {
-	if bc.request == nil || bc.request.Context() == nil {
+	if bc.request == nil {
 		return
 	}
 	return bc.request.Context().Deadline()
@@ -253,7 +253,7 @@ func (bc *beanContext) Deadline() (deadline time.Time, ok bool) {
 
 // Done returns nil (chan which will wait forever) when c.Request has no Context.
 func (bc *beanContext) Done() <-chan struct{} {
-	if bc.request == nil || bc.request.Context() == nil {
+	if bc.request == nil {
 		return nil
 	}
 	return bc.request.Context().Done()
@@ -261,7 +261,7 @@ func (bc *beanContext) Done() <-chan struct{} {
 
 // Err returns nil when c.Request has no Context.
 func (bc *beanContext) Err() error {
-	if bc.request == nil || bc.request.Context() == nil {
+	if bc.request == nil {
 		return nil
 	}
 	return bc.request.Context().Err()
@@ -280,7 +280,7 @@ func (bc *beanContext) Value(key any) any {
 			return val
 		}
 	}
-	if bc.request == nil || bc.request.Context() == nil {
+	if bc.request == nil {
 		return nil
 	}
 	return bc.request.Context().Value(key)
