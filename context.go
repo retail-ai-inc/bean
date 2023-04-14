@@ -2,17 +2,18 @@ package bean
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
 	"time"
-
-	"github.com/go-playground/validator/v10"
-	bvalidator "github.com/retail-ai-inc/bean/validator"
 )
 
 type (
 	Context interface {
+		context.Context
+
 		// Request returns `*http.Request`.
 		Request() *http.Request
 
@@ -25,6 +26,8 @@ type (
 		// Get returns the value for the given key string from the context.
 		// If the value doesn't exist it returns (nil, false).
 		Get(key string) (any, bool)
+
+		MustGet(key string) any
 
 		// Set saves data in the context.
 		Set(key string, val any)
@@ -89,26 +92,33 @@ type (
 		Bind(i interface{}) error
 	}
 
+	// Validator is the interface that wraps the Validate function.
+	Validator interface {
+		Validate(i interface{}) error
+	}
+
 	beanContext struct {
-		request  *http.Request
-		response http.ResponseWriter
-		mu       sync.RWMutex
-		keys     map[string]any
-		binder   Binder
-		bean     *Bean
-		params   [][2]string
-		query    url.Values
+		request   *http.Request
+		response  http.ResponseWriter
+		mu        sync.RWMutex
+		keys      map[string]any
+		binder    Binder
+		validator Validator
+		params    [][2]string
+		query     url.Values
 	}
 
 	HandlerFunc    func(c Context) error
 	MiddlewareFunc func(HandlerFunc) HandlerFunc
 )
 
+const (
+	defaultIndent = "  "
+)
+
 var (
 	// beanContext implement the Context interface
 	_ Context = (*beanContext)(nil)
-	// beanContext implement the context.Context interface
-	_ context.Context = (*beanContext)(nil)
 )
 
 func (bc *beanContext) Request() *http.Request {
@@ -127,6 +137,14 @@ func (bc *beanContext) Keys() map[string]any {
 	bc.mu.RLock()
 	defer bc.mu.RUnlock()
 	return bc.keys
+}
+
+func (bc *beanContext) MustGet(key string) any {
+	val, e := bc.Get(key)
+	if !e {
+		panic(fmt.Sprintf("beanContext: %q not exist", key))
+	}
+	return val
 }
 
 // Get returns the value for the given key string from the context.
@@ -183,15 +201,8 @@ func (bc *beanContext) SetBinder(binder Binder) {
 }
 
 func (bc *beanContext) Validate(i any) error {
-	if bc.bean.validate == nil {
-		return nil
-	}
-	if err := bc.bean.validate.Struct(i); err != nil {
-		// Checking any invalid data passed to the validator.
-		if err, ok := err.(*validator.InvalidValidationError); ok {
-			panic(err)
-		}
-		return &bvalidator.ValidationError{Err: err}
+	if bc.validator != nil {
+		return bc.validator.Validate(i)
 	}
 	return nil
 }
@@ -217,8 +228,28 @@ func (bc *beanContext) String(code int, s string) error {
 }
 
 func (bc *beanContext) JSON(code int, i any) error {
-	// TODO implement me
-	panic("implement me")
+	indent := ""
+	if _, pretty := bc.QueryParams()["pretty"]; pretty {
+		indent = defaultIndent
+	}
+	return bc.json(code, i, indent)
+}
+
+func (bc *beanContext) json(code int, i interface{}, indent string) error {
+	bc.writeContentType("application/json;charset=UTF-8")
+	bc.response.WriteHeader(code)
+	enc := json.NewEncoder(bc.response)
+	if indent != "" {
+		enc.SetIndent("", indent)
+	}
+	return enc.Encode(i)
+}
+
+func (bc *beanContext) writeContentType(value string) {
+	header := bc.response.Header()
+	if header.Get("Content-Type") == "" {
+		header.Set("Content-Type", value)
+	}
 }
 
 func (bc *beanContext) Error(err error) {

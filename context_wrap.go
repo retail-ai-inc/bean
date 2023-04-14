@@ -51,7 +51,9 @@ func genBeanContextFromEcho(c echo.Context) *beanContext {
 		return bc
 	}
 
-	bc := &beanContext{}
+	bc := &beanContext{
+		validator: c.Echo().Validator,
+	}
 	response := c.Response()
 	request = request.WithContext(context.WithValue(request.Context(), beanContextKey, bc))
 	bc.Reset(request, response)

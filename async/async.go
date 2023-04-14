@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"regexp"
 
 	"github.com/getsentry/sentry-go"
@@ -68,14 +69,14 @@ func Execute(fn func(), poolName ...string) {
 
 // `ExecuteWithContext` provides a safe way to execute a function asynchronously with a context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
-func ExecuteWithContext(fn Task, request *http.Request, poolName ...string) {
-	if request == nil {
-		// TODO
+func ExecuteWithContext(fn Task, ctx context.Context, poolName ...string) {
+	req, ok := ctx.Value(0).(*http.Request)
+	if ok {
+		// clone request
+		req = req.Clone(context.TODO())
+	} else {
+		req = httptest.NewRequest("", "/", nil)
 	}
-
-	// TODO there may be performance issues
-	// clone request
-	req := request.Clone(context.TODO())
 
 	Execute(func() {
 		// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
@@ -111,7 +112,6 @@ func ExecuteWithContext(fn Task, request *http.Request, poolName ...string) {
 
 				defer span.Finish()
 				req = req.WithContext(span.Context())
-
 			}
 		}
 

@@ -46,6 +46,23 @@ type ValidationError struct {
 	Err error
 }
 
+// DefaultValidator implements the Echo#Validator interface.
+type DefaultValidator struct {
+	Validator *validator.Validate
+}
+
+// Validate implements the `Echo#Validator.Validate` function.
+func (dv *DefaultValidator) Validate(data interface{}) error {
+	if err := dv.Validator.Struct(data); err != nil {
+		// Checking any invalid data passed to the validator.
+		if err, ok := err.(*validator.InvalidValidationError); ok {
+			panic(err)
+		}
+		return &ValidationError{err}
+	}
+	return nil
+}
+
 // ErrCollection formats the validation errors and return it as a slice.
 func (ve *ValidationError) ErrCollection() []map[string]string {
 
