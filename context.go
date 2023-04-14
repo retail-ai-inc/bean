@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -48,7 +50,7 @@ type (
 
 		// Bind binds the request body into provided type `i`. The default binder
 		// does it based on Content-Type header.
-		Bind(i any, _ Context) error
+		Bind(i any) error
 
 		// Validate validates provided `i`. It is usually called after `Context#Bind()`.
 		// Validator must be registered using `Echo#Validator`.
@@ -86,6 +88,11 @@ type (
 
 		// Cookies returns the HTTP cookies sent with the request.
 		Cookies() []*http.Cookie
+
+		// RealIP returns the client's network address based on `X-Forwarded-For`
+		// or `X-Real-IP` request header.
+		// The behavior can be configured using `Echo#IPExtractor`.
+		RealIP() string
 	}
 
 	Binder interface {
@@ -192,7 +199,7 @@ func (bc *beanContext) QueryParams() url.Values {
 	return bc.query
 }
 
-func (bc *beanContext) Bind(i any, _ Context) error {
+func (bc *beanContext) Bind(i any) error {
 	return bc.binder.Bind(i)
 }
 
@@ -272,6 +279,27 @@ func (bc *beanContext) SetCookie(cookie *http.Cookie) {
 
 func (bc *beanContext) Cookies() []*http.Cookie {
 	return bc.request.Cookies()
+}
+
+func (bc *beanContext) RealIP() string {
+	// Fall back to legacy behavior
+	if ip := bc.request.Header.Get("X-Forwarded-For"); ip != "" {
+		i := strings.IndexAny(ip, ",")
+		if i > 0 {
+			xffip := strings.TrimSpace(ip[:i])
+			xffip = strings.TrimPrefix(xffip, "[")
+			xffip = strings.TrimSuffix(xffip, "]")
+			return xffip
+		}
+		return ip
+	}
+	if ip := bc.request.Header.Get("X-Real-Ip"); ip != "" {
+		ip = strings.TrimPrefix(ip, "[")
+		ip = strings.TrimSuffix(ip, "]")
+		return ip
+	}
+	ra, _, _ := net.SplitHostPort(bc.request.RemoteAddr)
+	return ra
 }
 
 // Deadline returns that there is no deadline (ok==false) when c.Request has no Context.
