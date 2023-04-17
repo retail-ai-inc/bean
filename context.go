@@ -69,8 +69,13 @@ type (
 		// String sends a string response with status code.
 		String(code int, s string) error
 
-		// JSON sends a JSON response with status code.
-		JSON(code int, i any) error
+		// JSON sends a JSON response with status code. `charset` is an optional parameter.
+		JSON(code int, i any, charset ...string) error
+
+		// JSONP stands for JSON with Padding. Requesting a file from another domain can cause problems,
+		// due to cross-domain policy. This function sends a JSONP response with status code.
+		// It uses `callback` query param to construct the JSONP payload. `charset` is an optional parameter.
+		JSONP(code int, i any, charset ...string) error
 
 		// Error invokes the registered HTTP error handler. Generally used by middleware.
 		Error(err error)
@@ -96,12 +101,12 @@ type (
 	}
 
 	Binder interface {
-		Bind(i interface{}) error
+		Bind(i any) error
 	}
 
 	// Validator is the interface that wraps the Validate function.
 	Validator interface {
-		Validate(i interface{}) error
+		Validate(i any) error
 	}
 
 	beanContext struct {
@@ -126,6 +131,11 @@ const (
 var (
 	// beanContext implement the Context interface
 	_ Context = (*beanContext)(nil)
+)
+
+var (
+	jsonCTypeUTF8  = "application/json"
+	jsonpCTypeUTF8 = "application/javascript"
 )
 
 func (bc *beanContext) Request() *http.Request {
@@ -234,22 +244,67 @@ func (bc *beanContext) String(code int, s string) error {
 	panic("implement me")
 }
 
-func (bc *beanContext) JSON(code int, i any) error {
+func (bc *beanContext) JSON(code int, i any, charset ...string) error {
 	indent := ""
 	if _, pretty := bc.QueryParams()["pretty"]; pretty {
 		indent = defaultIndent
 	}
-	return bc.json(code, i, indent)
+	return bc.json(code, i, indent, charset...)
 }
 
-func (bc *beanContext) json(code int, i interface{}, indent string) error {
-	bc.writeContentType("application/json;charset=UTF-8")
+func (bc *beanContext) JSONP(code int, i any, charset ...string) (err error) {
+	indent := ""
+	if _, pretty := bc.QueryParams()["pretty"]; pretty {
+		indent = defaultIndent
+	}
+	return bc.jsonp(code, i, indent, charset...)
+}
+
+func (bc *beanContext) json(code int, i any, indent string, charset ...string) error {
+	if len(charset) > 0 {
+		bc.writeContentType(jsonCTypeUTF8 + ";" + charset[0])
+	} else {
+		bc.writeContentType(jsonCTypeUTF8 + ";" + "charset=utf-8")
+	}
 	bc.response.WriteHeader(code)
 	enc := json.NewEncoder(bc.response)
 	if indent != "" {
 		enc.SetIndent("", indent)
 	}
 	return enc.Encode(i)
+}
+
+func (bc *beanContext) jsonp(code int, i any, indent string, charset ...string) (err error) {
+	if len(charset) > 0 {
+		bc.writeContentType(jsonpCTypeUTF8 + ";" + charset[0])
+	} else {
+		bc.writeContentType(jsonpCTypeUTF8 + ";" + "charset=utf-8")
+	}
+	bc.response.WriteHeader(code)
+
+	callback := bc.Query("callback")
+	if callback == "" {
+		enc := json.NewEncoder(bc.response)
+		if indent != "" {
+			enc.SetIndent("", indent)
+		}
+		return enc.Encode(i)
+	} else {
+		if _, err = bc.response.Write([]byte(callback + "(")); err != nil {
+			return
+		}
+		enc := json.NewEncoder(bc.response)
+		if indent != "" {
+			enc.SetIndent("", indent)
+		}
+		if err = enc.Encode(i); err != nil {
+			return
+		}
+		if _, err = bc.response.Write([]byte(");")); err != nil {
+			return
+		}
+		return
+	}
 }
 
 func (bc *beanContext) writeContentType(value string) {
