@@ -25,21 +25,62 @@ type (
 		// Response returns `http.ResponseWriter`.
 		Response() http.ResponseWriter
 
+		// Keys returns all context keys set by Set.
+		Keys() map[string]any
+
+		// MustGet returns the value for the given key if it exists, otherwise it panics.
+		MustGet(key string) any
+
 		// Get returns the value for the given key string from the context.
 		// If the value doesn't exist it returns (nil, false).
 		Get(key string) (any, bool)
 
-		MustGet(key string) any
+		// GetString returns the value associated with the key as a string.
+		GetString(key string) (s string)
+
+		// GetBool returns the value associated with the key as a boolean.
+		GetBool(key string) (b bool)
+
+		// GetInt returns the value associated with the key as an integer.
+		GetInt(key string) (i int)
+
+		// GetInt64 returns the value associated with the key as an integer.
+		GetInt64(key string) (i64 int64)
+
+		// GetUint returns the value associated with the key as an unsigned integer.
+		GetUint(key string) (ui uint)
+
+		// GetUint64 returns the value associated with the key as an unsigned integer.
+		GetUint64(key string) (ui64 uint64)
+
+		// GetFloat64 returns the value associated with the key as a float64.
+		GetFloat64(key string) (f64 float64)
+
+		// GetTime returns the value associated with the key as time.
+		GetTime(key string) (t time.Time)
+
+		// GetDuration returns the value associated with the key as a duration.
+		GetDuration(key string) (d time.Duration)
+
+		// GetStringSlice returns the value associated with the key as a slice of strings.
+		GetStringSlice(key string) (ss []string)
+
+		// GetStringMap returns the value associated with the key as a map of interfaces.
+		GetStringMap(key string) (sm map[string]any)
+
+		// GetStringMapString returns the value associated with the key as a map of strings.
+		GetStringMapString(key string) (sms map[string]string)
+
+		// GetStringMapStringSlice returns the value associated with the key as a map to a slice of strings.
+		GetStringMapStringSlice(key string) (smss map[string][]string)
 
 		// Set saves data in the context.
 		Set(key string, val any)
 
-		Keys() map[string]any
-
-		// Param returns path parameter by name.
+		// Param returns URL parameter by name.
 		Param(name string) string
 
-		// AddParam adds param to context and
+		// AddParam adds param to context and.
 		AddParam(name, value string)
 
 		// Query returns the query param for the provided name.
@@ -156,6 +197,7 @@ func (bc *beanContext) Keys() map[string]any {
 	return bc.keys
 }
 
+// MustGet returns the value for the given key if it exists, otherwise it panics.
 func (bc *beanContext) MustGet(key string) any {
 	val, e := bc.Get(key)
 	if !e {
@@ -173,6 +215,110 @@ func (bc *beanContext) Get(key string) (value any, e bool) {
 	return
 }
 
+// GetString returns the value associated with the key as a string.
+func (bc *beanContext) GetString(key string) (s string) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		s, _ = val.(string)
+	}
+	return
+}
+
+// GetBool returns the value associated with the key as a boolean.
+func (bc *beanContext) GetBool(key string) (b bool) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		b, _ = val.(bool)
+	}
+	return
+}
+
+// GetInt returns the value associated with the key as an integer.
+func (bc *beanContext) GetInt(key string) (i int) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		i, _ = val.(int)
+	}
+	return
+}
+
+// GetInt64 returns the value associated with the key as an integer.
+func (bc *beanContext) GetInt64(key string) (i64 int64) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		i64, _ = val.(int64)
+	}
+	return
+}
+
+// GetUint returns the value associated with the key as an unsigned integer.
+func (bc *beanContext) GetUint(key string) (ui uint) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		ui, _ = val.(uint)
+	}
+	return
+}
+
+// GetUint64 returns the value associated with the key as an unsigned integer.
+func (bc *beanContext) GetUint64(key string) (ui64 uint64) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		ui64, _ = val.(uint64)
+	}
+	return
+}
+
+// GetFloat64 returns the value associated with the key as a float64.
+func (bc *beanContext) GetFloat64(key string) (f64 float64) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		f64, _ = val.(float64)
+	}
+	return
+}
+
+// GetTime returns the value associated with the key as time.
+func (bc *beanContext) GetTime(key string) (t time.Time) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		t, _ = val.(time.Time)
+	}
+	return
+}
+
+// GetDuration returns the value associated with the key as a duration.
+func (bc *beanContext) GetDuration(key string) (d time.Duration) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		d, _ = val.(time.Duration)
+	}
+	return
+}
+
+// GetStringSlice returns the value associated with the key as a slice of strings.
+func (bc *beanContext) GetStringSlice(key string) (ss []string) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		ss, _ = val.([]string)
+	}
+	return
+}
+
+// GetStringMap returns the value associated with the key as a map of interfaces.
+func (bc *beanContext) GetStringMap(key string) (sm map[string]any) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		sm, _ = val.(map[string]any)
+	}
+	return
+}
+
+// GetStringMapString returns the value associated with the key as a map of strings.
+func (bc *beanContext) GetStringMapString(key string) (sms map[string]string) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		sms, _ = val.(map[string]string)
+	}
+	return
+}
+
+// GetStringMapStringSlice returns the value associated with the key as a map to a slice of strings.
+func (bc *beanContext) GetStringMapStringSlice(key string) (smss map[string][]string) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		smss, _ = val.(map[string][]string)
+	}
+	return
+}
+
 // Set is saving a new key-value pair exclusively for this context.
 // It also initializes `bc.keys` if it was not initialized previously.
 func (bc *beanContext) Set(key string, value any) {
@@ -185,6 +331,8 @@ func (bc *beanContext) Set(key string, value any) {
 	bc.keys[key] = value
 }
 
+// Param returns the value of the first Param which key matches the given name.
+// If no matching Param is found, an empty string is returned.
 func (bc *beanContext) Param(name string) string {
 	for _, data := range bc.params {
 		if data[0] == name {
@@ -252,8 +400,7 @@ func (bc *beanContext) JSONP(code int, i any, charset ...string) (err error) {
 	return bc.jsonp(code, i, bc.indentFromQueryParam(), charset...)
 }
 
-func (bc *beanContext) indentFromQueryParam() string {
-	var indent string
+func (bc *beanContext) indentFromQueryParam() (indent string) {
 	if _, pretty := bc.QueryParams()["pretty"]; pretty {
 		indent = defaultIndent
 	}
