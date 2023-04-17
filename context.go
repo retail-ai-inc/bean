@@ -134,8 +134,8 @@ var (
 )
 
 var (
-	jsonCTypeUTF8  = "application/json"
-	jsonpCTypeUTF8 = "application/javascript"
+	jsonCType  = "application/json"
+	jsonpCType = "application/javascript"
 )
 
 func (bc *beanContext) Request() *http.Request {
@@ -262,9 +262,9 @@ func (bc *beanContext) JSONP(code int, i any, charset ...string) (err error) {
 
 func (bc *beanContext) json(code int, i any, indent string, charset ...string) error {
 	if len(charset) > 0 {
-		bc.writeContentType(jsonCTypeUTF8 + ";" + charset[0])
+		bc.writeContentType(jsonCType + ";" + charset[0])
 	} else {
-		bc.writeContentType(jsonCTypeUTF8 + ";" + "charset=utf-8")
+		bc.writeContentType(jsonCType + ";" + "charset=utf-8")
 	}
 	bc.response.WriteHeader(code)
 	enc := json.NewEncoder(bc.response)
@@ -276,9 +276,9 @@ func (bc *beanContext) json(code int, i any, indent string, charset ...string) e
 
 func (bc *beanContext) jsonp(code int, i any, indent string, charset ...string) (err error) {
 	if len(charset) > 0 {
-		bc.writeContentType(jsonpCTypeUTF8 + ";" + charset[0])
+		bc.writeContentType(jsonpCType + ";" + charset[0])
 	} else {
-		bc.writeContentType(jsonpCTypeUTF8 + ";" + "charset=utf-8")
+		bc.writeContentType(jsonpCType + ";" + "charset=utf-8")
 	}
 	bc.response.WriteHeader(code)
 
