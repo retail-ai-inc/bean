@@ -133,7 +133,7 @@ var (
 	_ Context = (*beanContext)(nil)
 )
 
-var (
+const (
 	jsonCType  = "application/json"
 	jsonpCType = "application/javascript"
 )
@@ -245,19 +245,19 @@ func (bc *beanContext) String(code int, s string) error {
 }
 
 func (bc *beanContext) JSON(code int, i any, charset ...string) error {
-	indent := ""
-	if _, pretty := bc.QueryParams()["pretty"]; pretty {
-		indent = defaultIndent
-	}
-	return bc.json(code, i, indent, charset...)
+	return bc.json(code, i, bc.indentFromQueryParam(), charset...)
 }
 
 func (bc *beanContext) JSONP(code int, i any, charset ...string) (err error) {
-	indent := ""
+	return bc.jsonp(code, i, bc.indentFromQueryParam(), charset...)
+}
+
+func (bc *beanContext) indentFromQueryParam() string {
+	var indent string
 	if _, pretty := bc.QueryParams()["pretty"]; pretty {
 		indent = defaultIndent
 	}
-	return bc.jsonp(code, i, indent, charset...)
+	return indent
 }
 
 func (bc *beanContext) json(code int, i any, indent string, charset ...string) error {
