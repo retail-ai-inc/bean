@@ -319,6 +319,14 @@ func (bc *beanContext) GetStringMapStringSlice(key string) (smss map[string][]st
 	return
 }
 
+// get returns the value associated with the key as a T. for example get[string](bc,key)
+func get[T any](bc *beanContext, key string) (value T) {
+	if val, ok := bc.Get(key); ok && val != nil {
+		value, _ = val.(T)
+	}
+	return
+}
+
 // Set is saving a new key-value pair exclusively for this context.
 // It also initializes `bc.keys` if it was not initialized previously.
 func (bc *beanContext) Set(key string, value any) {
