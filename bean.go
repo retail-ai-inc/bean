@@ -441,10 +441,13 @@ func NewEcho() *echo.Echo {
 
 func (b *Bean) NewContext(r *http.Request, w http.ResponseWriter) *beanContext {
 	return &beanContext{
-		request:  r,
-		response: w,
-		keys:     make(map[string]interface{}),
-		params:   make([][2]string, 0),
+		request: r,
+		response: &responseWriter{
+			ResponseWriter: w,
+			size:           noWritten,
+		},
+		keys:   make(map[string]interface{}),
+		params: make([][2]string, 0),
 	}
 }
 

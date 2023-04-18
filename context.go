@@ -77,6 +77,9 @@ type (
 		// Set saves data in the context.
 		Set(key string, val any)
 
+		// Params returns all params set by AddParam.
+		Params() [][2]string
+
 		// Param returns URL parameter by name.
 		Param(name string) string
 
@@ -152,7 +155,7 @@ type (
 
 	beanContext struct {
 		request   *http.Request
-		response  http.ResponseWriter
+		response  ResponseWriter
 		mu        sync.RWMutex
 		keys      map[string]any
 		binder    Binder
@@ -331,6 +334,11 @@ func (bc *beanContext) Set(key string, value any) {
 	bc.keys[key] = value
 }
 
+// Params returns all params set by AddParam.
+func (bc *beanContext) Params() [][2]string {
+	return bc.params
+}
+
 // Param returns the value of the first Param which key matches the given name.
 // If no matching Param is found, an empty string is returned.
 func (bc *beanContext) Param(name string) string {
@@ -468,7 +476,12 @@ func (bc *beanContext) Error(err error) {
 
 func (bc *beanContext) Reset(r *http.Request, w http.ResponseWriter) {
 	bc.request = r
-	bc.response = w
+	bc.response.Reset(w)
+	bc.keys = nil
+	bc.binder = nil
+	bc.validator = nil
+	bc.params = nil
+	bc.query = nil
 }
 
 func (bc *beanContext) Cookie(name string) (*http.Cookie, error) {

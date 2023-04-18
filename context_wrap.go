@@ -30,6 +30,15 @@ func WrapEchoMiddleware(m MiddlewareFunc) echo.MiddlewareFunc {
 				for key, val := range ctx.Keys() {
 					c.Set(key, val)
 				}
+				paramLen := len(ctx.Params())
+				var pName = make([]string, paramLen)
+				var pValue = make([]string, paramLen)
+				for i, param := range ctx.Params() {
+					pName[i] = param[0]
+					pValue[i] = param[1]
+				}
+				c.SetParamNames(pName...)
+				c.SetParamValues(pValue...)
 				return next(c)
 			})(bc)
 		}
@@ -56,7 +65,17 @@ func genBeanContextFromEcho(c echo.Context) *beanContext {
 	}
 	response := c.Response()
 	request = request.WithContext(context.WithValue(request.Context(), beanContextKey, bc))
-	bc.Reset(request, response)
+	bc.Reset(request, &responseWriter{
+		ResponseWriter: response,
+		size:           int(response.Size),
+		status:         response.Status,
+	})
+	pNames := c.ParamNames()
+	pValues := c.ParamValues()
+	for i := 0; i < len(pNames); i++ {
+		bc.AddParam(pNames[i], pValues[i])
+	}
+
 	bc.SetBinder(&binderWrapper{c.Echo().Binder.Bind, c})
 	return bc
 }
