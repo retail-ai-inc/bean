@@ -67,7 +67,7 @@ func genBeanContextFromEcho(c echo.Context) *beanContext {
 	response := c.Response()
 	bc.response = &responseWriter{
 		ResponseWriter: response,
-		size:           int(response.Size),
+		size:           response.Size,
 		status:         response.Status,
 	}
 
