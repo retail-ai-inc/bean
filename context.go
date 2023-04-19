@@ -23,7 +23,7 @@ type (
 		SetRequest(r *http.Request)
 
 		// Response returns `http.ResponseWriter`.
-		Response() http.ResponseWriter
+		Response() ResponseWriter
 
 		// Keys returns all context keys set by Set.
 		Keys() map[string]any
@@ -190,7 +190,7 @@ func (bc *beanContext) SetRequest(r *http.Request) {
 	bc.request = r
 }
 
-func (bc *beanContext) Response() http.ResponseWriter {
+func (bc *beanContext) Response() ResponseWriter {
 	return bc.response
 }
 

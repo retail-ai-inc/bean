@@ -63,13 +63,14 @@ func genBeanContextFromEcho(c echo.Context) *beanContext {
 	bc := &beanContext{
 		validator: c.Echo().Validator,
 	}
+	bc.request = request.WithContext(context.WithValue(request.Context(), beanContextKey, bc))
 	response := c.Response()
-	request = request.WithContext(context.WithValue(request.Context(), beanContextKey, bc))
-	bc.Reset(request, &responseWriter{
+	bc.response = &responseWriter{
 		ResponseWriter: response,
 		size:           int(response.Size),
 		status:         response.Status,
-	})
+	}
+
 	pNames := c.ParamNames()
 	pValues := c.ParamValues()
 	for i := 0; i < len(pNames); i++ {

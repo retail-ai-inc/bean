@@ -25,7 +25,7 @@ type ResponseWriter interface {
 	Status() int
 
 	// Size returns the number of bytes already written into the response http body.
-	Size() int
+	Size() int64
 
 	// WriteString writes the string into the response body.
 	WriteString(string) (int, error)
@@ -40,7 +40,7 @@ type ResponseWriter interface {
 type responseWriter struct {
 	http.ResponseWriter
 	status int
-	size   int
+	size   int64
 }
 
 func (w *responseWriter) Reset(writer http.ResponseWriter) {
@@ -69,14 +69,14 @@ func (w *responseWriter) WriteHeaderNow() {
 func (w *responseWriter) Write(data []byte) (n int, err error) {
 	w.WriteHeaderNow()
 	n, err = w.ResponseWriter.Write(data)
-	w.size += n
+	w.size += int64(n)
 	return
 }
 
 func (w *responseWriter) WriteString(s string) (n int, err error) {
 	w.WriteHeaderNow()
 	n, err = io.WriteString(w.ResponseWriter, s)
-	w.size += n
+	w.size += int64(n)
 	return
 }
 
@@ -84,7 +84,7 @@ func (w *responseWriter) Status() int {
 	return w.status
 }
 
-func (w *responseWriter) Size() int {
+func (w *responseWriter) Size() int64 {
 	return w.size
 }
 
