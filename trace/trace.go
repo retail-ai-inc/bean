@@ -27,7 +27,6 @@ import (
 	"runtime"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/retail-ai-inc/bean"
 	"github.com/spf13/viper"
 )
 
@@ -76,7 +75,7 @@ func Start(c context.Context, operation string, spanOpts ...sentry.SpanOption) f
 			ctx.Push(span.Context())
 		} else {
 			span = sentry.StartSpan(c, operation, spanOpts...)
-			bean.SentryCaptureMessage(nil, functionName+"not using a traceable context")
+			SentryCaptureMessage(nil, functionName+"not using a traceable context")
 		}
 
 		span.Description = functionName
@@ -100,4 +99,34 @@ func NewTraceableContext(ctx context.Context) *TraceableContext {
 		stack:   stack,
 		Context: ctx,
 	}
+}
+
+// SentryCaptureException This is a global function to send sentry exception if you configure the sentry through env.json. You cann pass a proper context or nil.
+func SentryCaptureException(c context.Context, err error) {
+	if c != nil {
+		// If the function get a proper context then push the request headers and URI along with other meaningful info.
+		if hub := sentry.GetHubFromContext(c); hub != nil {
+			hub.CaptureException(err)
+		}
+
+		return
+	}
+
+	// If someone call the function from service/repository without a proper context.
+	sentry.CurrentHub().Clone().CaptureException(err)
+}
+
+// SentryCaptureMessage This is a global function to send sentry message if you configure the sentry through env.json. You cann pass a proper context or nil.
+func SentryCaptureMessage(c context.Context, msg string) {
+	if c != nil {
+		// If the function get a proper context then push the request headers and URI along with other meaningful info.
+		if hub := sentry.GetHubFromContext(c); hub != nil {
+			hub.CaptureMessage(msg)
+		}
+
+		return
+	}
+
+	// If someone call the function from service/repository without a proper context.
+	sentry.CurrentHub().Clone().CaptureMessage(msg)
 }

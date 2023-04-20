@@ -65,9 +65,13 @@ func genBeanContextFromEcho(c echo.Context) *beanContext {
 	}
 	bc.request = request.WithContext(context.WithValue(request.Context(), beanContextKey, bc))
 	response := c.Response()
+	size := noWritten
+	if response.Size > 0 {
+		size = response.Size
+	}
 	bc.response = &responseWriter{
 		ResponseWriter: response,
-		size:           response.Size,
+		size:           size,
 		status:         response.Status,
 	}
 

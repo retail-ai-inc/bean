@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	noWritten     = -1
-	defaultStatus = http.StatusOK
+	noWritten     int64 = -1
+	defaultStatus       = http.StatusOK
 )
 
 type ResponseWriter interface {
@@ -56,6 +56,7 @@ func (w *responseWriter) WriteHeader(code int) {
 			return
 		}
 		w.status = code
+		w.ResponseWriter.WriteHeader(code)
 	}
 }
 
