@@ -14,4 +14,4 @@ jobs:
         with:
           filter_mode: nofilter
           reporter: github-pr-review
-          golangci_lint_flags: "--config=./.golangci.yml"
+          golangci_lint_flags: "--config=./github/workflows/.golangci.yml"
