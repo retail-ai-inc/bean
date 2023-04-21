@@ -30,10 +30,10 @@ import (
 	"github.com/rs/dnscache"
 )
 
-// Support a DNS cache version of the net/http Transport.
+// NetHttpFastTransporter Support a DNS cache version of the net/http Transport.
 var NetHttpFastTransporter *http.Transport
 
-// Hold the useful configuration settings of bean so that we can use it quickly from anywhere.
+// BeanConfig Hold the useful configuration settings of bean so that we can use it quickly from anywhere.
 var BeanConfig bean.Config
 
 func Run() {
@@ -293,7 +293,7 @@ func openFile(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0664)
 }
 
-// `prometheusUrlSkipper` ignores metrics route on some endpoints.
+// prometheusUrlSkipper ignores metrics route on some endpoints.
 func prometheusUrlSkipper(skipEndpoints []string) func(c echo.Context) bool {
 	return func(c echo.Context) bool {
 		path := c.Request().URL.Path

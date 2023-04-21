@@ -11,3 +11,6 @@ linters:
     - nestif
     - exhaustivestruct
     - wsl
+    - gomnd
+    - ifshort
+    - exhaustruct
