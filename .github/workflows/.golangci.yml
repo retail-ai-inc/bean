@@ -1,0 +1,13 @@
+linters:
+  # Enable all available linters.
+  # Default: false
+  enable-all: true
+  # Disable specific linter
+  # https://golangci-lint.run/usage/linters/#disabled-by-default
+  disable:
+    - funlen
+    - unused
+    - lll
+    - nestif
+    - exhaustivestruct
+    - wsl

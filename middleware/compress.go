@@ -86,7 +86,7 @@ func GzipWithConfig(config GzipConfig) bean.MiddlewareFunc {
 						}
 						w.Reset(io.Discard)
 					}
-					w.Close()
+					_ = w.Close()
 					pool.Put(w)
 				}()
 				c.SetResponse(grw)
@@ -110,7 +110,7 @@ func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 }
 
 func (w *gzipResponseWriter) Flush() {
-	w.writer.(*gzip.Writer).Flush()
+	_ = w.writer.(*gzip.Writer).Flush()
 	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
 		flusher.Flush()
 	}
