@@ -23,10 +23,10 @@ func TestGzip(t *testing.T) {
 
 	// Skip if no Accept-Encoding header
 	h := Gzip()(func(c bean.Context) error {
-		c.Response().Write([]byte("test")) // For Content-Type sniffing
+		_, _ = c.Response().Write([]byte("test")) // For Content-Type sniffing
 		return nil
 	})
-	h(bc)
+	_ = h(bc)
 
 	assert.Equal(t, "test", rec.Body.String())
 
@@ -35,14 +35,16 @@ func TestGzip(t *testing.T) {
 	req.Header.Set(bean.HeaderAcceptEncoding, gzipScheme)
 	rec = httptest.NewRecorder()
 	bc = b.NewContext(req, rec)
-	h(bc)
+	_ = h(bc)
 	assert.Equal(t, gzipScheme, rec.Header().Get(bean.HeaderContentEncoding))
 	assert.Contains(t, rec.Header().Get(bean.HeaderContentType), bean.MIMETextPlain)
 	r, err := gzip.NewReader(rec.Body)
 	if assert.NoError(t, err) {
 		buf := new(bytes.Buffer)
-		defer r.Close()
-		buf.ReadFrom(r)
+		defer func(r *gzip.Reader) {
+			_ = r.Close()
+		}(r)
+		_, _ = buf.ReadFrom(r)
 		assert.Equal(t, "test", buf.String())
 	}
 
@@ -54,25 +56,25 @@ func TestGzip(t *testing.T) {
 	rec = httptest.NewRecorder()
 
 	bc = b.NewContext(req, rec)
-	Gzip()(func(c bean.Context) error {
+	_ = Gzip()(func(c bean.Context) error {
 		c.Response().Header().Set("Content-Type", "text/event-stream")
 		c.Response().Header().Set("Transfer-Encoding", "chunked")
 
 		// Write and flush the first part of the data
-		c.Response().Write([]byte("test\n"))
+		_, _ = c.Response().Write([]byte("test\n"))
 		c.Response().Flush()
 
 		// Read the first part of the data
 		assert.True(t, rec.Flushed)
 		assert.Equal(t, gzipScheme, rec.Header().Get(bean.HeaderContentEncoding))
-		r.Reset(rec.Body)
+		_ = r.Reset(rec.Body)
 
 		_, err = io.ReadFull(r, chunkBuf)
 		assert.NoError(t, err)
 		assert.Equal(t, "test\n", string(chunkBuf))
 
 		// Write and flush the second part of the data
-		c.Response().Write([]byte("test\n"))
+		_, _ = c.Response().Write([]byte("test\n"))
 		c.Response().Flush()
 
 		_, err = io.ReadFull(r, chunkBuf)
@@ -80,13 +82,15 @@ func TestGzip(t *testing.T) {
 		assert.Equal(t, "test\n", string(chunkBuf))
 
 		// Write the final part of the data and return
-		c.Response().Write([]byte("test"))
+		_, _ = c.Response().Write([]byte("test"))
 		return nil
 	})(bc)
 
 	buf := new(bytes.Buffer)
-	defer r.Close()
-	buf.ReadFrom(r)
+	defer func(r *gzip.Reader) {
+		_ = r.Close()
+	}(r)
+	_, _ = buf.ReadFrom(r)
 	assert.Equal(t, "test", buf.String())
 }
 
@@ -122,7 +126,7 @@ func TestGzipEmpty(t *testing.T) {
 		r, err := gzip.NewReader(rec.Body)
 		if assert.NoError(t, err) {
 			var buf bytes.Buffer
-			buf.ReadFrom(r)
+			_, _ = buf.ReadFrom(r)
 			assert.Equal(t, "", buf.String())
 		}
 	}
@@ -147,7 +151,7 @@ func TestGzipErrorReturnedInvalidConfig(t *testing.T) {
 	// Invalid level
 	e.Use(bean.WrapEchoMiddleware(GzipWithConfig(GzipConfig{Level: 12})))
 	e.GET("/", bean.WrapEchoHandler(func(c bean.Context) error {
-		c.Response().Write([]byte("test"))
+		_, _ = c.Response().Write([]byte("test"))
 		return nil
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -175,11 +179,13 @@ func TestGzipWithStatic(t *testing.T) {
 	}
 	r, err := gzip.NewReader(rec.Body)
 	if assert.NoError(t, err) {
-		defer r.Close()
+		defer func(r *gzip.Reader) {
+			_ = r.Close()
+		}(r)
 		want, err := os.ReadFile("../docs/static/service_repository_pattern.png")
 		if assert.NoError(t, err) {
 			buf := new(bytes.Buffer)
-			buf.ReadFrom(r)
+			_, _ = buf.ReadFrom(r)
 			assert.Equal(t, want, buf.Bytes())
 		}
 	}
@@ -192,7 +198,7 @@ func BenchmarkGzip(b *testing.B) {
 	req.Header.Set(bean.HeaderAcceptEncoding, gzipScheme)
 
 	h := Gzip()(func(c bean.Context) error {
-		c.Response().Write([]byte("test")) // For Content-Type sniffing
+		_, _ = c.Response().Write([]byte("test")) // For Content-Type sniffing
 		return nil
 	})
 
@@ -203,6 +209,6 @@ func BenchmarkGzip(b *testing.B) {
 		// Gzip
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		h(c)
+		_ = h(c)
 	}
 }

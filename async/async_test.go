@@ -21,6 +21,6 @@ func BenchmarkExecuteWithContext(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ExecuteWithContext(func(c context.Context) {
 
-		}, request)
+		}, request.Context())
 	}
 }
