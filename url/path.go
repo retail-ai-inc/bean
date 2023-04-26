@@ -75,7 +75,7 @@ type Match struct {
 //
 // The syntax for paths looks something like the following:
 //
-//  /shelves/:shelf/books/:book
+// /shelves/:shelf/books/:book
 //
 // This would match inputs like:
 //
@@ -203,7 +203,7 @@ func (p *Path) Match(s string) (Match, bool) {
 }
 
 // Build is the inverse of Match. Given parameter and trailing segment
-// information, Build returns a string which satifies this information.
+// information, Build returns a string which satisfies this information.
 //
 // The second parameter indicates whether the inputted match has the parameters
 // the path specifies. If any of the parameters in the path are not found in the

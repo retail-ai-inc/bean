@@ -303,7 +303,7 @@ func replaceStringToNthLineOfFile(filePath, newText string, lineNumber int) erro
 	return ioutil.WriteFile(filePath, []byte(fileContent), 0644)
 }
 
-func replaceStringFromFileByRegex(filePath, regex, additonal, replaceWith string) error {
+func replaceStringFromFileByRegex(filePath, regex, additional, replaceWith string) error {
 
 	input, err := ioutil.ReadFile(filePath)
 	if err != nil {
@@ -314,7 +314,7 @@ func replaceStringFromFileByRegex(filePath, regex, additonal, replaceWith string
 	match := re.FindStringSubmatch(string(input))
 	if len(match) > 1 {
 
-		replaceMe := additonal + match[1]
+		replaceMe := additional + match[1]
 		output := bytes.Replace(input, []byte(replaceMe), []byte(replaceWith), -1)
 
 		if err = ioutil.WriteFile(filePath, output, 0664); err != nil {

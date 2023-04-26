@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 // Do not change this file.
-// It is copied from github.com/pkg/errors pacakge
+// It is copied from github.com/pkg/errors package
 package stacktrace
 
 import (
@@ -75,10 +75,10 @@ func (f Frame) name() string {
 
 // Format formats the frame according to the fmt.Formatter interface.
 //
-//    %s    source file
-//    %d    source line
-//    %n    function name
-//    %v    equivalent to %s:%d
+// %s    source file
+// %d    source line
+// %n    function name
+// %v    equivalent to %s:%d
 //
 // Format accepts flags that alter the printing of some verbs, as follows:
 //

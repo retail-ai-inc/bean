@@ -7,7 +7,6 @@ linters:
   disable-all: true
   enable:
     - typecheck
-    - goimports
     - misspell
     - govet
     - ineffassign
