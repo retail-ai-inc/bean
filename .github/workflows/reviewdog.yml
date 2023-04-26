@@ -8,11 +8,9 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.18
+          go-version: '^1.18'
       - name: lint
         uses: golangci/golangci-lint-action@v3.4.0
         with:
           version: latest
-          # skip cache because of flaky behaviors
-          skip-build-cache: true
-          skip-pkg-cache: true
+          args: --verbose
