@@ -12,5 +12,5 @@ jobs:
       - name: lint
         uses: golangci/golangci-lint-action@v3.4.0
         with:
-          version: latest
-          args: --verbose
+          reporter: github-pr-review
+          golangci_lint_flags: "--config=.github/.golangci.yml"
