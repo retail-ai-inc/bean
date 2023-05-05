@@ -1,0 +1,14 @@
+linters-settings:
+  golint:
+    min-confidence: 0
+  misspell:
+    locale: US
+linters:
+  disable-all: true
+  enable:
+    - typecheck
+    - misspell
+    - govet
+    - ineffassign
+    - gosimple
+    - errcheck

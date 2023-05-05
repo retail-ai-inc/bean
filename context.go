@@ -26,6 +26,9 @@ type (
 		// Response returns `http.ResponseWriter`.
 		Response() ResponseWriter
 
+		// SetResponse sets `http.ResponseWriter`.
+		SetResponse(w ResponseWriter)
+
 		// Keys returns all context keys set by Set.
 		Keys() map[string]any
 
@@ -175,6 +178,8 @@ type (
 		validator Validator
 		params    [][2]string
 		query     url.Values
+
+		bean *Bean
 	}
 
 	HandlerFunc    func(c Context) error
@@ -206,6 +211,10 @@ func (bc *beanContext) SetRequest(r *http.Request) {
 
 func (bc *beanContext) Response() ResponseWriter {
 	return bc.response
+}
+
+func (bc *beanContext) SetResponse(w ResponseWriter) {
+	bc.response = w
 }
 
 func (bc *beanContext) Keys() map[string]any {
@@ -418,8 +427,14 @@ func (bc *beanContext) HTMLBlob(code int, b []byte) error {
 }
 
 func (bc *beanContext) String(code int, s string) error {
-	// TODO implement me
-	panic("implement me")
+	return bc.Blob(code, MIMETextPlainCharsetUTF8, []byte(s))
+}
+
+func (bc *beanContext) Blob(code int, contentType string, b []byte) (err error) {
+	bc.writeContentType(contentType)
+	bc.response.WriteHeader(code)
+	_, err = bc.response.Write(b)
+	return
 }
 
 func (bc *beanContext) JSON(code int, i any, charset ...string) error {
@@ -614,4 +629,12 @@ func (bc *beanContext) FormFile(name string) (*multipart.FileHeader, error) {
 func (bc *beanContext) MultipartForm() (*multipart.Form, error) {
 	err := bc.request.ParseMultipartForm(defaultMemory)
 	return bc.request.MultipartForm, err
+}
+
+func (bc *beanContext) SentryCaptureException(err error) {
+	bc.bean.SentryCaptureException(bc, err)
+}
+
+func (bc *beanContext) SentryCaptureMessage(msg string) {
+	bc.bean.SentryCaptureMessage(bc, msg)
 }

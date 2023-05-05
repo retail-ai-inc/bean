@@ -84,7 +84,7 @@ func ExecuteWithContext(fn Task, ctx context.Context, poolName ...string) {
 	Execute(func() {
 		// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
 		// can pull the right hub and send the exception message to sentry.
-		if bean.BeanConfig.Sentry.On {
+		if viper.GetBool("sentry.on") {
 			ctx := req.Context()
 			hub := sentry.GetHubFromContext(ctx)
 			if hub == nil {
@@ -129,7 +129,7 @@ func ExecuteWithContext(fn Task, ctx context.Context, poolName ...string) {
 func recoverPanic(r *http.Request) {
 	if err := recover(); err != nil {
 		// Create a new Hub by cloning the existing one.
-		if bean.BeanConfig.Sentry.On {
+		if viper.GetBool("sentry.on") {
 			localHub := sentry.CurrentHub().Clone()
 
 			if r != nil {
