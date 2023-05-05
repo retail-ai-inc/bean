@@ -32,6 +32,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
@@ -75,6 +76,7 @@ type DBDeps struct {
 }
 
 type Bean struct {
+	pool              sync.Pool
 	DBConn            *DBDeps
 	Echo              *echo.Echo
 	BeforeServe       func()
@@ -189,6 +191,10 @@ func New() (b *Bean) {
 		Echo:     e,
 		validate: validatorV10.New(),
 		Config:   BeanConfig,
+	}
+
+	b.pool.New = func() any {
+		return b.NewContext(nil, nil)
 	}
 
 	// If `NetHttpFastTransporter` is on from env.json then initialize it.
@@ -433,6 +439,18 @@ func NewEcho() *echo.Echo {
 	return e
 }
 
+func (b *Bean) NewContext(r *http.Request, w http.ResponseWriter) *beanContext {
+	return &beanContext{
+		request: r,
+		response: &responseWriter{
+			ResponseWriter: w,
+			size:           noWritten,
+		},
+		keys:   make(map[string]interface{}),
+		params: make([][2]string, 0),
+	}
+}
+
 func (b *Bean) ServeAt(host, port string) {
 	b.Echo.Logger.Info("Starting " + b.Config.Environment + " " + b.Config.ProjectName + " at " + host + ":" + port + "...🚀")
 
@@ -505,7 +523,7 @@ func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
 			handled, err := handle(err, c)
 			if err != nil {
 				if BeanConfig.Sentry.On {
-					SentryCaptureException(c, err)
+					SentryCaptureException(c.Request().Context(), err)
 				} else {
 					c.Logger().Error(err)
 				}
@@ -568,14 +586,14 @@ func Logger() echo.Logger {
 }
 
 // This is a global function to send sentry exception if you configure the sentry through env.json. You cann pass a proper context or nil.
-func SentryCaptureException(c echo.Context, err error) {
+func SentryCaptureException(c context.Context, err error) {
 	if !BeanConfig.Sentry.On {
 		return
 	}
 
 	if c != nil {
 		// If the function get a proper context then push the request headers and URI along with other meaningful info.
-		if hub := sentryecho.GetHubFromContext(c); hub != nil {
+		if hub := sentry.GetHubFromContext(c); hub != nil {
 			hub.CaptureException(err)
 		}
 

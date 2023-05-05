@@ -26,7 +26,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -36,6 +35,11 @@ import (
 	structure "github.com/retail-ai-inc/bean/struct"
 )
 
+const (
+	HeaderContentType   = "Content-Type"
+	MIMEApplicationJSON = "application/json"
+)
+
 // CustomBinder is an implementation of the Binder interface
 // which only decodes JSON body and disallow unknow JSON fields.
 type CustomBinder struct{}
@@ -43,17 +47,19 @@ type CustomBinder struct{}
 // Bind implements the `Echo#Binder#Bind` function. It only decodes the JSON body for now.
 // Extends it if you also need path or query params. Please reference the Echo#Binder to check how to do it.
 func (cb *CustomBinder) Bind(i interface{}, c echo.Context) (err error) {
+	return Bind(i, c.Request())
+}
 
-	req := c.Request()
+func Bind(i interface{}, req *http.Request) (err error) {
 	if req.ContentLength == 0 {
 		return
 	}
 
-	ctype := req.Header.Get(echo.HeaderContentType)
+	ctype := req.Header.Get(HeaderContentType)
 
 	switch {
 
-	case strings.HasPrefix(ctype, echo.MIMEApplicationJSON) && (req.Method == http.MethodPost || req.Method == http.MethodPut || req.Method == http.MethodPatch):
+	case strings.HasPrefix(ctype, MIMEApplicationJSON) && (req.Method == http.MethodPost || req.Method == http.MethodPut || req.Method == http.MethodPatch):
 
 		bodyBytes := bytes.NewBuffer(make([]byte, 0))
 		reader := io.TeeReader(req.Body, bodyBytes)
@@ -66,9 +72,9 @@ func (cb *CustomBinder) Bind(i interface{}, c echo.Context) (err error) {
 		}
 
 		// Restore the io.ReadCloser to its original state so that we can read c.Request().Body somewhere else.
-		c.Request().Body = ioutil.NopCloser(bodyBytes)
+		req.Body = io.NopCloser(bodyBytes)
 
-		data, _ := helpers.PostDataStripTags(c, false)
+		data, _ := helpers.PostDataStripTags(req, false)
 
 		for key := range data {
 			// We are ignoring the err. Here we are trying to match the actual JSON request parameter based on
