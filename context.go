@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -23,7 +24,7 @@ type (
 		SetRequest(r *http.Request)
 
 		// Response returns `http.ResponseWriter`.
-		Response() http.ResponseWriter
+		Response() ResponseWriter
 
 		// Keys returns all context keys set by Set.
 		Keys() map[string]any
@@ -142,6 +143,18 @@ type (
 		// or `X-Real-IP` request header.
 		// The behavior can be configured using `Echo#IPExtractor`.
 		RealIP() string
+
+		// FormValue returns the form field value for the provided name.
+		FormValue(name string) string
+
+		// FormParams returns the form parameters as `url.Values`.
+		FormParams() (url.Values, error)
+
+		// FormFile returns the multipart form file for the provided name.
+		FormFile(name string) (*multipart.FileHeader, error)
+
+		// MultipartForm returns the multipart form.
+		MultipartForm() (*multipart.Form, error)
 	}
 
 	Binder interface {
@@ -170,6 +183,7 @@ type (
 
 const (
 	defaultIndent = "  "
+	defaultMemory = 32 << 20 // 32 MB
 )
 
 var (
@@ -190,7 +204,7 @@ func (bc *beanContext) SetRequest(r *http.Request) {
 	bc.request = r
 }
 
-func (bc *beanContext) Response() http.ResponseWriter {
+func (bc *beanContext) Response() ResponseWriter {
 	return bc.response
 }
 
@@ -472,8 +486,8 @@ func (bc *beanContext) jsonp(code int, i any, indent string, charset ...string) 
 
 func (bc *beanContext) writeContentType(value string) {
 	header := bc.response.Header()
-	if header.Get("Content-Type") == "" {
-		header.Set("Content-Type", value)
+	if header.Get(HeaderContentType) == "" {
+		header.Set(HeaderContentType, value)
 	}
 }
 
@@ -506,7 +520,7 @@ func (bc *beanContext) Cookies() []*http.Cookie {
 
 func (bc *beanContext) RealIP() string {
 	// Fall back to legacy behavior
-	if ip := bc.request.Header.Get("X-Forwarded-For"); ip != "" {
+	if ip := bc.request.Header.Get(HeaderXForwardedFor); ip != "" {
 		i := strings.IndexAny(ip, ",")
 		if i > 0 {
 			xffip := strings.TrimSpace(ip[:i])
@@ -516,7 +530,7 @@ func (bc *beanContext) RealIP() string {
 		}
 		return ip
 	}
-	if ip := bc.request.Header.Get("X-Real-Ip"); ip != "" {
+	if ip := bc.request.Header.Get(HeaderXRealIP); ip != "" {
 		ip = strings.TrimPrefix(ip, "[")
 		ip = strings.TrimSuffix(ip, "]")
 		return ip
@@ -566,4 +580,38 @@ func (bc *beanContext) Value(key any) any {
 		return nil
 	}
 	return bc.request.Context().Value(key)
+}
+
+func (bc *beanContext) FormValue(name string) string {
+	return bc.request.FormValue(name)
+}
+
+func (bc *beanContext) FormParams() (url.Values, error) {
+	if strings.HasPrefix(bc.request.Header.Get(HeaderContentType), MIMEMultipartForm) {
+		if err := bc.request.ParseMultipartForm(defaultMemory); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := bc.request.ParseForm(); err != nil {
+			return nil, err
+		}
+	}
+	return bc.request.Form, nil
+}
+
+func (bc *beanContext) FormFile(name string) (*multipart.FileHeader, error) {
+	f, fh, err := bc.request.FormFile(name)
+	if err != nil {
+		return nil, err
+	}
+	err = f.Close()
+	if err != nil {
+		return nil, err
+	}
+	return fh, nil
+}
+
+func (bc *beanContext) MultipartForm() (*multipart.Form, error) {
+	err := bc.request.ParseMultipartForm(defaultMemory)
+	return bc.request.MultipartForm, err
 }
