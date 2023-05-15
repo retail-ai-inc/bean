@@ -36,8 +36,9 @@ func FloatInRange(i, min, max float64) float64 {
 	}
 }
 
-// MaxInt returns a greater int value between x and y.
-func MaxInt(x, y int) int {
+// Max returns a greater number of x and y, otherwise y.
+// It only supports type parameters comparable with order operators (`<`, `<=`, `>=` and `>`) among comparison ones.
+func Max[T int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | float32 | float64 | uintptr](x, y T) T {
 	if x > y {
 		return x
 	}
