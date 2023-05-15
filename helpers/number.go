@@ -35,3 +35,12 @@ func FloatInRange(i, min, max float64) float64 {
 		return i
 	}
 }
+
+// MaxInt returns a greater int value among x and y.
+func MaxInt(x, y int) int {
+	if x > y {
+		return x
+	}
+
+	return y
+}
