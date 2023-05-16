@@ -36,12 +36,19 @@ func FloatInRange(i, min, max float64) float64 {
 	}
 }
 
+type Int interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
+}
+
+type Float interface {
+	~float32 | ~float64
+}
+
 // Max returns a greater number of x and y, otherwise y.
 // It supports only type parameters comparable with order operators (`<`, `<=`, `>` and `>=`).
-func Max[T int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | float32 | float64 | uintptr](x, y T) T {
+func Max[T Int | Float](x, y T) T {
 	if x > y {
 		return x
 	}
-
 	return y
 }
