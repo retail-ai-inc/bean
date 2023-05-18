@@ -25,6 +25,7 @@ package bean
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"html/template"
 	"net"
 	"net/http"
@@ -522,6 +523,27 @@ func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
 			}
 		}
 	}
+}
+
+func (b *Bean) UseContextTimeout(errorResponse interface{}) {
+	timeoutErrorHandler := func(err error, c echo.Context) error {
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return &echo.HTTPError{
+					Code:     http.StatusServiceUnavailable,
+					Message:  errorResponse,
+					Internal: err,
+				}
+			}
+			return err
+		}
+		return nil
+	}
+
+	b.Echo.Use(echomiddleware.ContextTimeoutWithConfig(echomiddleware.ContextTimeoutConfig{
+		Timeout:      BeanConfig.HTTP.Timeout,
+		ErrorHandler: timeoutErrorHandler,
+	}))
 }
 
 // InitDB initialize all the database dependencies and store it in global variable `global.DBConn`.
