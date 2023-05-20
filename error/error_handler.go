@@ -119,7 +119,7 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 			}
 		}
 		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
-			err = c.Render(he.Code, "errors/html/503", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+			err = c.Render(he.Code, "errors/html/504", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
 		} else {
 			err = c.JSON(he.Code, he.Message)
 		}
