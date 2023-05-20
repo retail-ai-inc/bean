@@ -530,7 +530,7 @@ func (b *Bean) UseContextTimeout(errorResponse interface{}) {
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				return &echo.HTTPError{
-					Code:     http.StatusServiceUnavailable,
+					Code:     http.StatusGatewayTimeout,
 					Message:  errorResponse,
 					Internal: err,
 				}

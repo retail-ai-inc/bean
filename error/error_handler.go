@@ -112,7 +112,7 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 			})
 		}
 
-	case http.StatusServiceUnavailable:
+	case http.StatusGatewayTimeout:
 		if viper.GetBool("sentry.on") {
 			if hub := sentryecho.GetHubFromContext(c); hub != nil {
 				hub.CaptureException(he.Internal)
