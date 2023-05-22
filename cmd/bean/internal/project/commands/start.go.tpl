@@ -74,10 +74,10 @@ func start(cmd *cobra.Command, args []string) {
 	)
 
 	// Add custom context timeout middleware in here.
-    b.UseContextTimeout(map[string]string{
-        "errorCode": "100004",
-        "errorMsg":  "timeout",
-    })
+	b.UseContextTimeout(map[string]string{
+		"errorCode": "100004",
+		"errorMsg":  "timeout",
+	})
 
 	// Set custom error handler function here.
 	// Bean use a error function chain inside the default http error handler,
