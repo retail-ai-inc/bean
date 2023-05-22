@@ -525,27 +525,6 @@ func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
 	}
 }
 
-func (b *Bean) UseContextTimeout(errorResponse interface{}) {
-	timeoutErrorHandler := func(err error, c echo.Context) error {
-		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				return &echo.HTTPError{
-					Code:     http.StatusGatewayTimeout,
-					Message:  errorResponse,
-					Internal: err,
-				}
-			}
-			return err
-		}
-		return nil
-	}
-
-	b.Echo.Use(echomiddleware.ContextTimeoutWithConfig(echomiddleware.ContextTimeoutConfig{
-		Timeout:      BeanConfig.HTTP.Timeout,
-		ErrorHandler: timeoutErrorHandler,
-	}))
-}
-
 // InitDB initialize all the database dependencies and store it in global variable `global.DBConn`.
 func (b *Bean) InitDB() {
 	var masterMySQLDB *gorm.DB
@@ -702,4 +681,26 @@ func openFile(path string) (*os.File, error) {
 		}
 	}
 	return os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0664)
+}
+
+// ContextTimeout return custom context timeout middleware
+func ContextTimeout(errorResponse interface{}) echo.MiddlewareFunc {
+	timeoutErrorHandler := func(err error, c echo.Context) error {
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return &echo.HTTPError{
+					Code:     http.StatusGatewayTimeout,
+					Message:  errorResponse,
+					Internal: err,
+				}
+			}
+			return err
+		}
+		return nil
+	}
+
+	return echomiddleware.ContextTimeoutWithConfig(echomiddleware.ContextTimeoutConfig{
+		Timeout:      BeanConfig.HTTP.Timeout,
+		ErrorHandler: timeoutErrorHandler,
+	})
 }
