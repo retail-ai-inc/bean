@@ -71,10 +71,6 @@ func start(cmd *cobra.Command, args []string) {
 
 	// Set custom middleware in here.
 	b.UseMiddlewares(
-		bean.ContextTimeout(map[string]string{
-			"errorCode": "100004",
-			"errorMsg":  "timeout",
-		}),
 		// Example:
 		middlewares.Example("example middleware"),
 	)

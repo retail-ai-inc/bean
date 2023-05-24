@@ -118,9 +118,15 @@ type Config struct {
 		BodyLimit       string
 		IsHttpsRedirect bool
 		Timeout         time.Duration
-		KeepAlive       bool
-		AllowedMethod   []string
-		SSL             struct {
+		TimeoutMessage  struct {
+			Json []struct {
+				Key   string
+				Value string
+			}
+		}
+		KeepAlive     bool
+		AllowedMethod []string
+		SSL           struct {
 			On            bool
 			CertFile      string
 			PrivFile      string
@@ -362,6 +368,25 @@ func NewEcho() *echo.Echo {
 		}
 		accessLogger := middleware.AccessLoggerWithConfig(accessLogConfig)
 		e.Use(accessLogger)
+	}
+
+	// Add context timeout.
+	// If no timeout is set or timeout=0, skip adding the timeout middleware.
+	timeoutDur := BeanConfig.HTTP.Timeout
+	if timeoutDur > 0 {
+		var message = make(map[string]interface{})
+		for _, v := range BeanConfig.HTTP.TimeoutMessage.Json {
+			message[v.Key] = v.Value
+		}
+
+		if len(message) == 0 {
+			message = map[string]interface{}{
+				"errorCode": "100004",
+				"errorMsg":  "timeout",
+			}
+		}
+
+		e.Use(ContextTimeout(message, timeoutDur))
 	}
 
 	// IMPORTANT: Capturing error and send to sentry if needed.
@@ -684,7 +709,7 @@ func openFile(path string) (*os.File, error) {
 }
 
 // ContextTimeout return custom context timeout middleware
-func ContextTimeout(errorResponse interface{}) echo.MiddlewareFunc {
+func ContextTimeout(errorResponse interface{}, timeout time.Duration) echo.MiddlewareFunc {
 	timeoutErrorHandler := func(err error, c echo.Context) error {
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
@@ -700,7 +725,7 @@ func ContextTimeout(errorResponse interface{}) echo.MiddlewareFunc {
 	}
 
 	return echomiddleware.ContextTimeoutWithConfig(echomiddleware.ContextTimeoutConfig{
-		Timeout:      BeanConfig.HTTP.Timeout,
+		Timeout:      timeout,
 		ErrorHandler: timeoutErrorHandler,
 	})
 }
