@@ -118,8 +118,16 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 				hub.CaptureException(he.Internal)
 			}
 		}
+
+		// Get from env.json file.
+		html504File := viper.GetString("http.timeoutMessage.html.file")
+
 		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
-			err = c.Render(he.Code, "errors/html/504", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+			if html504File != "" {
+				err = c.Render(he.Code, html504File, echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+			} else {
+				err = c.Render(he.Code, "errors/html/504", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+			}
 		} else {
 			err = c.JSON(he.Code, he.Message)
 		}

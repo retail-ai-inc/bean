@@ -123,6 +123,9 @@ type Config struct {
 				Key   string
 				Value string
 			}
+			Html struct {
+				File string
+			}
 		}
 		KeepAlive     bool
 		AllowedMethod []string
@@ -379,6 +382,7 @@ func NewEcho() *echo.Echo {
 			message[v.Key] = v.Value
 		}
 
+		// Set default response if not set via env.json
 		if len(message) == 0 {
 			message = map[string]interface{}{
 				"errorCode": "100004",
