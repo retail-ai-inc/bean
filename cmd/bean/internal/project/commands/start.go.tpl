@@ -71,15 +71,8 @@ func start(cmd *cobra.Command, args []string) {
 
 	// Set custom middleware in here.
 	b.UseMiddlewares(
-		echomiddleware.TimeoutWithConfig(echomiddleware.TimeoutConfig{
-			ErrorMessage:               `{"errorCode": "100004", "errorMsg": "timeout"}`,
-			OnTimeoutRouteErrorHandler: berror.OnTimeoutRouteErrorHandler,
-			Timeout:                    bean.BeanConfig.HTTP.Timeout,
-		}),
 		// Example:
 		middlewares.Example("example middleware"),
-		// IMPORTANT: The following line will produce a proper stack trace if error occurred. Keep it as the last parameter/middleware here.
-        echomiddleware.Recover(),
 	)
 
 	// Set custom error handler function here.

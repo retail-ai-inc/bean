@@ -93,7 +93,6 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 	var err error
 	switch he.Code {
 	case http.StatusNotFound:
-
 		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
 			err = c.Render(he.Code, "errors/html/404", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
 		} else {
@@ -104,7 +103,6 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 		}
 
 	case http.StatusMethodNotAllowed:
-
 		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
 			err = c.Render(he.Code, "errors/html/405", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
 		} else {
@@ -112,6 +110,18 @@ func EchoHTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 				ErrorCode: METHOD_NOT_ALLOWED,
 				ErrorMsg:  he.Message,
 			})
+		}
+
+	case http.StatusGatewayTimeout:
+		if viper.GetBool("sentry.on") {
+			if hub := sentryecho.GetHubFromContext(c); hub != nil {
+				hub.CaptureException(he.Internal)
+			}
+		}
+		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
+			err = c.Render(he.Code, "errors/html/504", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+		} else {
+			err = c.JSON(he.Code, he.Message)
 		}
 
 	default:
