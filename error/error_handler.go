@@ -24,6 +24,7 @@ package error
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -59,6 +60,8 @@ func APIErrorHanderFunc(e error, c echo.Context) (bool, error) {
 	if !ok {
 		return false, nil
 	}
+	log.Printf("he: %#v\n", he)
+	log.Printf("he.Err == nil: %#v\n", he.Err == nil)
 
 	if he.HTTPStatusCode >= 404 {
 		c.Logger().Error(he.Error())
