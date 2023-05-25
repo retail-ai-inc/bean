@@ -65,5 +65,8 @@ func (e *APIError) String() string {
 // This function need to be call explicitly because the APIError embedded the *stacktrace.Stack which already implemented the Format()
 // function and treat it as a formatter. Example: fmt.Println(e.String())
 func (e *APIError) Error() string {
-	return e.Err.Error()
+	if e.Err != nil {
+		return e.Err.Error()
+	}
+	return "No error detail available"
 }
