@@ -137,6 +137,15 @@ type Config struct {
 					File string
 				}
 			}
+			E500 struct {
+				Json []struct {
+					Key   string
+					Value string
+				}
+				Html struct {
+					File string
+				}
+			}
 			E504 struct {
 				Json []struct {
 					Key   string
