@@ -135,7 +135,7 @@ func HTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 
 		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
 			// Get from env.json file.
-			html500File := viper.GetString("http.errorMessage.default.html.file")
+			html500File := viper.GetString("http.errorMessage.e500.html.file")
 			if html500File != "" {
 				err = c.Render(he.Code, html500File, echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
 			} else {
@@ -143,7 +143,7 @@ func HTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 			}
 		} else {
 			// Get from env.json file.
-			def := viper.GetStringMap("http.errorMessage.default")
+			def := viper.GetStringMap("http.errorMessage.e500")
 			if val, ok := def["json"]; ok {
 				err = c.JSON(he.Code, val)
 			} else {
@@ -172,7 +172,7 @@ func HTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 			if val, ok := e504["json"]; ok {
 				err = c.JSON(he.Code, val)
 			} else {
-				err = c.JSON(he.Code, errorResp{ErrorCode: TIMEOUT, ErrorMsg: "gateway timeout"})
+				err = c.JSON(he.Code, errorResp{ErrorCode: TIMEOUT, ErrorMsg: he.Message})
 			}
 		}
 

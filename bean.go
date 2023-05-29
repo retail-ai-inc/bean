@@ -744,7 +744,7 @@ func ContextTimeout(timeout time.Duration) echo.MiddlewareFunc {
 			if errors.Is(err, context.DeadlineExceeded) {
 				return &echo.HTTPError{
 					Code:     http.StatusGatewayTimeout,
-					Message:  nil,
+					Message:  "gateway timeout",
 					Internal: err,
 				}
 			}
