@@ -79,9 +79,9 @@ func start(cmd *cobra.Command, args []string) {
 	// Bean use a error function chain inside the default http error handler,
 	// so that it can easily add or remove the different kind of error handling.
 	b.UseErrorHandlerFuncs(
-		berror.ValidationErrorHanderFunc,
-		berror.APIErrorHanderFunc,
-		berror.EchoHTTPErrorHanderFunc,
+		berror.ValidationErrorHanderFunc, // You can use your own custom validation error handler func.
+		berror.APIErrorHanderFunc, // You can use your own custom API error handler func.
+		berror.HTTPErrorHanderFunc,
 		// Set your custom error handler func here, for example:
 		// func(e error, c echo.Context) (bool, error) {
 		// 	return false, nil

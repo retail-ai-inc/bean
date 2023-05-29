@@ -82,19 +82,19 @@ func TestAPIErrorHanderFunc(t *testing.T) {
 	e.ReleaseContext(c)
 }
 
-func TestEchoHTTPErrorHanderFunc(t *testing.T) {
+func TestHTTPErrorHanderFunc(t *testing.T) {
 	e := echo.New()
 	c := e.AcquireContext()
 	c.SetRequest(httptest.NewRequest("", "/", nil))
 	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e))
 
 	fakeErr := &fakeError{"fake"}
-	got, err := EchoHTTPErrorHanderFunc(fakeErr, c)
+	got, err := HTTPErrorHanderFunc(fakeErr, c)
 	assert.NoError(t, err)
 	assert.Equal(t, false, got)
 
 	echoHTTPErr := echo.NewHTTPError(http.StatusInternalServerError, "internal")
-	got, err = EchoHTTPErrorHanderFunc(echoHTTPErr, c)
+	got, err = HTTPErrorHanderFunc(echoHTTPErr, c)
 	assert.NoError(t, err)
 	assert.Equal(t, true, got)
 
