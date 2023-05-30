@@ -90,23 +90,6 @@ func HTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 
 	c.Logger().Error(he)
 
-	var converter = func(data interface{}) interface{} {
-		slice, ok := data.([]interface{})
-		if !ok {
-			return data
-		}
-
-		var message = make(map[string]interface{})
-		for _, v := range slice {
-			m, ok := v.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			message[m["key"].(string)] = m["value"]
-		}
-		return message
-	}
-
 	// Return different response based on some defined error.
 	var err error
 	switch he.Code {
@@ -255,7 +238,7 @@ func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
 	// Get from env.json file.
 	def := viper.GetStringMap("http.errorMessage.default")
 	if val, ok := def["json"]; ok {
-		err = c.JSON(http.StatusInternalServerError, val)
+		err = c.JSON(http.StatusInternalServerError, converter(val))
 	} else {
 		err = c.JSON(http.StatusInternalServerError, errorResp{
 			ErrorCode: INTERNAL_SERVER_ERROR,
@@ -264,4 +247,21 @@ func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
 	}
 
 	return true, err
+}
+
+func converter(data interface{}) interface{} {
+	slice, ok := data.([]interface{})
+	if !ok {
+		return data
+	}
+
+	var message = make(map[string]interface{})
+	for _, v := range slice {
+		m, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		message[m["key"].(string)] = m["value"]
+	}
+	return message
 }
