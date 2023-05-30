@@ -106,7 +106,7 @@ func HTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 			// Get from env.json file.
 			e404 := viper.GetStringMap("http.errorMessage.e404")
 			if val, ok := e404["json"]; ok {
-				err = c.JSON(he.Code, val)
+				err = c.JSON(he.Code, converter(val))
 			} else {
 				err = c.JSON(he.Code, errorResp{ErrorCode: RESOURCE_NOT_FOUND, ErrorMsg: he.Message})
 			}
@@ -119,7 +119,7 @@ func HTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 			// Get from env.json file.
 			e405 := viper.GetStringMap("http.errorMessage.e405")
 			if val, ok := e405["json"]; ok {
-				err = c.JSON(he.Code, val)
+				err = c.JSON(he.Code, converter(val))
 			} else {
 				err = c.JSON(he.Code, errorResp{ErrorCode: METHOD_NOT_ALLOWED, ErrorMsg: he.Message})
 			}
@@ -145,7 +145,7 @@ func HTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 			// Get from env.json file.
 			def := viper.GetStringMap("http.errorMessage.e500")
 			if val, ok := def["json"]; ok {
-				err = c.JSON(he.Code, val)
+				err = c.JSON(he.Code, converter(val))
 			} else {
 				err = c.JSON(he.Code, errorResp{ErrorCode: INTERNAL_SERVER_ERROR, ErrorMsg: he.Message})
 			}
@@ -170,7 +170,7 @@ func HTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 			// Get from env.json file.
 			e504 := viper.GetStringMap("http.errorMessage.e504")
 			if val, ok := e504["json"]; ok {
-				err = c.JSON(he.Code, val)
+				err = c.JSON(he.Code, converter(val))
 			} else {
 				err = c.JSON(he.Code, errorResp{ErrorCode: TIMEOUT, ErrorMsg: he.Message})
 			}
@@ -196,7 +196,7 @@ func HTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 			// Get from env.json file.
 			def := viper.GetStringMap("http.errorMessage.default")
 			if val, ok := def["json"]; ok {
-				err = c.JSON(he.Code, val)
+				err = c.JSON(he.Code, converter(val))
 			} else {
 				err = c.JSON(he.Code, errorResp{ErrorCode: INTERNAL_SERVER_ERROR, ErrorMsg: he.Message})
 			}
@@ -238,7 +238,7 @@ func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
 	// Get from env.json file.
 	def := viper.GetStringMap("http.errorMessage.default")
 	if val, ok := def["json"]; ok {
-		err = c.JSON(http.StatusInternalServerError, val)
+		err = c.JSON(http.StatusInternalServerError, converter(val))
 	} else {
 		err = c.JSON(http.StatusInternalServerError, errorResp{
 			ErrorCode: INTERNAL_SERVER_ERROR,
@@ -247,4 +247,21 @@ func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
 	}
 
 	return true, err
+}
+
+func converter(data interface{}) interface{} {
+	slice, ok := data.([]interface{})
+	if !ok {
+		return data
+	}
+
+	var message = make(map[string]interface{})
+	for _, v := range slice {
+		m, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		message[m["key"].(string)] = m["value"]
+	}
+	return message
 }
