@@ -468,7 +468,7 @@ fmt.Println(string) // will print 0.1
 
 ---
 **helpers.SingleDoChan[T any](ctx context.Context, key string, call sfCallback, retry int, ttl ...time.Duration)** 
-- SingleDoChan provides a duplicate function call suppression mechanism using singleflight.Group. It ensures that only one execution is in-flight for a given key at a time and returns the results of the given function. Duplicate calls wait for the first call to complete and receive the same results. Additionally, SingleDoChan implements retry logic in case the callback function returns an error, and an optional ttl parameter. This helper is useful for handling concurrent requests that need to access a shared resource, such as cache penetration.
+- SingleDoChan provides a duplicate function call suppression mechanism using singleflight.Group. It ensures that only one execution is in-flight for a given key at a time and returns the results of the given function. Duplicate calls wait for the first call to complete and receive the same results. Additionally, SingleDoChan implements retry logic in case the callback function returns an error, and an optional ttl parameter. This helper is useful for handling concurrent requests that need to access a shared resource, which would cause problems such as race conditons, deadlocks, cache penetration etc.
 - Make sure the uniqueness of the `key` in different situations. 
 - `retry` refers to the number of times the `call` function will be repeated if it fails.
 - `ttl` represents the expiration time of the `key`.
