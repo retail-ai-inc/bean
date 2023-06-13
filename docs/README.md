@@ -475,9 +475,9 @@ fmt.Println(string) // will print 0.1
 
 example:
 ```
-	data, err := helpers.SingleDoChan[string](c, redisKey, func() (interface{}, error) {
-		return "data",nil
-	}, 2, time.Second)
+data, err := helpers.SingleDoChan[string](c, redisKey, func() (interface{}, error) {
+    return "data",nil
+}, 2, time.Second)
 ```
 
 ## Bean Config 
