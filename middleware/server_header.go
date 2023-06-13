@@ -23,6 +23,8 @@
 package middleware
 
 import (
+	"path"
+
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/helpers"
@@ -40,12 +42,7 @@ func ServerHeader(name, version string) echo.MiddlewareFunc {
 				defer span.Finish()
 			}
 
-			if version == "" {
-				c.Response().Header().Set(echo.HeaderServer, name)
-				return next(c)
-			}
-
-			c.Response().Header().Set(echo.HeaderServer, name+"/"+version)
+			c.Response().Header().Set(echo.HeaderServer, path.Join(name, version))
 			return next(c)
 		}
 	}
