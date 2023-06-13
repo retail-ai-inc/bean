@@ -475,7 +475,7 @@ fmt.Println(string) // will print 0.1
 
 example:
 ```
-data, err := helpers.SingleDoChan[string](c, redisKey, func() (interface{}, error) {
+data, err := helpers.SingleDoChan[string](c, "key", func() (interface{}, error) {
     return "data",nil
 }, 2, time.Second)
 ```
