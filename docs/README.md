@@ -467,7 +467,7 @@ fmt.Println(string) // will print 0.1
 ```
 
 ---
-**helpers.SingleDoChan[T any](ctx context.Context, key string, call sfCallback, retry int, ttl ...time.Duration)** 
+**helpers.SingleDoChan[T any](ctx context.Context, key string, call func()(T,error), retry int, ttl ...time.Duration)** 
 - SingleDoChan will provides a duplicate function call suppression mechanism.It returns the results of the given function, making sure that only one execution is in-flight for a given key at a time. If a duplicate comes in, the duplicate caller waits for the original to complete and receives the same results.
 - Make sure the uniqueness of the `key` in different situations. 
 - `retry` refers to the number of times the `call` function will be repeated if it fails.
@@ -475,7 +475,7 @@ fmt.Println(string) // will print 0.1
 
 example:
 ```
-data, err := helpers.SingleDoChan[string](c, "key", func() (interface{}, error) {
+data, err := helpers.SingleDoChan(c, "key", func() (string, error) {
     return "data",nil
 }, 2, time.Second)
 ```
