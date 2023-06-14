@@ -9,15 +9,13 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-type sfCallback func() (interface{}, error)
-
 var (
 	singleFlightGroup = new(singleflight.Group)
 	waitTime          = time.Duration(100) * time.Millisecond
 	maxWaitTime       = time.Duration(2000) * time.Millisecond
 )
 
-func SingleDoChan[T any](ctx context.Context, key string, call sfCallback, retry int, ttl ...time.Duration) (data T, err error) {
+func SingleDoChan[T any](ctx context.Context, key string, call func() (T, error), retry int, ttl ...time.Duration) (data T, err error) {
 	result := singleFlightGroup.DoChan(key, func() (result interface{}, err error) {
 		defer func() {
 			if e := recover(); e != nil {
