@@ -61,10 +61,7 @@ func SingleDoChan[T any](ctx context.Context, key string, call func() (T, error)
 		}
 		return val, nil
 	case <-ctx.Done():
-		if ctx.Err() != nil {
-			err = ctx.Err()
-			return
-		}
+		err = errors.WithStack(ctx.Err())
+		return
 	}
-	return
 }

@@ -24,6 +24,7 @@ package error
 
 import (
 	"errors"
+	"html/template"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -31,9 +32,13 @@ import (
 
 	validatorV10 "github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
+	"github.com/retail-ai-inc/bean/echoview"
+	"github.com/retail-ai-inc/bean/goview"
 	"github.com/retail-ai-inc/bean/validator"
 	"github.com/stretchr/testify/assert"
 )
+
+const TEST_VIEWS_ROOT string = "../cmd/bean/internal/project/views"
 
 type dummyWriter struct{ io.Writer }
 
@@ -84,6 +89,15 @@ func TestAPIErrorHanderFunc(t *testing.T) {
 
 func TestHTTPErrorHanderFunc(t *testing.T) {
 	e := echo.New()
+	e.Renderer = echoview.New(goview.Config{
+		Root:         TEST_VIEWS_ROOT,
+		Extension:    ".html",
+		Master:       "templates/master",
+		Partials:     []string{},
+		Funcs:        make(template.FuncMap),
+		DisableCache: true,
+		Delims:       goview.Delims{Left: "{{", Right: "}}"},
+	})
 	c := e.AcquireContext()
 	c.SetRequest(httptest.NewRequest("", "/", nil))
 	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e))
@@ -103,6 +117,15 @@ func TestHTTPErrorHanderFunc(t *testing.T) {
 
 func TestDefaultErrorHanderFunc(t *testing.T) {
 	e := echo.New()
+	e.Renderer = echoview.New(goview.Config{
+		Root:         TEST_VIEWS_ROOT,
+		Extension:    ".html",
+		Master:       "templates/master",
+		Partials:     []string{},
+		Funcs:        make(template.FuncMap),
+		DisableCache: true,
+		Delims:       goview.Delims{Left: "{{", Right: "}}"},
+	})
 	c := e.AcquireContext()
 	c.SetRequest(httptest.NewRequest("", "/", nil))
 	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e))

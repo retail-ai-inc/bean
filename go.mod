@@ -20,6 +20,7 @@ require (
 	github.com/stretchr/testify v1.8.1
 	github.com/valyala/fasttemplate v1.2.2
 	go.mongodb.org/mongo-driver v1.8.2
+	golang.org/x/sync v0.1.0
 	gorm.io/datatypes v1.0.5
 	gorm.io/driver/mysql v1.2.3
 	gorm.io/gorm v1.22.5
@@ -74,7 +75,6 @@ require (
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/crypto v0.6.0 // indirect
 	golang.org/x/net v0.7.0 // indirect
-	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
