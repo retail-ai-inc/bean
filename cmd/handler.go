@@ -71,20 +71,20 @@ Example :- "bean create handler post" will create a handler Post in handlers fol
 func handler(cmd *cobra.Command, args []string) {
 	beanCheck := beanInitialisationCheck() // This function will display an error message on the terminal.
 	if !beanCheck {
-		return
+		os.Exit(1)
 	}
 
 	wd, err := os.Getwd()
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	userHandlerName := args[0]
 	handlerName, err := getHandlerName(userHandlerName)
 	if err != nil {
 		fmt.Println(handlerValidationRule)
-		return
+		os.Exit(1)
 	}
 
 	handlerFilesPath := wd + "/handlers/"
@@ -94,7 +94,7 @@ func handler(cmd *cobra.Command, args []string) {
 	_, err = os.Stat(handlerFilesPath + handlerFileName + ".go")
 	if err == nil {
 		fmt.Println("Handler with name " + handlerFileName + " already exists.")
-		return
+		os.Exit(1)
 	}
 
 	p := &Project{
@@ -105,13 +105,13 @@ func handler(cmd *cobra.Command, args []string) {
 	// Set the relative root path of the internal templates folder.
 	if p.RootFS, err = fs.Sub(InternalFS, "internal/_tpl"); err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	p.PkgPath, err = getPackagePathNameFromEnv(p)
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	// Reading the base handler file.
@@ -120,7 +120,7 @@ func handler(cmd *cobra.Command, args []string) {
 	file, err := p.RootFS.Open(baseHandlerFilePath)
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	defer file.Close()
@@ -128,13 +128,13 @@ func handler(cmd *cobra.Command, args []string) {
 	fileData, err := ioutil.ReadAll(file)
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	tmpl, err := template.New("").Parse(string(fileData))
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	var handler Handler
@@ -152,7 +152,7 @@ func handler(cmd *cobra.Command, args []string) {
 	handlerFileCreate, err := os.Create(handlerFilesPath + handlerFileName + ".go")
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	defer handlerFileCreate.Close()
@@ -160,7 +160,7 @@ func handler(cmd *cobra.Command, args []string) {
 	err = tmpl.Execute(handlerFileCreate, handler)
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	routerFilesPath := wd + "/routers/"

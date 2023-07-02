@@ -63,7 +63,7 @@ func init() {
 func docker(cmd *cobra.Command, args []string) {
 	beanCheck := beanInitialisationCheck() // This function will display an error message on the terminal.
 	if !beanCheck {
-		return
+		os.Exit(1)
 	}
 
 	wd, err := os.Getwd()
@@ -77,7 +77,7 @@ func docker(cmd *cobra.Command, args []string) {
 	_, err = os.Stat(dockerfilePath)
 	if err == nil {
 		fmt.Println("Dockerfile already exists!")
-		return
+		os.Exit(1)
 	}
 
 	p := &Project{
@@ -150,7 +150,7 @@ func docker(cmd *cobra.Command, args []string) {
 	_, err = os.Stat(dockerComposefilePath)
 	if err == nil {
 		fmt.Println("docker-compose.yml file already exists!")
-		return
+		os.Exit(1)
 	}
 
 	// Reading the base docker-compose.yml.

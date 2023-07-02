@@ -66,20 +66,20 @@ Example :- "bean create command test" will create a command test in the commands
 func command(cmd *cobra.Command, args []string) {
 	beanCheck := beanInitialisationCheck() // This function will display an error message on the terminal.
 	if !beanCheck {
-		return
+		os.Exit(1)
 	}
 
 	wd, err := os.Getwd()
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	userCommandName := args[0]
 	commandName, err := getCommandName(userCommandName)
 	if err != nil {
 		fmt.Println(commandValidationRule)
-		return
+		os.Exit(1)
 	}
 
 	commandFilesPath := wd + "/commands/"
@@ -100,7 +100,7 @@ func command(cmd *cobra.Command, args []string) {
 	// Set the relative root path of the internal templates folder.
 	if p.RootFS, err = fs.Sub(InternalFS, "internal/_tpl"); err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	// Reading the base command file.
@@ -109,18 +109,18 @@ func command(cmd *cobra.Command, args []string) {
 	file, err := p.RootFS.Open(baseCommandFilePath)
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 	fileData, err := ioutil.ReadAll(file)
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	tmpl, err := template.New("").Parse(string(fileData))
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 
 	var command Command
@@ -129,14 +129,14 @@ func command(cmd *cobra.Command, args []string) {
 	commandFileCreate, err := os.Create(commandFilesPath + commandFileName + ".go")
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 	defer commandFileCreate.Close()
 
 	err = tmpl.Execute(commandFileCreate, command)
 	if err != nil {
 		fmt.Println(err)
-		return
+		os.Exit(1)
 	}
 	fmt.Printf("command with name %s and command file %s.go created\n", commandName, commandFileName)
 }
