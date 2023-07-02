@@ -1,0 +1,26 @@
+version: '3.7'
+
+services:
+  monaka:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    init: true
+    tty: true
+    hostname: {{.ProjectObject.PkgPath}}
+    container_name: {{.ProjectObject.PkgPath}}
+    command: air
+    volumes:
+      - .:/app:rw
+      - ~/go/pkg:/go/pkg
+    security_opt:
+      - "seccomp:unconfined"
+    ports:
+      - {{.AppPort}}:{{.AppPort}}
+      - 40000:40000
+    networks:
+      - backend
+
+networks:
+  backend:
+    external: true
