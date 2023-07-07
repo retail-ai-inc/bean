@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io/fs"
 	"io/ioutil"
-	"log"
 	"os"
 	"strings"
 	"text/template"
@@ -74,14 +73,15 @@ Example :- "bean create service post" will create a service Post in the services
 )
 
 func service(cmd *cobra.Command, args []string) {
-	beanCheck := beanInitialisationCheck()
+	beanCheck := beanInitialisationCheck() // This function will display an error message on the terminal.
 	if !beanCheck {
-		log.Fatalln("env.json for bean not found!!")
+		os.Exit(1)
 	}
 
 	wd, err := os.Getwd()
 	if err != nil {
-		log.Fatalln(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	var reposParamForSvcs []string
@@ -102,7 +102,8 @@ func service(cmd *cobra.Command, args []string) {
 	userServiceName := args[0]
 	serviceName, err := getServiceName(userServiceName)
 	if err != nil {
-		log.Fatalln(serviceValidationRule)
+		fmt.Println(serviceValidationRule)
+		os.Exit(1)
 	}
 
 	serviceFilesPath := wd + "/services/"
@@ -111,7 +112,8 @@ func service(cmd *cobra.Command, args []string) {
 	// check if service already exists.
 	_, err = os.Stat(serviceFilesPath + serviceFileName + ".go")
 	if err == nil {
-		log.Fatalln("Service with name " + serviceFileName + " already exists.")
+		fmt.Println("Service with name " + serviceFileName + " already exists.")
+		os.Exit(1)
 	}
 
 	p := &Project{
@@ -121,13 +123,14 @@ func service(cmd *cobra.Command, args []string) {
 
 	// Set the relative root path of the internal templates folder.
 	if p.RootFS, err = fs.Sub(InternalFS, "internal/_tpl"); err != nil {
-		log.Fatalln(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	p.PkgPath, err = getPackagePathNameFromEnv(p)
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	// Reading the base service file.
@@ -135,19 +138,19 @@ func service(cmd *cobra.Command, args []string) {
 
 	file, err := p.RootFS.Open(baseServiceFilePath)
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 	fileData, err := ioutil.ReadAll(file)
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	tmpl, err := template.New("").Parse(string(fileData))
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	var service Service
@@ -163,14 +166,14 @@ func service(cmd *cobra.Command, args []string) {
 	service.ServiceNameUpper = serviceName
 	serviceFileCreate, err := os.Create(serviceFilesPath + serviceFileName + ".go")
 	if err != nil {
-		log.Println(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	err = tmpl.Execute(serviceFileCreate, service)
 	if err != nil {
-		log.Println(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	// IMPORTANT: Instead of `defer` let's close the service file so that we can open it again if requires.
@@ -326,7 +329,8 @@ func getServiceName(serviceName string) (string, error) {
 			fmt.Println(errs.Error())
 			return "", errs
 		}
-		log.Fatalln(errs)
+		fmt.Println(errs)
+		os.Exit(1)
 	}
 
 	serviceName = strings.ToUpper(serviceName[:1]) + strings.ToLower(serviceName[1:])
@@ -337,7 +341,8 @@ func getServiceName(serviceName string) (string, error) {
 func checkRepoExists(repoName string) bool {
 	wd, err := os.Getwd()
 	if err != nil {
-		log.Fatalln(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 	repoFilesPath := wd + "/repositories/"
 	_, err = os.Stat(repoFilesPath + repoName + ".go")
@@ -349,7 +354,6 @@ func getPackagePathNameFromEnv(p *Project) (string, error) {
 	viper.SetConfigType("json")
 	viper.SetConfigName("env")
 	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalln(err)
 		return "", err
 	}
 	packagePath := viper.GetString("packagePath")

@@ -29,22 +29,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var createCmd = &cobra.Command{
+	Use:       "create",
+	Short:     "Enable user to create new handler, service, repository, command and docker file",
+	Long:      `This command requires a sub command parameter to create a new command, repository, service, handler and docker template.`,
+	Args:      cobra.ExactValidArgs(1),
+	ValidArgs: []string{"repo", "service", "handler", "command", "docker"},
+}
+
 func init() {
 	createCmd.DisableFlagsInUseLine = true
 	rootCmd.AddCommand(createCmd)
 }
 
-var createCmd = &cobra.Command{
-	Use:       "create",
-	Short:     "Enable user to create new handler, service, repository and command file",
-	Long:      `This command requires a sub command parameter to create a new command, repository, service and handler template.`,
-	Args:      cobra.ExactValidArgs(1),
-	ValidArgs: []string{"repo", "service", "handler", "command"},
-}
-
 func beanInitialisationCheck() bool {
 	if _, err := os.Stat("env.json"); errors.Is(err, os.ErrNotExist) {
-		fmt.Println("env.json not found")
+		fmt.Println("Your application env.json is not found!")
 		return false
 	}
 	return true

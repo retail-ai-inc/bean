@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"io/fs"
 	"io/ioutil"
-	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -70,20 +69,22 @@ Example :- "bean create handler post" will create a handler Post in handlers fol
 )
 
 func handler(cmd *cobra.Command, args []string) {
-	beanCheck := beanInitialisationCheck()
+	beanCheck := beanInitialisationCheck() // This function will display an error message on the terminal.
 	if !beanCheck {
-		log.Fatalln("env.json for bean not found!!")
+		os.Exit(1)
 	}
+
 	wd, err := os.Getwd()
 	if err != nil {
-		log.Fatalln(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	userHandlerName := args[0]
 	handlerName, err := getHandlerName(userHandlerName)
-	// fmt.Println("handlerName", handlerName)
 	if err != nil {
-		log.Fatalln(handlerValidationRule)
+		fmt.Println(handlerValidationRule)
+		os.Exit(1)
 	}
 
 	handlerFilesPath := wd + "/handlers/"
@@ -92,7 +93,8 @@ func handler(cmd *cobra.Command, args []string) {
 	// check if handler already exists.
 	_, err = os.Stat(handlerFilesPath + handlerFileName + ".go")
 	if err == nil {
-		log.Fatalln("Handler with name " + handlerFileName + " already exists.")
+		fmt.Println("Handler with name " + handlerFileName + " already exists.")
+		os.Exit(1)
 	}
 
 	p := &Project{
@@ -102,13 +104,14 @@ func handler(cmd *cobra.Command, args []string) {
 
 	// Set the relative root path of the internal templates folder.
 	if p.RootFS, err = fs.Sub(InternalFS, "internal/_tpl"); err != nil {
-		log.Fatalln(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	p.PkgPath, err = getPackagePathNameFromEnv(p)
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	// Reading the base handler file.
@@ -116,22 +119,22 @@ func handler(cmd *cobra.Command, args []string) {
 
 	file, err := p.RootFS.Open(baseHandlerFilePath)
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	defer file.Close()
 
 	fileData, err := ioutil.ReadAll(file)
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	tmpl, err := template.New("").Parse(string(fileData))
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	var handler Handler
@@ -148,16 +151,16 @@ func handler(cmd *cobra.Command, args []string) {
 	handler.HandlerNameUpper = handlerName
 	handlerFileCreate, err := os.Create(handlerFilesPath + handlerFileName + ".go")
 	if err != nil {
-		log.Println(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	defer handlerFileCreate.Close()
 
 	err = tmpl.Execute(handlerFileCreate, handler)
 	if err != nil {
-		log.Println(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	routerFilesPath := wd + "/routers/"
@@ -196,7 +199,8 @@ func getHandlerName(handlerName string) (string, error) {
 			fmt.Println(errs.Error())
 			return "", errs
 		}
-		log.Fatalln(errs)
+		fmt.Println(errs)
+		os.Exit(1)
 	}
 
 	handlerName = strings.ToUpper(handlerName[:1]) + strings.ToLower(handlerName[1:])
@@ -207,7 +211,8 @@ func getHandlerName(handlerName string) (string, error) {
 func checkServiceExists(repoName string) bool {
 	wd, err := os.Getwd()
 	if err != nil {
-		log.Fatalln(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	serviceFilesPath := wd + "/services/"
@@ -243,7 +248,6 @@ func matchTextInFileAndReturnFirstOccurrenceLineNumber(filePath string, needle s
 
 // Insert sting to n-th line of file.
 func insertStringToNthLineOfFile(filePath, textToInsert string, lineNumber int) error {
-
 	f, err := os.Open(filePath)
 	if err != nil {
 		return err
@@ -313,7 +317,6 @@ func replaceStringFromFileByRegex(filePath, regex, additonal, replaceWith string
 	re := regexp.MustCompile(regex)
 	match := re.FindStringSubmatch(string(input))
 	if len(match) > 1 {
-
 		replaceMe := additonal + match[1]
 		output := bytes.Replace(input, []byte(replaceMe), []byte(replaceWith), -1)
 
@@ -326,14 +329,12 @@ func replaceStringFromFileByRegex(filePath, regex, additonal, replaceWith string
 }
 
 func replaceStringFromFileByExactMatches(filePath, replaceMe, replaceWith string) error {
-
 	input, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
 
 	output := bytes.Replace(input, []byte(replaceMe), []byte(replaceWith), -1)
-
 	if err = ioutil.WriteFile(filePath, output, 0664); err != nil {
 		return err
 	}

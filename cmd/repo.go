@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io/fs"
 	"io/ioutil"
-	"log"
 	"os"
 	"strings"
 	"text/template"
@@ -68,20 +67,22 @@ Example :- "bean create repo post" will create a repository Post in repositories
 )
 
 func repo(cmd *cobra.Command, args []string) {
-	beanCheck := beanInitialisationCheck()
+	beanCheck := beanInitialisationCheck() // This function will display an error message on the terminal.
 	if !beanCheck {
-		log.Fatalln("env.json for bean not found!!")
+		os.Exit(1)
 	}
 
 	wd, err := os.Getwd()
 	if err != nil {
-		log.Fatalln(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	userRepoName := args[0]
 	repoName, err := getRepoName(userRepoName)
 	if err != nil {
-		log.Fatalln(repoValidationRule)
+		fmt.Println(repoValidationRule)
+		os.Exit(1)
 	}
 
 	repoFilesPath := wd + "/repositories/"
@@ -90,7 +91,8 @@ func repo(cmd *cobra.Command, args []string) {
 	// check if repo already exists.
 	_, err = os.Stat(repoFilesPath + repoFileName + ".go")
 	if err == nil {
-		log.Fatalln("Repo with name " + repoFileName + " already exists.")
+		fmt.Println("Repo with name " + repoFileName + " already exists.")
+		os.Exit(1)
 	}
 
 	p := &Project{
@@ -100,7 +102,8 @@ func repo(cmd *cobra.Command, args []string) {
 
 	// Set the relative root path of the internal templates folder.
 	if p.RootFS, err = fs.Sub(InternalFS, "internal/_tpl"); err != nil {
-		log.Fatalln(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	// Reading the base repo file.
@@ -108,19 +111,19 @@ func repo(cmd *cobra.Command, args []string) {
 
 	file, err := p.RootFS.Open(baseRepoFilePath)
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 	fileData, err := ioutil.ReadAll(file)
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	tmpl, err := template.New("").Parse(string(fileData))
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	var repo Repo
@@ -130,15 +133,15 @@ func repo(cmd *cobra.Command, args []string) {
 
 	repoFileCreate, err := os.Create(repoFilesPath + repoFileName + ".go")
 	if err != nil {
-		log.Println(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 	defer repoFileCreate.Close()
 
 	err = tmpl.Execute(repoFileCreate, repo)
 	if err != nil {
-		log.Println(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	routerFilesPath := wd + "/routers/"
@@ -170,7 +173,8 @@ func getRepoName(repoName string) (string, error) {
 			fmt.Println(errs.Error())
 			return "", errs
 		}
-		log.Fatalln(errs)
+		fmt.Println(errs)
+		os.Exit(1)
 	}
 
 	repoName = strings.ToUpper(repoName[:1]) + strings.ToLower(repoName[1:])

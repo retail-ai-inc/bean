@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"io/fs"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	fpath "path"
@@ -55,34 +54,38 @@ directory. the suffix of the package_name should match the current directory.`,
 		Example: "bean init github.com/retail-ai-inc/bean",
 		Args:    cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-
 			pkgPath := args[0]
 			pkgName, err := getProjectName(pkgPath)
 			if err != nil {
-				log.Fatalln(validationRule)
+				fmt.Println(validationRule)
+				os.Exit(1)
 			}
 
 			wd, err := os.Getwd()
 			if err != nil {
-				log.Fatalln(err)
+				fmt.Println(err)
+				os.Exit(1)
 			}
 
 			// Generate a 32 character long random secret string.
 			secret, err := str.GenerateRandomString(32, false)
 			if err != nil {
-				log.Fatalln(err)
+				fmt.Println(err)
+				os.Exit(1)
 			}
 
 			// Generate a 24 character long random JWT secret string.
 			jwtSecret, err := str.GenerateRandomString(24, false)
 			if err != nil {
-				log.Fatalln(err)
+				fmt.Println(err)
+				os.Exit(1)
 			}
 
 			// Generate a 36 character long random token string.
 			bearerToken, err := str.GenerateRandomString(36, false)
 			if err != nil {
-				log.Fatalln(err)
+				fmt.Println(err)
+				os.Exit(1)
 			}
 
 			p := &Project{
@@ -97,12 +100,14 @@ directory. the suffix of the package_name should match the current directory.`,
 
 			// Set the relative root path of the internal FS.
 			if p.RootFS, err = fs.Sub(InternalFS, "internal/project"); err != nil {
-				log.Fatalln(err)
+				fmt.Println(err)
+				os.Exit(1)
 			}
 
 			fmt.Println("initializing " + p.PkgName + "...")
 			if err := fs.WalkDir(p.RootFS, ".", p.generateProjectFiles); err != nil {
-				log.Fatalln(err)
+				fmt.Println(err)
+				os.Exit(1)
 			}
 
 			fmt.Println("\ntidying go mod...")
@@ -110,7 +115,8 @@ directory. the suffix of the package_name should match the current directory.`,
 			goModTidyCmd.Stdout = os.Stdout
 			goModTidyCmd.Stderr = os.Stderr
 			if err := goModTidyCmd.Run(); err != nil {
-				log.Fatalln(err)
+				fmt.Println(err)
+				os.Exit(1)
 			}
 		},
 	}
@@ -128,7 +134,8 @@ func getProjectName(pkgPath string) (string, error) {
 		if errs, ok := errs.(validator.ValidationErrors); ok {
 			return "", errs
 		}
-		log.Fatalln(errs)
+		fmt.Println(errs)
+		os.Exit(1)
 	}
 
 	pathElements := strings.Split(pkgPath, "/")
@@ -137,7 +144,8 @@ func getProjectName(pkgPath string) (string, error) {
 			if errs, ok := errs.(validator.ValidationErrors); ok {
 				return "", errs
 			}
-			log.Fatalln(errs)
+			fmt.Println(errs)
+			os.Exit(1)
 		}
 	}
 
@@ -147,7 +155,8 @@ func getProjectName(pkgPath string) (string, error) {
 			if errs, ok := errs.(validator.ValidationErrors); ok {
 				return "", errs
 			}
-			log.Fatalln(errs)
+			fmt.Println(errs)
+			os.Exit(1)
 		}
 	}
 

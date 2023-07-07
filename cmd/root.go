@@ -23,8 +23,8 @@
 package cmd
 
 import (
+	"fmt"
 	"io/fs"
-	"log"
 	"os"
 	"runtime/debug"
 
@@ -101,7 +101,8 @@ func Execute(internalFS fs.FS) {
 	if bi, ok := debug.ReadBuildInfo(); ok {
 		rootCmd.Version = bi.Main.Version
 	} else {
-		log.Fatalln("Failed to read build info")
+		fmt.Println("Failed to read build info")
+		os.Exit(1)
 	}
 
 	err := rootCmd.Execute()

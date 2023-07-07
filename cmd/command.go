@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"io/fs"
 	"io/ioutil"
-	"log"
 	"os"
 	"strings"
 	"text/template"
@@ -47,11 +46,12 @@ type Command struct {
 
 // commandCmd represents the command command
 var (
-	commandValidationRule = `A command name must satisfy the following requirements:-
-	1. The commandName should not start or end with slash (/).
-	2. The commandName should not start with any digit.
-	3. The commandName should not begin or end with a dot (., U+002E).
-	4. The commandName is a non-empty string made of up ASCII letters, ASCII digits, and limited ASCII punctuation (-, ., _).
+	commandValidationRule = `A command-name must satisfy the following requirements:-
+	1. The command-name should not begin or end with slash (/).
+	2. The command-name should not begin with any digit.
+	3. The command-name should not begin or end with a dot (., U+002E).
+	4. The command-name is a non-empty string made of up ASCII letters, ASCII digits, and limited ASCII punctuation (-, ., _).
+	5. The command-name cannot contain more than 100 characters.
 	`
 	commandCmd = &cobra.Command{
 		Use:   "command <command-name>",
@@ -64,20 +64,22 @@ Example :- "bean create command test" will create a command test in the commands
 )
 
 func command(cmd *cobra.Command, args []string) {
-	beanCheck := beanInitialisationCheck()
+	beanCheck := beanInitialisationCheck() // This function will display an error message on the terminal.
 	if !beanCheck {
-		log.Fatalln("env.json for bean not found!!")
+		os.Exit(1)
 	}
 
 	wd, err := os.Getwd()
 	if err != nil {
-		log.Fatalln(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	userCommandName := args[0]
 	commandName, err := getCommandName(userCommandName)
 	if err != nil {
-		log.Fatalln(commandValidationRule)
+		fmt.Println(commandValidationRule)
+		os.Exit(1)
 	}
 
 	commandFilesPath := wd + "/commands/"
@@ -86,7 +88,8 @@ func command(cmd *cobra.Command, args []string) {
 	// check if command already exists.
 	_, err = os.Stat(commandFilesPath + commandFileName + ".go")
 	if err == nil {
-		log.Fatalln("Command with name " + commandFileName + " already exists.")
+		fmt.Println("Command with name " + commandFileName + " already exists.")
+		return
 	}
 
 	p := &Project{
@@ -96,7 +99,8 @@ func command(cmd *cobra.Command, args []string) {
 
 	// Set the relative root path of the internal templates folder.
 	if p.RootFS, err = fs.Sub(InternalFS, "internal/_tpl"); err != nil {
-		log.Fatalln(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	// Reading the base command file.
@@ -104,19 +108,19 @@ func command(cmd *cobra.Command, args []string) {
 
 	file, err := p.RootFS.Open(baseCommandFilePath)
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 	fileData, err := ioutil.ReadAll(file)
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	tmpl, err := template.New("").Parse(string(fileData))
 	if err != nil {
-		log.Fatalln(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	var command Command
@@ -124,15 +128,15 @@ func command(cmd *cobra.Command, args []string) {
 	command.CommandName = commandName
 	commandFileCreate, err := os.Create(commandFilesPath + commandFileName + ".go")
 	if err != nil {
-		log.Println(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 	defer commandFileCreate.Close()
 
 	err = tmpl.Execute(commandFileCreate, command)
 	if err != nil {
-		log.Println(err)
-		return
+		fmt.Println(err)
+		os.Exit(1)
 	}
 	fmt.Printf("command with name %s and command file %s.go created\n", commandName, commandFileName)
 }
@@ -147,10 +151,8 @@ func getCommandName(commandName string) (string, error) {
 
 	if errs := validate.Var(commandName, "required,max=100,startsnotwith=/,endsnotwith=/,alphanum,startsnotwith=.,endsnotwith=."); errs != nil {
 		if errs, ok := errs.(validator.ValidationErrors); ok {
-			fmt.Println(errs.Error())
 			return "", errs
 		}
-		log.Fatalln(errs)
 	}
 
 	commandName = strings.ToLower(commandName)
