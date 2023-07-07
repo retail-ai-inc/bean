@@ -35,7 +35,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	validatorV10 "github.com/go-playground/validator/v10"
@@ -72,7 +71,7 @@ type DBDeps struct {
 	TenantMongoDBNames map[uint64]string
 	MasterRedisDB      map[uint64]*dbdrivers.RedisDBConn
 	TenantRedisDBs     map[uint64]*dbdrivers.RedisDBConn
-	MemoryDB           *badger.DB
+	MemoryDB           *dbdrivers.Memory
 }
 
 type Bean struct {
@@ -311,15 +310,7 @@ func New() (b *Bean) {
 			}
 
 			key := c.Param("key")
-			err := b.DBConn.MemoryDB.Update(func(txn *badger.Txn) error {
-				return txn.Delete([]byte(key))
-			})
-			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-					"message": err.Error(),
-				})
-			}
-
+			b.DBConn.MemoryDB.Del(key)
 			return c.JSON(http.StatusOK, map[string]interface{}{
 				"message": "Done",
 			})
@@ -591,7 +582,7 @@ func (b *Bean) InitDB() {
 	var tenantMongoDBs map[uint64]*mongo.Client
 	var tenantMongoDBNames map[uint64]string
 	var tenantRedisDBs map[uint64]*dbdrivers.RedisDBConn
-	var masterMemoryDB *badger.DB
+	var masterMemoryDB *dbdrivers.Memory
 
 	if b.Config.Database.Tenant.On {
 		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
@@ -606,7 +597,7 @@ func (b *Bean) InitDB() {
 	}
 
 	if b.Config.Database.Memory.On {
-		masterMemoryDB = dbdrivers.InitMemoryConn(b.Config.Database.Memory)
+		masterMemoryDB = dbdrivers.New()
 	}
 
 	b.DBConn = &DBDeps{
