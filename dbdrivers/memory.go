@@ -39,7 +39,7 @@ type MemoryConfig struct {
 
 // Memory stores arbitrary data with ttl.
 type Memory struct {
-	keys *haxmap.Map[string, interface{}]
+	keys *haxmap.Map[string, Key]
 	done chan struct{}
 }
 
@@ -60,7 +60,7 @@ func New() *Memory {
 		// XXX: IMPORTANT - Run the ttl cleaning process in every 60 seconds.
 		ttlCleaningInterval := 60 * time.Second
 
-		h := haxmap.New[string, interface{}]()
+		h := haxmap.New[string, Key]()
 		if h == nil {
 			panic("Failed to initialize the memory!")
 		}
@@ -79,8 +79,7 @@ func New() *Memory {
 				case <-ticker.C:
 					now := time.Now().UnixNano()
 					// O(N) iteration. It is linear time complexity.
-					memoryDBConn.keys.ForEach(func(k string, v interface{}) bool {
-						item := v.(Key)
+					memoryDBConn.keys.ForEach(func(k string, item Key) bool {
 						if item.ttl > 0 && now > item.ttl {
 							memoryDBConn.keys.Del(k)
 						}
@@ -100,12 +99,11 @@ func New() *Memory {
 
 // Get gets the value for the given key.
 func (mem *Memory) Get(k string) (interface{}, bool) {
-	obj, exists := mem.keys.Get(k)
+	key, exists := mem.keys.Get(k)
 	if !exists {
 		return nil, false
 	}
 
-	key := obj.(Key)
 	if key.ttl > 0 && time.Now().UnixNano() > key.ttl {
 		return nil, false
 	}
