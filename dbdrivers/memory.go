@@ -26,163 +26,112 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
-	"github.com/pkg/errors"
+	"github.com/alphadose/haxmap"
 )
 
 type MemoryConfig struct {
 	On        bool
-	Dir       string
 	DelKeyAPI struct {
 		EndPoint        string
 		AuthBearerToken string
 	}
 }
 
-// memoryDBConn is a singleton memory database connection.
-var memoryDBConn *badger.DB
-var memoryOnce sync.Once
-
-// Initialize the Memory database.
-func InitMemoryConn(config MemoryConfig) *badger.DB {
-	return connectMemoryDB(config)
+// Memory stores arbitrary data with ttl.
+type Memory struct {
+	keys *haxmap.Map[string, Key]
+	done chan struct{}
 }
 
-// connectMemoryDB returns the singleton memory database connection
-func connectMemoryDB(config MemoryConfig) *badger.DB {
+// A Key represents arbitrary data with ttl.
+type Key struct {
+	value any
+	ttl   int64 // unix nano
+}
 
+// memoryDBConn is a singleton memory database connection.
+var memoryDBConn *Memory
+var memoryOnce sync.Once
+
+// New creates a new memory that asynchronously cleans expired entries after the given ttl passes.
+func New() *Memory {
 	memoryOnce.Do(func() {
-		// IMPORTANT: InMemory mode can only use with empty "" dir
-		opt := badger.DefaultOptions(config.Dir).WithInMemory(config.On)
-		opt.Logger = nil
 
-		// Open the Badger database located in the opt directory.
-		// It will be created if it doesn't exist.
-		var err error
+		// XXX: IMPORTANT - Run the ttl cleaning process in every 60 seconds.
+		ttlCleaningInterval := 60 * time.Second
 
-		memoryDBConn, err = badger.Open(opt)
-		if err != nil {
-			panic(err)
+		h := haxmap.New[string, Key]()
+		if h == nil {
+			panic("Failed to initialize the memory!")
 		}
+
+		memoryDBConn = &Memory{
+			keys: h,
+			done: make(chan struct{}),
+		}
+
+		go func() {
+			ticker := time.NewTicker(ttlCleaningInterval)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					now := time.Now().UnixNano()
+					// O(N) iteration. It is linear time complexity.
+					memoryDBConn.keys.ForEach(func(k string, item Key) bool {
+						if item.ttl > 0 && now > item.ttl {
+							memoryDBConn.keys.Del(k)
+						}
+
+						return true
+					})
+
+				case <-memoryDBConn.done:
+					return
+				}
+			}
+		}()
 	})
 
 	return memoryDBConn
 }
 
-// MemoryGetString returns a string val of associated key from memory.
-// If the key doesn't exist in memory then this function will return
-// `nil` error with empty string.
-func MemoryGetString(client *badger.DB, key string) (string, error) {
-
-	var data []byte
-
-	err := client.View(func(txn *badger.Txn) error {
-
-		item, err := txn.Get([]byte(key))
-		if err != nil {
-			if err == badger.ErrKeyNotFound {
-				return nil
-			}
-
-			return err
-		}
-
-		data, err = item.ValueCopy(nil)
-
-		return err
-	})
-
-	if err != nil {
-		return "", errors.WithStack(err)
+// Get gets the value for the given key.
+func (mem *Memory) Get(k string) (interface{}, bool) {
+	key, exists := mem.keys.Get(k)
+	if !exists {
+		return nil, false
 	}
 
-	return string(data), nil
+	if key.ttl > 0 && time.Now().UnixNano() > key.ttl {
+		return nil, false
+	}
+
+	return key.value, true
 }
 
-// MemoryGetBytes returns a byte val of associated key from memory.
-// If the key doesn't exist in memory then this function will return
-// `nil` error with empty byte slice.
-func MemoryGetBytes(client *badger.DB, key string) ([]byte, error) {
+// Set sets a value for the given key with an expiration duration.
+// If the duration is 0 or less, it will be stored forever.
+func (mem *Memory) Set(key string, value any, duration time.Duration) {
+	var expires int64
 
-	var data []byte
-
-	err := client.View(func(txn *badger.Txn) error {
-
-		item, err := txn.Get([]byte(key))
-		if err != nil {
-			if err == badger.ErrKeyNotFound {
-				return nil
-			}
-
-			return err
-		}
-
-		data, err = item.ValueCopy(nil)
-
-		return err
-	})
-
-	if err != nil {
-		return nil, errors.WithStack(err)
+	if duration > 0 {
+		expires = time.Now().Add(duration).UnixNano()
 	}
 
-	return data, nil
+	mem.keys.Set(key, Key{
+		value: value,
+		ttl:   expires,
+	})
 }
 
-// MemorySetString saves a string key value pair into memory. If you supply `ttl` greater than 0
-// then this will save the key into the memory for that many seconds. Once the TTL has elapsed,
-// the key will no longer be retrievable and will be eligible for garbage collection. Pass `ttl` as 0
-// if you want to keep the key forever into the db until the server restarted or crashed.
-func MemorySetString(client *badger.DB, key string, val string, ttl time.Duration) error {
-
-	err := client.Update(func(txn *badger.Txn) error {
-		if ttl > 0 {
-			e := badger.NewEntry([]byte(key), []byte(val)).WithTTL(ttl)
-			return txn.SetEntry(e)
-		}
-
-		return txn.Set([]byte(key), []byte(val))
-	})
-
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
+// Del deletes the key and its value from the memory cache.
+func (mem *Memory) Del(key string) {
+	mem.keys.Del(key)
 }
 
-// MemorySetBytes saves a string key and it's value in bytes into memory. If you supply `ttl` greater than 0
-// then this will save the key into the memory for that many seconds. Once the TTL has elapsed,
-// the key will no longer be retrievable and will be eligible for garbage collection. Pass `ttl` as 0
-// if you want to keep the key forever into the db until the server restarted or crashed.
-func MemorySetBytes(client *badger.DB, key string, val []byte, ttl time.Duration) error {
-
-	err := client.Update(func(txn *badger.Txn) error {
-		if ttl > 0 {
-			e := badger.NewEntry([]byte(key), val).WithTTL(ttl)
-			return txn.SetEntry(e)
-		}
-
-		return txn.Set([]byte(key), val)
-	})
-
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
-}
-
-// MemoryDelKey will just delete a key from memory if it is exist.
-func MemoryDelKey(client *badger.DB, key string) error {
-
-	err := client.Update(func(txn *badger.Txn) error {
-		return txn.Delete([]byte(key))
-	})
-
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
+// Close closes the memory cache and frees up resources.
+func (mem *Memory) Close() {
+	mem.done <- struct{}{}
 }
