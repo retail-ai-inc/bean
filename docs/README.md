@@ -523,7 +523,7 @@ Bean configs default values are picked from the `env.json` file, but can be upda
 
 ## TenantAlterDbHostParam
 
-The `TenantAlterDbHostParam` is helful in multitenant scenarios when we need to run some 
+The `TenantAlterDbHostParam` is helpful in multitenant scenarios when we need to run some 
 cloudfunction or cron and you cannot connect your memorystore/SQL/mongo server from 
 cloudfunction/VM using the usual `host` ip.
 
