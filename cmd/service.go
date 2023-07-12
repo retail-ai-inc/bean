@@ -193,10 +193,14 @@ func service(cmd *cobra.Command, args []string) {
 					strings.ToUpper(v[:1]) + strings.ToLower(v[1:]) + "Repository\n"
 			}
 
-			replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
+			err := replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
 
 			needle := "func New" + service.ServiceNameUpper + "Service("
-			lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
+			lineNumber, err = matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
 
 			if err == nil && lineNumber > 0 {
 				var param []string
@@ -209,10 +213,14 @@ func service(cmd *cobra.Command, args []string) {
 				newText := "func New" + service.ServiceNameUpper + "Service(" +
 					strings.Join(param[:], ", ") + ") *" + service.ServiceNameLower + "Service {"
 
-				replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
+				err := replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
+				if err != nil {
+					fmt.Println(err)
+					os.Exit(1)
+				}
 
 				needle := "return &" + service.ServiceNameLower + "Service{"
-				lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
+				lineNumber, err = matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
 
 				if err == nil && lineNumber > 0 {
 					var param []string
@@ -230,7 +238,11 @@ func service(cmd *cobra.Command, args []string) {
 						newText := "\treturn &" + service.ServiceNameLower + "Service{\n" +
 							strings.Join(param[:], "\n") + "\n\t}\n}"
 
-						replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
+						err = replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
+						if err != nil {
+							fmt.Println(err)
+							os.Exit(1)
+						}
 					}
 				}
 			}
@@ -251,7 +263,11 @@ func service(cmd *cobra.Command, args []string) {
 
 					newText += "}"
 
-					replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
+					err = replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
+					if err != nil {
+						fmt.Println(err)
+						os.Exit(1)
+					}
 
 					needle = "func New" + service.ServiceNameUpper + "Service() *" + service.ServiceNameLower + "Service {"
 					lineNumber, err = matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
