@@ -193,7 +193,7 @@ func service(cmd *cobra.Command, args []string) {
 					strings.ToUpper(v[:1]) + strings.ToLower(v[1:]) + "Repository\n"
 			}
 
-			replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
+			_ = replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
 
 			needle := "func New" + service.ServiceNameUpper + "Service("
 			lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
@@ -209,7 +209,7 @@ func service(cmd *cobra.Command, args []string) {
 				newText := "func New" + service.ServiceNameUpper + "Service(" +
 					strings.Join(param[:], ", ") + ") *" + service.ServiceNameLower + "Service {"
 
-				replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
+				_ = replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
 
 				needle := "return &" + service.ServiceNameLower + "Service{"
 				lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
@@ -230,7 +230,7 @@ func service(cmd *cobra.Command, args []string) {
 						newText := "\treturn &" + service.ServiceNameLower + "Service{\n" +
 							strings.Join(param[:], "\n") + "\n\t}\n}"
 
-						replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
+						_ = replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
 					}
 				}
 			}
@@ -251,7 +251,7 @@ func service(cmd *cobra.Command, args []string) {
 
 					newText += "}"
 
-					replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
+					_ = replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
 
 					needle = "func New" + service.ServiceNameUpper + "Service() *" + service.ServiceNameLower + "Service {"
 					lineNumber, err = matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
@@ -283,12 +283,12 @@ func service(cmd *cobra.Command, args []string) {
 										}
 
 										newText := "\treturn &" + service.ServiceNameLower + "Service{\n" + strings.Join(param[:], "") + "\t}"
-										replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
+										_ = replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
 
 										needle = `// "github.com/retail-ai-inc/bean/trace"`
 										lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
 										if err == nil {
-											replaceStringToNthLineOfFile(serviceFileToUpdate, "\t\""+p.PkgPath+`/repositories"`, lineNumber+1)
+											_ = replaceStringToNthLineOfFile(serviceFileToUpdate, "\t\""+p.PkgPath+`/repositories"`, lineNumber+1)
 										}
 									}
 								}

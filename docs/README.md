@@ -18,6 +18,7 @@ A web framework written in GO on-top of `echo` to ease your application developm
     - [Cryptography using the aes command](#cryptography-using-the-aes-command)
     - [Listing routes using the route list command](#listing-routes-using-the-route-list-command)
   - [Make your own Commands](#make-your-own-commands)
+  - [Local K/V Memorystore](#local-kv-memorystore)
   - [Useful Helper Functions](#useful-helper-functions)
   - [Bean Config](#bean-config)
   - [TenantAlterDbHostParam](#tenantalterdbhostparam)
@@ -224,6 +225,38 @@ func helloWorld(h string) error {
 
 Now, compile your project and run the command as `./myproject gopher helloworld`. The command will just print the `hellow world`.
 
+## Local K/V Memorystore
+
+`Bean` supports a memory-efficient local K/V store. To configure it, you need to activate it from your `database` parameter in env.json like below:
+
+```
+"memory": {
+    "on": true,
+    "delKeyAPI": {
+        "endPoint": "/memory/key/:key",
+        "authBearerToken": "<set_any_token_string_of_your_choice>"
+    }
+}
+```
+
+How to use in the code:
+
+```
+import "github.com/retail-ai-inc/bean/dbdrivers"
+
+// Initialize the local memory store with key type `string` and value type `any`
+m := dbdrivers.MemoryNew()
+
+m.MemorySet("Hello", "World", 0)
+
+data, found := m.MemoryGet("Hello")
+if !found {
+  // Do something
+}
+
+m.MemoryDel("Hello")
+```
+
 ## Useful Helper Functions
 
 Let's import the package first:
@@ -233,7 +266,7 @@ import helpers "github.com/retail-ai-inc/bean/helpers"
 ```
 
 ---
-**helpers.GetRandomNumberFromRange(min, max int)** 
+**helpers.GetRandomNumberFromRange(min, max int)**
 - This function will generate and return a random integer from a minimum and maximum range.
 
 example:
