@@ -257,6 +257,8 @@ if !found {
 m.MemoryDel("Hello")
 ```
 
+The `delKeyAPI` parameter will help you proactively delete your local cache if you cache something from your database like SQL or NOSQL. For example, suppose you cache some access token in your local memory, which resides in your database, to avoid too many connections with your database. In that case, if your access token gets changed from the database, you can trigger the `delKeyAPI` endpoint with the key and `Bearer <authBearerToken>` as the header parameter then `bean` will delete the key from the local cache. Here, you must be careful if you run the `bean` application in a `k8s` container because then you have to trigger the `delKeyAPI` for all your pods separately by IP address from `k8s`.
+
 ## Useful Helper Functions
 
 Let's import the package first:
@@ -556,7 +558,7 @@ Bean configs default values are picked from the `env.json` file, but can be upda
 
 ## TenantAlterDbHostParam
 
-The `TenantAlterDbHostParam` is helpful in multitenant scenarios when we need to run some 
+The `TenantAlterDbHostParam` is helful in multitenant scenarios when we need to run some 
 cloudfunction or cron and you cannot connect your memorystore/SQL/mongo server from 
 cloudfunction/VM using the usual `host` ip.
 
