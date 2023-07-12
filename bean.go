@@ -310,7 +310,7 @@ func New() (b *Bean) {
 			}
 
 			key := c.Param("key")
-			b.DBConn.MemoryDB.Del(key)
+			b.DBConn.MemoryDB.MemoryDel(key)
 			return c.JSON(http.StatusOK, map[string]interface{}{
 				"message": "Done",
 			})
@@ -597,7 +597,7 @@ func (b *Bean) InitDB() {
 	}
 
 	if b.Config.Database.Memory.On {
-		masterMemoryDB = dbdrivers.New()
+		masterMemoryDB = dbdrivers.MemoryNew()
 	}
 
 	b.DBConn = &DBDeps{
