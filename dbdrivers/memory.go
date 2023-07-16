@@ -54,7 +54,7 @@ var memoryDBConn *Memory
 var memoryOnce sync.Once
 
 // New creates a new memory that asynchronously cleans expired entries after the given ttl passes.
-func MemoryNew() *Memory {
+func NewMemory() *Memory {
 	memoryOnce.Do(func() {
 
 		// XXX: IMPORTANT - Run the ttl cleaning process in every 60 seconds.
@@ -98,7 +98,7 @@ func MemoryNew() *Memory {
 }
 
 // Get gets the value for the given key.
-func (mem *Memory) MemoryGet(k string) (interface{}, bool) {
+func (mem *Memory) GetMemory(k string) (interface{}, bool) {
 	key, exists := mem.keys.Get(k)
 	if !exists {
 		return nil, false
@@ -113,7 +113,7 @@ func (mem *Memory) MemoryGet(k string) (interface{}, bool) {
 
 // Set sets a value for the given key with an expiration duration.
 // If the duration is 0 or less, it will be stored forever.
-func (mem *Memory) MemorySet(key string, value any, duration time.Duration) {
+func (mem *Memory) SetMemory(key string, value any, duration time.Duration) {
 	var expires int64
 
 	if duration > 0 {
@@ -127,11 +127,11 @@ func (mem *Memory) MemorySet(key string, value any, duration time.Duration) {
 }
 
 // Del deletes the key and its value from the memory cache.
-func (mem *Memory) MemoryDel(key string) {
+func (mem *Memory) DelMemory(key string) {
 	mem.keys.Del(key)
 }
 
 // Close closes the memory cache and frees up resources.
-func (mem *Memory) MemoryClose() {
+func (mem *Memory) CloseMemory() {
 	mem.done <- struct{}{}
 }

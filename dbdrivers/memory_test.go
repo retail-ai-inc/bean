@@ -30,11 +30,11 @@ import (
 
 func TestGetSet(t *testing.T) {
 	cycle := 100 * time.Millisecond
-	m := MemoryNew()
+	m := NewMemory()
 
-	m.MemorySet("sticky", "forever", 0)
-	m.MemorySet("hello", "Hello", cycle/2)
-	hello, found := m.MemoryGet("hello")
+	m.SetMemory("sticky", "forever", 0)
+	m.SetMemory("hello", "Hello", cycle/2)
+	hello, found := m.GetMemory("hello")
 
 	if !found {
 		t.FailNow()
@@ -46,7 +46,7 @@ func TestGetSet(t *testing.T) {
 
 	time.Sleep(cycle / 2)
 
-	_, found = m.MemoryGet("hello")
+	_, found = m.GetMemory("hello")
 
 	if found {
 		t.FailNow()
@@ -54,13 +54,13 @@ func TestGetSet(t *testing.T) {
 
 	time.Sleep(cycle)
 
-	_, found = m.MemoryGet("404")
+	_, found = m.GetMemory("404")
 
 	if found {
 		t.FailNow()
 	}
 
-	_, found = m.MemoryGet("sticky")
+	_, found = m.GetMemory("sticky")
 
 	if !found {
 		t.FailNow()
@@ -68,17 +68,17 @@ func TestGetSet(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	m := MemoryNew()
-	m.MemorySet("hello", "Hello", time.Hour)
-	_, found := m.MemoryGet("hello")
+	m := NewMemory()
+	m.SetMemory("hello", "Hello", time.Hour)
+	_, found := m.GetMemory("hello")
 
 	if !found {
 		t.FailNow()
 	}
 
-	m.MemoryDel("hello")
+	m.DelMemory("hello")
 
-	_, found = m.MemoryGet("hello")
+	_, found = m.GetMemory("hello")
 
 	if found {
 		t.FailNow()
@@ -90,21 +90,21 @@ func BenchmarkNew(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			MemoryNew()
+			NewMemory()
 		}
 	})
 }
 
 func BenchmarkGet(b *testing.B) {
-	m := MemoryNew()
-	m.MemorySet("Hello", "World", 0)
+	m := NewMemory()
+	m.SetMemory("Hello", "World", 0)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			m.MemoryGet("Hello")
+			m.GetMemory("Hello")
 		}
 	})
 }
@@ -114,7 +114,7 @@ const (
 )
 
 func BenchmarkGetWithSet(b *testing.B) {
-	m := MemoryNew()
+	m := NewMemory()
 
 	var writer uintptr
 	b.ResetTimer()
@@ -123,13 +123,13 @@ func BenchmarkGetWithSet(b *testing.B) {
 		if atomic.CompareAndSwapUintptr(&writer, 0, 1) {
 			for pb.Next() {
 				for i := uintptr(0); i < epochs; i++ {
-					m.MemorySet("Hello", "World", 0)
+					m.SetMemory("Hello", "World", 0)
 				}
 			}
 		} else {
 			for pb.Next() {
 				for i := uintptr(0); i < epochs; i++ {
-					j, _ := m.MemoryGet("Hello")
+					j, _ := m.GetMemory("Hello")
 					if j.(string) != "World" {
 						b.Fail()
 					}
@@ -140,27 +140,27 @@ func BenchmarkGetWithSet(b *testing.B) {
 }
 
 func BenchmarkSet(b *testing.B) {
-	m := MemoryNew()
+	m := NewMemory()
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			m.MemorySet("Hello", "World", 0)
+			m.SetMemory("Hello", "World", 0)
 		}
 	})
 }
 
 func BenchmarkDel(b *testing.B) {
-	m := MemoryNew()
+	m := NewMemory()
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			m.MemoryDel("Hello")
+			m.DelMemory("Hello")
 		}
 	})
 }
