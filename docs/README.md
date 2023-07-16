@@ -245,16 +245,17 @@ How to use in the code:
 import "github.com/retail-ai-inc/bean/dbdrivers"
 
 // Initialize the local memory store with key type `string` and value type `any`
-m := dbdrivers.MemoryNew()
+m := dbdrivers.NewMemory()
 
-m.MemorySet("Hello", "World", 0)
+// The third parameter is the `ttl`. O means forever.
+m.SetMemory("Hello", "World", 0)
 
-data, found := m.MemoryGet("Hello")
+data, found := m.GetMemory("Hello")
 if !found {
   // Do something
 }
 
-m.MemoryDel("Hello")
+m.DelMemory("Hello")
 ```
 
 The `delKeyAPI` parameter will help you proactively delete your local cache if you cache something from your database like SQL or NOSQL. For example, suppose you cache some access token in your local memory, which resides in your database, to avoid too many connections with your database. In that case, if your access token gets changed from the database, you can trigger the `delKeyAPI` endpoint with the key and `Bearer <authBearerToken>` as the header parameter then `bean` will delete the key from the local cache. Here, you must be careful if you run the `bean` application in a `k8s` container because then you have to trigger the `delKeyAPI` for all your pods separately by IP address from `k8s`.
