@@ -69,7 +69,7 @@ type DBDeps struct {
 	MasterMongoDBName  string
 	TenantMongoDBs     map[uint64]*mongo.Client
 	TenantMongoDBNames map[uint64]string
-	MasterRedisDB      map[uint64]*dbdrivers.RedisDBConn
+	MasterRedisDB      *dbdrivers.RedisDBConn
 	TenantRedisDBs     map[uint64]*dbdrivers.RedisDBConn
 	MemoryDB           *dbdrivers.Memory
 }
@@ -576,7 +576,7 @@ func (b *Bean) InitDB() {
 	var masterMySQLDBName string
 	var masterMongoDB *mongo.Client
 	var masterMongoDBName string
-	var masterRedisDB map[uint64]*dbdrivers.RedisDBConn
+	var masterRedisDB *dbdrivers.RedisDBConn
 	var tenantMySQLDBs map[uint64]*gorm.DB
 	var tenantMySQLDBNames map[uint64]string
 	var tenantMongoDBs map[uint64]*mongo.Client
