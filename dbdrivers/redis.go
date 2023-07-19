@@ -83,16 +83,16 @@ func InitRedisTenantConns(config RedisConfig, master *gorm.DB, tenantAlterDbHost
 	return nil
 }
 
-func InitRedisMasterConn(config RedisConfig) map[uint64]*RedisDBConn {
+func InitRedisMasterConn(config RedisConfig) *RedisDBConn {
+
+	var masterRedisDB *RedisDBConn
 
 	masterCfg := config.Master
-	masterRedisDB := make(map[uint64]*RedisDBConn, 1)
-
 	if masterCfg != nil {
 
-		masterRedisDB[0] = &RedisDBConn{}
+		masterRedisDB = &RedisDBConn{}
 
-		masterRedisDB[0].Host, masterRedisDB[0].Name = connectRedisDB(
+		masterRedisDB.Host, masterRedisDB.Name = connectRedisDB(
 			masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
 			config.Maxretries, config.PoolSize, config.MinIdleConnections, config.DialTimeout,
 			config.ReadTimeout, config.WriteTimeout, config.PoolTimeout,
@@ -120,7 +120,7 @@ func InitRedisMasterConn(config RedisConfig) map[uint64]*RedisDBConn {
 
 			}
 
-			masterRedisDB[0].Read = redisReadConn
+			masterRedisDB.Read = redisReadConn
 		}
 	}
 
