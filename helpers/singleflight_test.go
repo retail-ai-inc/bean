@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -11,28 +12,28 @@ import (
 
 var timeoutCtx, _ = context.WithTimeout(context.Background(), time.Second)
 
-func TestSingleDoChan(t *testing.T) {
-	type T any
-	type args struct {
+func TestSingleDo(t *testing.T) {
+	type args[T any] struct {
 		ctx   context.Context
 		key   string
-		call  func() (any, error)
-		retry int
+		call  func() (T, error)
+		retry uint
 		ttl   []time.Duration
 	}
 
 	tests := []struct {
 		name     string
-		args     args
-		wantData T
+		args     args[string]
+		previous *args[int]
+		wantData any
 		wantErr  bool
 	}{
 		{
 			name: "success",
-			args: args{
+			args: args[string]{
 				ctx: context.Background(),
 				key: "test1",
-				call: func() (any, error) {
+				call: func() (string, error) {
 					return "data", nil
 				},
 				retry: 2,
@@ -42,106 +43,86 @@ func TestSingleDoChan(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name: "retry<0",
-			args: args{
-				ctx: context.Background(),
-				key: "test1",
-				call: func() (any, error) {
-					var data = "data"
-					return &data, nil
-				},
-				retry: -1,
-				ttl:   nil,
-			},
-			wantData: nil,
-			wantErr:  false,
-		},
-		{
-			name: "retry<0 with error",
-			args: args{
-				ctx: context.Background(),
-				key: "test1",
-				call: func() (any, error) {
-					var data = "data"
-					return &data, errors.New("some error")
-				},
-				retry: -1,
-				ttl:   nil,
-			},
-			wantData: nil,
-			wantErr:  false,
-		},
-		{
 			name: "failed with ttl",
-			args: args{
+			args: args[string]{
 				ctx: context.Background(),
 				key: "test2",
-				call: func() (any, error) {
+				call: func() (string, error) {
 					time.Sleep(time.Second * 2)
-					return nil, errors.New("some error")
+					return "", errors.New("some error")
 				},
 				retry: 0,
 				ttl:   []time.Duration{time.Second},
 			},
-			wantData: nil,
+			wantData: "",
 			wantErr:  true,
 		},
 		{
 			name: "normal failed",
-			args: args{
-				ctx: context.Background(),
-				key: "test2",
-				call: func() (any, error) {
-					return 0, errors.New("some error")
-				},
-				retry: 0,
-				ttl:   nil,
-			},
-			wantData: nil,
-			wantErr:  true,
-		},
-		{
-			name: "panic recover",
-			args: args{
+			args: args[string]{
 				ctx: context.Background(),
 				key: "test3",
-				call: func() (any, error) {
-					panic("cause panic here")
+				call: func() (string, error) {
+					return "", errors.New("some error")
 				},
 				retry: 0,
 				ttl:   nil,
 			},
-			wantData: nil,
-			wantErr:  true,
-		},
-		{
-			name: "timeout failed",
-			args: args{
-				ctx: timeoutCtx,
-				key: "test4",
-				call: func() (any, error) {
-					time.Sleep(time.Second * 2)
-					return "data", nil
-				},
-				retry: 0,
-				ttl:   nil,
-			},
-			wantData: nil,
+			wantData: "",
 			wantErr:  true,
 		},
 		{
 			name: "error timeout",
-			args: args{
+			args: args[string]{
 				ctx: timeoutCtx,
-				key: "test5",
-				call: func() (any, error) {
+				key: "test4",
+				call: func() (string, error) {
 					time.Sleep(time.Millisecond * 500)
 					return "", errors.New("some error")
 				},
 				retry: 2,
 				ttl:   nil,
 			},
-			wantData: nil,
+			wantData: "",
+			wantErr:  true,
+		},
+		{
+			name: "context deadline exceeded",
+			args: args[string]{
+				ctx: timeoutCtx,
+				key: "test5",
+				call: func() (string, error) {
+					time.Sleep(time.Millisecond * 500)
+					return "", fmt.Errorf("%w", context.DeadlineExceeded)
+				},
+				retry: 2,
+				ttl:   nil,
+			},
+			wantData: "",
+			wantErr:  true,
+		},
+		{
+			name: "type error",
+			args: args[string]{
+				ctx: timeoutCtx,
+				key: "test6",
+				call: func() (string, error) {
+					return "123", nil
+				},
+				retry: 0,
+				ttl:   nil,
+			},
+			previous: &args[int]{
+				ctx: timeoutCtx,
+				key: "test6",
+				call: func() (int, error) {
+					time.Sleep(time.Millisecond * 500)
+					return 123, nil
+				},
+				retry: 0,
+				ttl:   nil,
+			},
+			wantData: "",
 			wantErr:  true,
 		},
 	}
@@ -149,17 +130,19 @@ func TestSingleDoChan(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(tt.args.ctx)
 			defer cancel()
-			gotData, err := SingleDoChan(ctx, tt.args.key, tt.args.call, tt.args.retry, tt.args.ttl...)
+			if tt.previous != nil {
+				go func() {
+					_, _ = SingleDo(ctx, tt.previous.key, tt.previous.call, tt.previous.retry, tt.previous.ttl...)
+				}()
+				time.Sleep(time.Millisecond * 100)
+			}
+			gotData, err := SingleDo(ctx, tt.args.key, tt.args.call, tt.args.retry, tt.args.ttl...)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("SingleDoChan() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("SingleDo() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(gotData, tt.wantData) {
-				t.Errorf("SingleDoChan() gotData = %v, want %v", gotData, tt.wantData)
-			}
-			if tt.args.retry > 0 && err != nil {
-				// waiting for goroutine finish
-				time.Sleep(2 * time.Second)
+				t.Errorf("SingleDo() gotData = %v, want %v", gotData, tt.wantData)
 			}
 		})
 	}
