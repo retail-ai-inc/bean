@@ -37,10 +37,14 @@ func SingleDo[T any](ctx context.Context, key string, call func() (T, error), re
 			select {
 			case <-time.After(waitTime):
 			case <-ctx.Done():
-				if errors.Is(err, context.DeadlineExceeded) && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				switch {
+				case errors.Is(err, context.DeadlineExceeded) && errors.Is(ctx.Err(), context.DeadlineExceeded):
+					fallthrough
+				case errors.Is(err, context.Canceled) && errors.Is(ctx.Err(), context.Canceled):
 					return nil, err
+				default:
+					return nil, errors.WithMessage(err, ctx.Err().Error())
 				}
-				return nil, errors.WithMessage(err, ctx.Err().Error())
 			}
 		}
 		return nil, err
