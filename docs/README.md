@@ -520,7 +520,7 @@ Bean configs default values are picked from the `env.json` file, but can be upda
 <details>
   <summary>BeanConfig</summary>
 	
-  Some of the configurable parameters are :-
+  Some of the configurable parameters are:
 
 	Environment: represents the environment in which the project is running (e.g. development, production, etc.)
 
