@@ -509,7 +509,7 @@ Duplicate calls wait for the first call to complete and receive the same results
 This helper is useful for handling concurrent requests that need to access a shared resource, which would cause problems such as race conditons, deadlocks, cache penetration etc.
 
 **helpers.SingleDoChan[T any](ctx context.Context, key string, call func()(T,error), retry int, ttl ...time.Duration)**
-> `SingleDoChan` achieves asynchronous calls by starting a goroutine. If the `ctx` variable is referenced in the `call` method, it is necessary to consider whether the `ctx` variable is thread-safe. Improper use may lead to a race condition with `ctx`. If unsure during the usage, please prefer using the `SingleDo` method.
+> `SingleDoChan` achieves asynchronous calls by starting a goroutine. If the `ctx` variable is referenced and written to in the `call` method, it is necessary to consider whether the `ctx` variable is thread-safe. Improper use may lead to a race condition with `ctx`. If unsure during the usage, please prefer using the `SingleDo` method.
 
 - Make sure the uniqueness of the `key` in different situations. 
 - `retry` refers to the number of times the `call` function will be repeated if it fails.
