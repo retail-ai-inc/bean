@@ -503,8 +503,14 @@ fmt.Println(string) // will print 0.1
 ```
 
 ---
-**helpers.SingleDo[T any](ctx context.Context, key string, call func()(T,error), retry int, ttl ...time.Duration)** 
-- SingleDo provides a duplicate function call suppression mechanism using singleflight.Group. It ensures that only one execution is in-flight for a given key at a time and returns the results of the given function. Duplicate calls wait for the first call to complete and receive the same results. Additionally, SingleDo implements retry logic in case the callback function returns an error, and an optional ttl parameter. This helper is useful for handling concurrent requests that need to access a shared resource, which would cause problems such as race conditons, deadlocks, cache penetration etc.
+**helpers.SingleDo[T any](ctx context.Context, key string, call func()(T,error), retry int, ttl ...time.Duration)**
+> `SingleDo` provides a duplicate function call suppression mechanism using singleflight.Group. It ensures that only one execution is in-flight for a given key at a time and returns the results of the given function. 
+Duplicate calls wait for the first call to complete and receive the same results. Additionally, SingleDo implements retry logic in case the callback function returns an error, and an optional ttl parameter. 
+This helper is useful for handling concurrent requests that need to access a shared resource, which would cause problems such as race conditons, deadlocks, cache penetration etc.
+
+**helpers.SingleDoChan[T any](ctx context.Context, key string, call func()(T,error), retry int, ttl ...time.Duration)**
+> `SingleDoChan` achieves asynchronous calls by starting a goroutine. If the `ctx` variable is referenced in the `call` method, it is necessary to consider whether the `ctx` variable is thread-safe. Improper use may lead to a race condition with `ctx`. If unsure during the usage, please prefer using the `SingleDo` method.
+
 - Make sure the uniqueness of the `key` in different situations. 
 - `retry` refers to the number of times the `call` function will be repeated if it fails.
 - `ttl` represents the expiration time of the `key`.
@@ -512,6 +518,11 @@ fmt.Println(string) // will print 0.1
 example:
 ```
 data, err := helpers.SingleDo(c, "key", func() (string, error) {
+    return "data",nil
+}, 2, time.Second)
+```
+```
+data, err := helpers.SingleDoChan(c, "key", func() (string, error) {
     return "data",nil
 }, 2, time.Second)
 ```
