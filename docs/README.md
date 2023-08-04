@@ -272,7 +272,6 @@ import helpers "github.com/retail-ai-inc/bean/helpers"
 **helpers.GetRandomNumberFromRange(min, max int)**
 > `GetRandomNumberFromRange` function will generate and return a random integer from a minimum and maximum range.
 
-example:
 ```
 id := helpers.GetRandomNumberFromRange(1001, 1050)
 ```
@@ -281,7 +280,6 @@ id := helpers.GetRandomNumberFromRange(1001, 1050)
 **helpers.(m CopyableMap) DeepCopy()** 
 > `DeepCopy` function will create a deep copy of a map. The depth of this copy is all inclusive. Both maps and slices will be considered when making the copy. Keep in mind that the slices in the resulting map will be of type []interface{}, so when using them, you will need to use type assertion to retrieve the value in the expected type.
 
-example:
 ```
 amap := map[string]interface{}{
   "a": "bbb",
@@ -302,7 +300,6 @@ deepCopyData := helpers.CopyableMap(amap).DeepCopy()
 **helpers.IsFilesExistInDirectory(dir string, filesToCheck []string)** 
 > `IsFilesExistInDirectory` function will check a file(s) is exist in a specific diretory or not. If you pass multiple files into `filesToCheck` slice then this function will chcek the existence of all those files. If one of the file doesn't exist, it will return `false`. 
 
-example:
 ```
 isExist, err := helpers.IsFilesExistInDirectory("/tmp", []string{"gopher.go", "hello.go"})
 if err != nil {
@@ -314,7 +311,6 @@ if err != nil {
 **helpers.FloatInRange(i, min, max float64)** 
 > `FloatInRange` function will return the floating point number provided in `i` if the number is between min and max. If `i` is less than `min` then it will return min. If `i` is greater than `max` then it will return max.
 
-example:
 ```
 if helpers.FloatInRange(0.3, 0.0, 1.0) > 0.0 {
   // DO SOMETHING
@@ -325,7 +321,6 @@ if helpers.FloatInRange(0.3, 0.0, 1.0) > 0.0 {
 **helpers.HasStringInSlice(slice []string, str string, modifier func(str string) string)** 
 > `HasStringInSlice` function tells whether a slice contains the `str` or not. If a `modifier` func is provided, it is called with the slice item before the comparation.
 
-example:
 ```
 modifier := func(s string) string {
   if s == "cc" {
@@ -343,7 +338,6 @@ if !helpers.HasStringInSlice(src, "ee", modifier) {
 **helpers.FindStringInSlice(slice []string, str string)** 
 > `FindStringInSlice` function will return the smallest index of the `slice` where `str` match a string in the `slice`, otherwise -1 if there is no match.
 
-example:
 ```
 i := helpers.FindStringInSlice([]string{"gopher", "go", "golang"}, "go")
 fmt.Println(i) // will print 1
@@ -353,7 +347,6 @@ fmt.Println(i) // will print 1
 **helpers.DeleteStringFromSlice(slice []string, index int)** 
 > `DeleteStringFromSlice` function delete a string from a specific index of a slice.
 
-example:
 ```
 s := helpers.DeleteStringFromSlice([]string{"gopher", "go", "golang"}, 1)
 fmt.Println(s) // will print [gopher golang]
@@ -363,7 +356,6 @@ fmt.Println(s) // will print [gopher golang]
 **helpers.JitterBackoff(min, max time.Duration, attempt int) time.Duration** 
 > `JitterBackoff` function returns capped exponential backoff with jitter. It is useful for http client when you want to retry request. A good explanation about jitter & backoff can be found [here](http://www.awsarchitectureblog.com/2015/03/backoff.html).
 
-example:
 ```
 for i := 0; i <= retryCount; i++ {
     resp, err := http.Get("https://retail-ai.jp")
@@ -390,7 +382,6 @@ for i := 0; i <= retryCount; i++ {
 **helpers.EncodeJWT(claims jwt.Claims, secret string)** 
 > `EncodeJWT` function will Encode JWT `claims` using a secret string and return a signed token as string.
 
-example:
 ```
 type UserJWTTokenData struct {
 	ID                   uint64
@@ -416,7 +407,6 @@ if err != nil {
 **helpers.DecodeJWT(c echo.Context, claims jwt.Claims, secret string)** 
 > `DecodeJWT` function will Decode JWT string into `claims` structure using a secret string.
 
-example:
 ```
 type UserJWTTokenData struct {
 	ID                   uint64
@@ -436,7 +426,6 @@ if err != nil {
 **helpers.ExtractJWTFromHeader(c echo.Context)** 
 > `ExtractJWTFromHeader` function will Extract JWT from `Authorization` HTTP header and returns the token as string.
 
-example:
 ```
 jwtString := helpers.ExtractJWTFromHeader(c)
 ```
@@ -445,7 +434,6 @@ jwtString := helpers.ExtractJWTFromHeader(c)
 **helpers.ConvertInterfaceToSlice(value interface{})** 
 > `ConvertInterfaceToSlice` will convert an interface `value` into slice. The `value` is also supporting pointer interface.
 
-example:
 ```
 slice := helpers.ConvertInterfaceToSlice(1)
 fmt.Println(slice) // will print [1]
@@ -458,7 +446,6 @@ fmt.Println(slice) // will print [1 2 3]
 **helpers.ConvertInterfaceToBool(value interface{})** 
 > `ConvertInterfaceToBool` will convert an interface `value` into boolean. The `value` is also supporting pointer interface.
 
-example:
 ```
 boolean, err := helpers.ConvertInterfaceToBool(true)
 fmt.Println(boolean) // will print true
@@ -474,7 +461,6 @@ fmt.Println(boolean) // will print false
 **helpers.ConvertInterfaceToFloat(value interface{})** 
 > `ConvertInterfaceToFloat` will convert an interface `value` into float. The `value` is also supporting pointer interface.
 
-example:
 ```
 float, err := helpers.ConvertInterfaceToFloat("1")
 fmt.Println(float) // will print 1
@@ -490,7 +476,6 @@ fmt.Println(float) // will print 0.1
 **helpers.ConvertInterfaceToString(value interface{})** 
 > `ConvertInterfaceToString` will convert an interface `value` into string. The `value` is also supporting pointer interface.
 
-example:
 ```
 string, err := helpers.ConvertInterfaceToString("abc")
 fmt.Println(string) // will print abc
@@ -515,7 +500,6 @@ This helper helps handle concurrent requests needing access to a shared resource
 - `retry` refers to the number of times the `call` function will be repeated if it fails.
 - `ttl` represents the expiration time of the `key`.
 
-example:
 ```
 data, err := helpers.SingleDo(c, "key", func() (string, error) {
     return "data",nil
