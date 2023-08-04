@@ -15,7 +15,48 @@ var (
 	maxWaitTime       = time.Duration(2000) * time.Millisecond
 )
 
-func SingleDoChan[T any](ctx context.Context, key string, call func() (T, error), retry int, ttl ...time.Duration) (data T, err error) {
+func SingleDo[T any](ctx context.Context, key string, call func() (T, error), retry uint, ttl ...time.Duration) (data T, err error) {
+	result, e, _ := singleFlightGroup.Do(key, func() (result interface{}, err error) {
+		if len(ttl) > 0 {
+			forgetTimer := time.AfterFunc(ttl[0], func() {
+				singleFlightGroup.Forget(key)
+			})
+			defer forgetTimer.Stop()
+		}
+
+		for i := 0; i <= int(retry); i++ {
+			result, err = call()
+			if err == nil {
+				return result, nil
+			}
+			if i == int(retry) {
+				return nil, err
+			}
+
+			waitTime := JitterBackoff(waitTime, maxWaitTime, i)
+			select {
+			case <-time.After(waitTime):
+			case <-ctx.Done():
+				return nil, err
+			}
+		}
+		return nil, err
+	})
+
+	if e != nil {
+		err = e
+		return
+	}
+
+	val, ok := result.(T)
+	if !ok {
+		err = errors.WithStack(fmt.Errorf("expected type %T but got type %T", data, result))
+		return
+	}
+	return val, nil
+}
+
+func SingleDoChan[T any](ctx context.Context, key string, call func() (T, error), retry uint, ttl ...time.Duration) (data T, err error) {
 	result := singleFlightGroup.DoChan(key, func() (result interface{}, err error) {
 		defer func() {
 			if e := recover(); e != nil {
@@ -30,12 +71,12 @@ func SingleDoChan[T any](ctx context.Context, key string, call func() (T, error)
 			defer forgetTimer.Stop()
 		}
 
-		for i := 0; i <= retry; i++ {
+		for i := 0; i <= int(retry); i++ {
 			result, err = call()
 			if err == nil {
 				return result, nil
 			}
-			if i == retry {
+			if i == int(retry) {
 				return nil, err
 			}
 
@@ -43,7 +84,7 @@ func SingleDoChan[T any](ctx context.Context, key string, call func() (T, error)
 			select {
 			case <-time.After(waitTime):
 			case <-ctx.Done():
-				return nil, errors.WithStack(ctx.Err())
+				return nil, err
 			}
 		}
 		return nil, err
@@ -57,6 +98,7 @@ func SingleDoChan[T any](ctx context.Context, key string, call func() (T, error)
 		}
 		val, ok := r.Val.(T)
 		if !ok {
+			err = errors.WithStack(fmt.Errorf("expected type %T but got type %T", data, r.Val))
 			return
 		}
 		return val, nil
