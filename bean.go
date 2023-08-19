@@ -474,7 +474,7 @@ func NewEcho() *echo.Echo {
 
 		pool, err := ants.NewPool(poolSize, ants.WithMaxBlockingTasks(blockAfter))
 		if err != nil {
-			e.Logger.Fatal("ants pool initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
+			e.Logger.Fatal("async pool initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
 		}
 
 		err = gopool.Register(asyncPool.Name, pool)
