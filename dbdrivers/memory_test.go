@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+// go test -bench=. -benchmem -benchtime=4s -cpu 2
 package dbdrivers
 
 import (
