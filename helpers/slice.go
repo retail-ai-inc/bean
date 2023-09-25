@@ -22,7 +22,9 @@
 
 package helpers
 
-import "strings"
+import (
+	"strings"
+)
 
 // HasStringInSlice will tell whether slice contains str or false
 // If a modifier func is provided, it is called with the slice item before the comparation:
@@ -65,7 +67,7 @@ func HasTargetInSlice[T comparable](slice []T, target T, modifiers ...func(T) T)
 		}
 
 		for _, modifier := range modifiers {
-			if modifier(v) == target {
+			if modifier != nil && modifier(v) == target {
 				return true
 			}
 		}
