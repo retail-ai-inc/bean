@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Report for {{.Project}}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+        }
+        table {
+            width: 100%;
+            table-layout: fixed; /* forces the table to fit the screen */
+            border-collapse: collapse;
+        }
+        th, td {
+            vertical-align: top;
+            border: 1px solid #888;
+            padding: 8px;
+            text-align: left;
+            white-space: normal;
+            word-wrap: break-word;
+            overflow: hidden; /* hide overflow text */
+            text-overflow: ellipsis; /* show ellipsis for overflow text */
+        }
+        th {
+            background-color: #373737;
+            color: #ffffff;
+        }
+        tr:hover {
+            background-color: #373737;
+        }
+
+        /* specific to results table */
+        .results-table th:nth-child(1) { width: 13%; } /* Package */
+        .results-table th:nth-child(2) { width: 13%; } /* Test */
+        .results-table th:nth-child(3) { width: 13%; } /* Sub-Test */
+        .results-table th:nth-child(4) { width: 5%; } /* Result */
+        .results-table th:nth-child(5) { width: 5%; } /* Severity */
+        .results-table th:nth-child(6) { width: 11%; } /* Time */
+        .results-table th:nth-child(7) { width: 40%; } /* Output */
+    </style>
+</head>
+<body>
+    <h2>{{.Project}}'s Tests executed at {{.TestPath}} on {{.ExecutedAt.FormattedHTML}}</h2>
+    <h2>Stats (Test Result × Severity)</h2>
+    <table class="stats-table">
+      <tr>
+        <th></th>
+        {{ $root := . }}
+        {{ range $si, $severity := .Severities }}
+          <!-- (column headers) severities -->
+          <th style="color: {{ index $root.SeverityColors $severity }}">{{ $severity }}</th>
+        {{ end }}
+          <!-- (last column header) total for each result -->
+          <th>Total</th>
+      </tr>
+      {{ range $ri, $result := .Results }}
+        {{ if not (and (eq $result "Unknown") (eq $root.Stats.Tests.Unknown 0)) }}
+          <tr>
+            <!-- (row headers) result -->
+            <th style="background-color: {{ index $root.ResultColors $result }}">{{ $result }}</th>
+            {{ range $si, $severity := $root.Severities }}
+            <!-- (row data) severity for result -->
+            <td>
+              {{ if eq $result "PASS" }}
+                {{ index $root.Stats.Severities.Pass $severity }}
+              {{ else if eq $result "FAIL" }}
+                {{ index $root.Stats.Severities.Fail $severity }}
+              {{ else if eq $result "SKIP" }}
+                {{ index $root.Stats.Severities.Skip $severity }}
+              {{ else if eq $result "Unknown" }}
+                {{ index $root.Stats.Severities.Unknown $severity }}
+              {{ end }}
+            </td>
+            {{ end }}
+            <!-- (last row data) total for each result -->
+            <td>
+            {{ if eq $result "PASS" }}
+              {{ $root.Stats.Tests.Pass }}
+            {{ else if eq $result "FAIL" }}
+              {{ $root.Stats.Tests.Fail }}
+            {{ else if eq $result "SKIP" }}
+              {{ $root.Stats.Tests.Skip }}
+            {{ else if eq $result "Unknown" }}
+              {{ $root.Stats.Tests.Unknown }}
+            {{ end }}
+            </td>
+          </tr>
+        {{ end }}
+      {{ end }}
+          <tr>
+            <!-- (last row header) total for each severity -->
+            <th>Total</th>
+            <!-- (row data) total for each severity -->
+            {{ range $si, $severity := .Severities }}
+              <td>{{ index $root.Stats.Severities.Total $severity }}</td>
+            {{ end }}
+            <!-- (last row data) total -->
+              <td>{{ $root.Stats.Tests.Total }}</td>
+          </tr>
+    </table>
+    <h2>Results</h2>
+    <table class="results-table">
+      <tr>
+        <th>Package</th>
+        <th>Test</th>
+        <th>Sub</th>
+        <th>Result</th>
+        <th>Severity</th>
+        <th>Time</th>
+        <th>Output</th>
+      </tr>
+      {{range $pi, $pr := .PkgResults}}
+        {{ $pkgName := $pr.Package }}
+        {{ $firstPkgRow := true }}
+        {{range $ti, $tr := $pr.Tests}}
+          {{ $testName := $tr.Test }}
+          {{ $firstTestRow := true }}
+          {{range $si, $sr := $tr.Subs}}
+            {{ $subTestName := $sr.Sub }}
+            {{with $rowSpans := index (index (index $.RowSpanMap $pkgName) $testName) $subTestName}}
+              <tr>
+              {{ if $firstPkgRow }}
+                <td rowspan="{{$rowSpans.Package}}">{{$pkgName}}</td>
+                {{ $firstPkgRow = false }}
+              {{ end }}
+
+              {{ if $firstTestRow }}
+                <td rowspan="{{$rowSpans.Test}}">{{if $testName}}{{$testName}}{{else}}-{{end}}</td>
+                {{ $firstTestRow = false }}
+              {{ end }}
+
+              {{ if gt $rowSpans.SubTest 1 }}
+                <!-- subtest with multiple details -->
+                {{range $di, $d := $sr.Details}}
+                  {{ if eq $di 0 }}
+                    <td rowspan="{{$rowSpans.SubTest}}">{{if $subTestName}}{{$subTestName}}{{else}}-{{end}}</td>
+                    <td rowspan="{{$rowSpans.SubTest}}" style="background-color: {{ index $root.ResultColors $sr.Result }}; font-weight: bold;">{{$sr.Result}}</td>
+                    <td rowspan="{{$rowSpans.SubTest}}" style="color: {{ index $root.SeverityColors $sr.Severity }}; font-weight: bold;">{{$sr.Severity}}</td>
+                  {{ end }}
+                  <td>{{$d.Time}}</td>
+                  <td>{{$d.Output}}</td>
+                </tr>
+                {{end}}
+              {{ else }}
+                <!-- subtest with no details -->
+                  <td>{{if $subTestName}}{{$subTestName}}{{else}}-{{end}}</td>
+                  <td style="background-color: {{ index $root.ResultColors $sr.Result }}; font-weight: bold;">{{$sr.Result}}</td>
+                  <td style="color: {{ index $root.SeverityColors $sr.Severity }}; font-weight: bold;">{{$sr.Severity}}</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+              {{ end }}
+            {{end}}
+          {{end}}
+        {{end}}
+      {{end}}
+    </table>
+</body>
+</html>
