@@ -12,6 +12,9 @@ build-race: ## build with race detactor
 build-slim: ## build without symbol and DWARF table, smaller binary but no debugging and profiling ability
 	go build -ldflags="-s -w" ./cmd/bean
 
+install: ## install the binary to $GOPATH/bin
+	go install ./cmd/bean
+
 lint: ## run all the lint tools, install golangci-lint if not exist
 ifeq (,$(wildcard $(GOPATH)/bin/golangci-lint))
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) > /dev/null

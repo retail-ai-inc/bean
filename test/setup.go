@@ -38,7 +38,8 @@ func setEnv(envStr string) error {
 
 type CfgOption func(*TestConfig)
 
-// SetupConfig initializes the configuration and accepts optional configuration functions
+// SetupConfig initializes the configuration and accepts optional configuration functions.
+// please ensure that config file contains `test` section.
 func SetupConfig(configPath string, opts ...CfgOption) error {
 	for _, opt := range opts {
 		opt(&TestCfg)
@@ -69,6 +70,7 @@ func SetupConfig(configPath string, opts ...CfgOption) error {
 
 // SetupConfigWithFixture initializes the configuration and custom fixture.
 // It finally overwrites a given fixture as argument with an initialized one which should have some values you set beforehand.
+// please ensure that config file contains `test` section and `fixture` section there.
 func SetupConfigWithFixture[T any](configPath string, custom *T) error {
 
 	if err := SetupConfig(

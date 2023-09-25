@@ -110,7 +110,7 @@ func isTestInSkipList(t *testing.T, testName string) bool {
 			return false
 		}
 	}
-	return helpers.HasStringInSlice(TestCfg.Skip, testName, nil)
+	return helpers.HasTargetInSlice(TestCfg.Skip, testName)
 }
 
 func getGitRootPath() string {

@@ -26,6 +26,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -65,7 +66,7 @@ const (
 
 // DEFAULT_XXX is used for default values of flags
 const (
-	DEFAULT_TEST_PATH   = "." + RECURSIVE_SUFFIX
+	DEFAULT_TEST_PATH   = "./..."
 	DEFAULT_OUTPUT_TYPE = string(CLI)
 	DEFAULT_REPORT_PATH = "./report"
 	DEFAULT_VERBOSE     = false
@@ -73,7 +74,6 @@ const (
 
 func init() {
 	// Add flags for the test command
-	TestCmd.Flags().StringP(TEST_PATH, "t", DEFAULT_TEST_PATH, "specify a path under which to run tests with the go test command.")
 	TestCmd.Flags().StringP(OUTPUT_TYPE, "o", DEFAULT_OUTPUT_TYPE, "specify a type of output of test results among 'cli', 'json', or 'html'.")
 	TestCmd.Flags().StringP(REPORT_PATH, "p", DEFAULT_REPORT_PATH, "if output type is not 'cli', specify a path where test results as report will be output.")
 	TestCmd.Flags().BoolP(VERBOSE, "v", DEFAULT_VERBOSE, "specify whether to output verbose logs, especially for passed or skipped test.")
@@ -84,21 +84,22 @@ func init() {
 
 // TestCmd represents the test command
 var TestCmd = &cobra.Command{
-	Use:   "test",
+	Use:   "test [test path]",
 	Short: "Run tests and generate the result report",
-	Long: `Run tests with go test command and generate a report
-with several options for specifying a test path, output type, report path and verbose output.`,
+	Long: `Run tests with go test command and generate a report by specifying a path under which to run tests (default "./...").
+You also have several options for output type, report path and verbose output.`,
+	Args:         cobra.MaximumNArgs(1),
 	RunE:         runTest,
 	SilenceUsage: true,
 }
 
 func runTest(cmd *cobra.Command, args []string) error {
 
-	testPath, err := cmd.Flags().GetString(TEST_PATH)
-	if err != nil {
-		return fmt.Errorf("failed to get test path: %w", err)
+	testPath := DEFAULT_TEST_PATH
+	if len(args) > 0 {
+		testPath = args[0]
 	}
-	err = validateTestPath(testPath)
+	err := validateTestPath(testPath)
 	if err != nil {
 		return err
 	}
@@ -234,10 +235,15 @@ func runTestAndShowResultOnCLI(testPath string, verbose bool) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
+	if err != nil {
+		log.Printf("tests failed (%s).\n", err)
+	} else {
+		log.Printf("all tests passed.\n")
+	}
 	return err
 }
 
-func runTestAndOrganizeResult(testPath string, verbose bool) (*test.Report, error) {
+func runTestAndOrganizeResult(testPath string, verbose bool) (*report, error) {
 	log.Printf("running tests at %s\n", testPath)
 
 	if verbose {
@@ -254,9 +260,12 @@ func runTestAndOrganizeResult(testPath string, verbose bool) (*test.Report, erro
 	executedAt := time.Now() // record the time when the test command is executed for the report
 	err := cmd.Run()
 	if err != nil {
-		log.Printf("finished testing with error (%s).\n", err) // log the error and continue
+		log.Printf("tests failed (%s)\n", err)
 	} else {
-		log.Printf("finished testing with no error.\n") // log the error and continue
+		log.Printf("all tests passed.\n")
+	}
+	if stderr.String() != "" {
+		return nil, fmt.Errorf("failed to run tests with standard error: %s", stderr.String())
 	}
 
 	pkgRlts, err := organizeResult(stdout, verbose)
@@ -269,18 +278,18 @@ func runTestAndOrganizeResult(testPath string, verbose bool) (*test.Report, erro
 		log.Println(err) // log the error and continue
 	}
 
-	report := &test.Report{
+	repo := &report{
 		Project:    project,
 		TestPath:   testPath,
-		ExecutedAt: test.ReportTime{Time: executedAt},
+		ExecutedAt: reportTime{Time: executedAt},
 		Stats:      stats,
 		PkgResults: pkgRlts,
 	}
 
-	return report, nil
+	return repo, nil
 }
 
-func organizeResult(stdout bytes.Buffer, verbose bool) ([]*test.PackageResult, error) {
+func organizeResult(stdout bytes.Buffer, verbose bool) ([]*packageResult, error) {
 	log.Println("organizing test result...")
 
 	events, err := unmarshalTestOutput(stdout)
@@ -289,20 +298,20 @@ func organizeResult(stdout bytes.Buffer, verbose bool) ([]*test.PackageResult, e
 	}
 
 	// group events by package name
-	eventsByPkg := make(map[string][]*test.Event)
+	eventsByPkg := make(map[string][]*event)
 	for _, e := range events {
 		eventsByPkg[e.Package] = append(eventsByPkg[e.Package], e)
 	}
 
-	var pkgRlts []*test.PackageResult
+	var pkgRlts []*packageResult
 	for pkgName, pEvents := range eventsByPkg {
-		pr := &test.PackageResult{
+		pr := &packageResult{
 			Package: pkgName,
 			Tests:   nil,
 		}
 
 		// group events by test name
-		eventsByTest := make(map[string][]*test.Event)
+		eventsByTest := make(map[string][]*event)
 		for _, e := range pEvents {
 			var testName string
 			if e.Test != "" && strings.Contains(e.Test, "/") {
@@ -313,14 +322,14 @@ func organizeResult(stdout bytes.Buffer, verbose bool) ([]*test.PackageResult, e
 			eventsByTest[testName] = append(eventsByTest[testName], e)
 		}
 
-		var testRlts []*test.TestResult
+		var testRlts []*testResult
 		for testName, tEvents := range eventsByTest {
-			tr := &test.TestResult{
+			tr := &testResult{
 				Test: testName,
 			}
 
 			// group events by sub test name
-			eventsBySubTest := make(map[string][]*test.Event)
+			eventsBySubTest := make(map[string][]*event)
 			for _, e := range tEvents {
 				var subTestName string
 				if e.Test != "" && strings.Contains(e.Test, "/") && tr.Test == strings.Split(e.Test, "/")[0] {
@@ -329,11 +338,11 @@ func organizeResult(stdout bytes.Buffer, verbose bool) ([]*test.PackageResult, e
 				eventsBySubTest[subTestName] = append(eventsBySubTest[subTestName], e)
 			}
 
-			var SubResults []*test.SubTestResult
+			var SubResults []*subTestResult
 			for subTestName, sEvents := range eventsBySubTest {
-				sr := &test.SubTestResult{
+				sr := &subTestResult{
 					Sub:      subTestName,
-					Result:   test.RLT_UNKNOWN,
+					Result:   RLT_UNKNOWN,
 					Severity: test.NO_SET,
 					Details:  nil,
 				}
@@ -342,22 +351,22 @@ func organizeResult(stdout bytes.Buffer, verbose bool) ([]*test.PackageResult, e
 					// set result for test
 					// find the first action and set it as the result for the test
 					// because, once outputs are grouped by test, either action of PASS, SKIP, or FAIL should come out just once in either of outputs
-					if sr.Result == test.RLT_UNKNOWN { // if result is still initialized
+					if sr.Result == RLT_UNKNOWN { // if result is still initialized
 						switch e.Action {
-						case test.FAIL:
-							sr.Result = test.RLT_FAIL
-						case test.PASS:
-							sr.Result = test.RLT_PASS
-						case test.SKIP:
-							sr.Result = test.RLT_SKIP
+						case FAIL:
+							sr.Result = RLT_FAIL
+						case PASS:
+							sr.Result = RLT_PASS
+						case SKIP:
+							sr.Result = RLT_SKIP
 						}
 					}
 					// set severity for test
 					// find the first severity log and set it as the severity for the test
 					// because, once outputs are grouped by test, severity log for test should come out just once in either of outputs
 					if sr.Severity == test.NO_SET { // if severity is still initialized
-						if e.Action == test.OUTPUT && e.Output != "" && test.SeverityRegex.MatchString(e.Output) {
-							matches := test.SeverityRegex.FindStringSubmatch(e.Output)
+						if e.Action == OUTPUT && e.Output != "" && SeverityRegex.MatchString(e.Output) {
+							matches := SeverityRegex.FindStringSubmatch(e.Output)
 							if len(matches) == 2 {
 								sr.Severity = test.Severity(strings.TrimSpace(matches[1]))
 							}
@@ -368,34 +377,34 @@ func organizeResult(stdout bytes.Buffer, verbose bool) ([]*test.PackageResult, e
 				// do not append sub test results without sub test name or severity is not set unless the result is `Unknown`
 				if sr.Sub == "" && sr.Severity == test.NO_SET &&
 					// when test is terminated for some reason before executing it, some clues could be left in the output with `Unknown` result
-					sr.Result != test.RLT_UNKNOWN {
+					sr.Result != RLT_UNKNOWN {
 					continue
 				}
 
-				var details []*test.Detail
+				var details []*detail
 				for _, e := range tEvents {
 
 					// do not append details without event's action or output is empty
-					if e.Action != test.OUTPUT || e.Output == "" {
+					if e.Action != OUTPUT || e.Output == "" {
 						continue
 
 					}
 
 					// do not append details for tests that are passed or skipped if verbose flag is not set
 					if !verbose {
-						if sr.Result == test.RLT_PASS || sr.Result == test.RLT_SKIP {
+						if sr.Result == RLT_PASS || sr.Result == RLT_SKIP {
 							continue
 						}
 					}
 
-					details = append(details, &test.Detail{
+					details = append(details, &detail{
 						Time:   e.Time,
 						Output: e.Output,
 					})
 				}
 
 				// do not append sub test results without details if result is not `Pass` or `Skip`
-				if sr.Result != test.RLT_PASS && sr.Result != test.RLT_SKIP &&
+				if sr.Result != RLT_PASS && sr.Result != RLT_SKIP &&
 					len(details) == 0 {
 					continue
 				}
@@ -448,18 +457,18 @@ func organizeResult(stdout bytes.Buffer, verbose bool) ([]*test.PackageResult, e
 	return pkgRlts, nil
 }
 
-func unmarshalTestOutput(stdout bytes.Buffer) ([]*test.Event, error) {
+func unmarshalTestOutput(stdout bytes.Buffer) ([]*event, error) {
 	rawData := stdout.String()
 	// split the output by rawLines once
 	rawLines := strings.Split(rawData, "\n")
 
 	// unmarshal json line to struct iteratively
-	var events []*test.Event
+	var events []*event
 	for _, l := range rawLines {
 		if l == "" {
 			continue
 		}
-		var e *test.Event
+		var e *event
 		err := json.Unmarshal([]byte(l), &e)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal json line %s: %w", l, err)
@@ -470,8 +479,8 @@ func unmarshalTestOutput(stdout bytes.Buffer) ([]*test.Event, error) {
 	return events, nil
 }
 
-func takeStats(pkgRlts []*test.PackageResult) test.Stats {
-	var stats test.Stats
+func takeStats(pkgRlts []*packageResult) stats {
+	var stats stats
 	stats.Severities.Pass = make(map[test.Severity]uint)
 	stats.Severities.Fail = make(map[test.Severity]uint)
 	stats.Severities.Skip = make(map[test.Severity]uint)
@@ -484,22 +493,22 @@ func takeStats(pkgRlts []*test.PackageResult) test.Stats {
 
 				severity := sr.Severity
 				switch sr.Result {
-				case test.RLT_PASS:
+				case RLT_PASS:
 					stats.Tests.Pass++
 					stats.Tests.Total++
 					stats.Severities.Pass[severity]++
 					stats.Severities.Total[severity]++
-				case test.RLT_FAIL:
+				case RLT_FAIL:
 					stats.Tests.Fail++
 					stats.Tests.Total++
 					stats.Severities.Fail[severity]++
 					stats.Severities.Total[severity]++
-				case test.RLT_SKIP:
+				case RLT_SKIP:
 					stats.Tests.Skip++
 					stats.Tests.Total++
 					stats.Severities.Skip[severity]++
 					stats.Severities.Total[severity]++
-				case test.RLT_UNKNOWN:
+				case RLT_UNKNOWN:
 					stats.Tests.Unknown++
 					stats.Tests.Total++
 					stats.Severities.Unknown[severity]++
@@ -530,10 +539,10 @@ func getModuleName() (string, error) {
 	return moduleName, nil
 }
 
-func outputReportJSON(report *test.Report, outputPath string) (string, error) {
+func outputReportJSON(repo *report, outputPath string) (string, error) {
 	log.Println("generating report as JSON...")
 
-	reportJSON, err := json.MarshalIndent(report, "", "  ")
+	reportJSON, err := json.MarshalIndent(repo, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal report to JSON: %w", err)
 	}
@@ -542,7 +551,7 @@ func outputReportJSON(report *test.Report, outputPath string) (string, error) {
 		return "", err
 	}
 
-	filePath := filepath.Join(outputPath, fmt.Sprintf("test_report_%s_%s.json", report.Project, report.ExecutedAt.ToSuffix()))
+	filePath := filepath.Join(outputPath, fmt.Sprintf("test_report_%s_%s.json", repo.Project, repo.ExecutedAt.toSuffix()))
 	err = os.WriteFile(filePath, reportJSON, 0644)
 	if err != nil {
 		return "", fmt.Errorf("failed to output report to %s: %w", filePath, err)
@@ -551,12 +560,15 @@ func outputReportJSON(report *test.Report, outputPath string) (string, error) {
 	return filePath, nil
 }
 
-var TestReportHTMLTmpl = "./tests/views/test_report.tmpl.html"
-
-func outputReportHTML(report *test.Report, outputPath string) (string, error) {
+func outputReportHTML(repo *report, outputPath string) (string, error) {
 	log.Println("generating report as HTML...")
 
-	tmpl, err := template.ParseFiles(TestReportHTMLTmpl)
+	tmplFS, err := fs.Sub(InternalFS, "internal/_test/views")
+	if err != nil {
+		return "", fmt.Errorf("failed to get template files: %w", err)
+	}
+
+	tmpl, err := template.ParseFS(tmplFS, "report.tpl.html")
 	if err != nil {
 		return "", fmt.Errorf("failed to parse HTML template: %w", err)
 	}
@@ -565,7 +577,7 @@ func outputReportHTML(report *test.Report, outputPath string) (string, error) {
 		return "", err
 	}
 
-	filePath := filepath.Join(outputPath, fmt.Sprintf("test_report_%s_%s.html", report.Project, report.ExecutedAt.ToSuffix()))
+	filePath := filepath.Join(outputPath, fmt.Sprintf("test_report_%s_%s.html", repo.Project, repo.ExecutedAt.toSuffix()))
 	file, err := os.Create(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create HTML file: %w", err)
@@ -575,21 +587,21 @@ func outputReportHTML(report *test.Report, outputPath string) (string, error) {
 	type tmplData struct {
 		Project        string
 		TestPath       string
-		ExecutedAt     test.ReportTime
+		ExecutedAt     reportTime
 		Severities     []test.Severity
 		SeverityColors map[test.Severity]string
-		Results        []test.Result
-		ResultColors   map[test.Result]string
-		Stats          test.Stats
-		PkgResults     []*test.PackageResult
-		RowSpanMap     map[string]map[string]map[string]RowSpans
+		Results        []result
+		ResultColors   map[result]string
+		Stats          stats
+		PkgResults     []*packageResult
+		RowSpanMap     map[string]map[string]map[string]rowSpans
 	}
 
 	data := tmplData{
-		Project:    report.Project,
-		TestPath:   report.TestPath,
-		ExecutedAt: report.ExecutedAt,
-		Stats:      report.Stats,
+		Project:    repo.Project,
+		TestPath:   repo.TestPath,
+		ExecutedAt: repo.ExecutedAt,
+		Stats:      repo.Stats,
 		Severities: []test.Severity{
 			test.CRITICAL,
 			test.HIGH,
@@ -606,20 +618,20 @@ func outputReportHTML(report *test.Report, outputPath string) (string, error) {
 			test.TRIVIAL:  "skyblue",
 			test.NO_SET:   "gray",
 		},
-		Results: []test.Result{
-			test.RLT_PASS,
-			test.RLT_FAIL,
-			test.RLT_SKIP,
-			test.RLT_UNKNOWN,
+		Results: []result{
+			RLT_PASS,
+			RLT_FAIL,
+			RLT_SKIP,
+			RLT_UNKNOWN,
 		},
-		ResultColors: map[test.Result]string{
-			test.RLT_PASS:    "forestgreen",
-			test.RLT_FAIL:    "crimson",
-			test.RLT_SKIP:    "goldenrod",
-			test.RLT_UNKNOWN: "gray",
+		ResultColors: map[result]string{
+			RLT_PASS:    "forestgreen",
+			RLT_FAIL:    "crimson",
+			RLT_SKIP:    "goldenrod",
+			RLT_UNKNOWN: "gray",
 		},
-		PkgResults: report.PkgResults,
-		RowSpanMap: calcRowSpans(report),
+		PkgResults: repo.PkgResults,
+		RowSpanMap: calcRowSpans(repo),
 	}
 
 	err = tmpl.Execute(file, data)
@@ -639,22 +651,16 @@ func makeOutputDir(dirPath string) error {
 	return nil
 }
 
-type RowSpans struct {
-	Package uint
-	Test    uint
-	SubTest uint
-}
+func calcRowSpans(repo *report) map[string]map[string]map[string]rowSpans {
+	rowSpanMap := make(map[string]map[string]map[string]rowSpans, len(repo.PkgResults))
 
-func calcRowSpans(report *test.Report) map[string]map[string]map[string]RowSpans {
-	rowSpanMap := make(map[string]map[string]map[string]RowSpans, len(report.PkgResults))
-
-	for _, pr := range report.PkgResults {
-		testMap := make(map[string]map[string]RowSpans)
+	for _, pr := range repo.PkgResults {
+		testMap := make(map[string]map[string]rowSpans)
 		pkgCount := uint(0)
 
 		// count package rows
 		for _, tr := range pr.Tests {
-			subMap := make(map[string]RowSpans, len(tr.Subs))
+			subMap := make(map[string]rowSpans, len(tr.Subs))
 			testCount := uint(0)
 
 			// count test rows
@@ -664,7 +670,7 @@ func calcRowSpans(report *test.Report) map[string]map[string]map[string]RowSpans
 				subCount = helpers.Max(subCount, 1) // fix sub count
 				testCount += subCount
 				// set row span for sub test
-				subMap[sr.Sub] = RowSpans{SubTest: subCount}
+				subMap[sr.Sub] = rowSpans{SubTest: subCount}
 			}
 
 			testCount = helpers.Max(testCount, 1) // fix test count
@@ -672,7 +678,7 @@ func calcRowSpans(report *test.Report) map[string]map[string]map[string]RowSpans
 
 			// retroactively set row span for test in return
 			for _, sr := range tr.Subs {
-				rowSpan := RowSpans{
+				rowSpan := rowSpans{
 					Test:    testCount,
 					SubTest: subMap[sr.Sub].SubTest,
 				}
@@ -687,11 +693,11 @@ func calcRowSpans(report *test.Report) map[string]map[string]map[string]RowSpans
 
 		// retroactively set row span for package
 		if rowSpanMap[pr.Package] == nil {
-			rowSpanMap[pr.Package] = make(map[string]map[string]RowSpans, len(pr.Tests))
+			rowSpanMap[pr.Package] = make(map[string]map[string]rowSpans, len(pr.Tests))
 		}
 		for _, tr := range pr.Tests {
 			if rowSpanMap[pr.Package][tr.Test] == nil {
-				rowSpanMap[pr.Package][tr.Test] = make(map[string]RowSpans, len(tr.Subs))
+				rowSpanMap[pr.Package][tr.Test] = make(map[string]rowSpans, len(tr.Subs))
 			}
 			for _, sr := range tr.Subs {
 				rowSpan := rowSpanMap[pr.Package][tr.Test][sr.Sub]
