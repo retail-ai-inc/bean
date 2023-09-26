@@ -58,6 +58,7 @@ const (
 	OUTPUT_TYPE = "output"
 	REPORT_PATH = "report_path"
 	VERBOSE     = "verbose"
+	RACE        = "race"
 )
 
 const (
@@ -70,13 +71,15 @@ const (
 	DEFAULT_OUTPUT_TYPE = string(CLI)
 	DEFAULT_REPORT_PATH = "./report"
 	DEFAULT_VERBOSE     = false
+	DEFAULT_RACE        = false
 )
 
 func init() {
 	// Add flags for the test command
-	TestCmd.Flags().StringP(OUTPUT_TYPE, "o", DEFAULT_OUTPUT_TYPE, "specify a type of output of test results among 'cli', 'json', or 'html'.")
-	TestCmd.Flags().StringP(REPORT_PATH, "p", DEFAULT_REPORT_PATH, "if output type is not 'cli', specify a path where test results as report will be output.")
-	TestCmd.Flags().BoolP(VERBOSE, "v", DEFAULT_VERBOSE, "specify whether to output verbose logs, especially for passed or skipped test.")
+	TestCmd.Flags().StringP(OUTPUT_TYPE, "o", DEFAULT_OUTPUT_TYPE, "specify a type of output of test results among 'cli', 'json', or 'html'")
+	TestCmd.Flags().StringP(REPORT_PATH, "p", DEFAULT_REPORT_PATH, "if output type is not 'cli', specify a path where test results as report will be output")
+	TestCmd.Flags().BoolP(VERBOSE, "v", DEFAULT_VERBOSE, "enable verbose output especially for passed or skipped tests as well as failed tests")
+	TestCmd.Flags().BoolP(RACE, "r", DEFAULT_RACE, "enable a race detector")
 
 	// Add the test command to the root command
 	rootCmd.AddCommand(TestCmd)
@@ -86,21 +89,20 @@ func init() {
 var TestCmd = &cobra.Command{
 	Use:   "test [test path]",
 	Short: "Run tests and generate the result report",
-	Long: `Run tests with go test command and generate a report by specifying a path under which to run tests (default "./...").
-You also have several options for output type, report path and verbose output.`,
+	Long: `Run tests with go test command and generate a report by specifying a path under which to run tests (default "./...")
+You also have several options for output type, report path and verbose output`,
 	Args:         cobra.MaximumNArgs(1),
 	RunE:         runTest,
 	SilenceUsage: true,
 }
 
 func runTest(cmd *cobra.Command, args []string) error {
+	opts := newTestOptions()
 
-	testPath := DEFAULT_TEST_PATH
 	if len(args) > 0 {
-		testPath = args[0]
+		opts.testPath = args[0]
 	}
-	err := validateTestPath(testPath)
-	if err != nil {
+	if err := opts.validateTestPath(); err != nil {
 		return err
 	}
 
@@ -108,30 +110,30 @@ func runTest(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get output type: %w", err)
 	}
-	oType := OutputType(rawType)
-	err = validateOutput(oType)
-	if err != nil {
+	opts.oType = OutputType(rawType)
+	if err := opts.validateOutputType(); err != nil {
 		return err
 	}
 
-	reportPath, err := cmd.Flags().GetString(REPORT_PATH)
+	opts.reportPath, err = cmd.Flags().GetString(REPORT_PATH)
 	if err != nil {
 		return fmt.Errorf("failed to get output path: %w", err)
 	}
-	if oType != CLI {
-		err = validateReportPath(reportPath)
-		if err != nil {
-			return err
-		}
+	if err := opts.validateReportPath(); err != nil {
+		return err
 	}
 
-	// validate verbose flag
-	verbose, err := cmd.Flags().GetBool(VERBOSE)
+	opts.verbose, err = cmd.Flags().GetBool(VERBOSE)
 	if err != nil {
 		return fmt.Errorf("failed to get verbose flag: %w", err)
 	}
 
-	err = execute(testPath, oType, reportPath, verbose)
+	opts.race, err = cmd.Flags().GetBool(RACE)
+	if err != nil {
+		return fmt.Errorf("failed to get race flag: %w", err)
+	}
+
+	err = execute(opts)
 	if err != nil {
 		return err
 	}
@@ -139,64 +141,104 @@ func runTest(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func validateTestPath(testPath string) error {
-	testDir := testPath
+type testOptions struct {
+	testPath   string
+	oType      OutputType
+	reportPath string
+	verbose    bool
+	race       bool
+}
 
-	if strings.HasSuffix(testPath, RECURSIVE_SUFFIX) {
-		testDir = strings.TrimSuffix(testPath, RECURSIVE_SUFFIX)
+func newTestOptions() *testOptions {
+	return &testOptions{
+		testPath:   DEFAULT_TEST_PATH,
+		oType:      OutputType(DEFAULT_OUTPUT_TYPE),
+		reportPath: DEFAULT_REPORT_PATH,
+		verbose:    DEFAULT_VERBOSE,
+		race:       DEFAULT_RACE,
 	}
-	info, err := os.Stat(testDir)
+}
+
+func (o *testOptions) validateTestPath() error {
+	testPath := o.testPath
+	if strings.HasSuffix(o.testPath, RECURSIVE_SUFFIX) {
+		testPath = strings.TrimSuffix(o.testPath, RECURSIVE_SUFFIX)
+	}
+	info, err := os.Stat(testPath)
 	if err != nil {
-		return fmt.Errorf("failed to get test path '%s': %w", testDir, err)
+		return fmt.Errorf("failed to get test path '%s': %w", testPath, err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("test path '%s' is not a directory", testDir)
+		return fmt.Errorf("test path '%s' is not a directory", testPath)
 	}
 
 	return nil
 }
 
-func validateOutput(output OutputType) error {
-	if !helpers.HasTargetInSlice(outputs, output) {
-		return fmt.Errorf("output type '%s' is not a valid output type. it must be one of '%s'", output, helpers.Join(outputs, "', '"))
+func (o *testOptions) validateOutputType() error {
+	if !helpers.HasTargetInSlice(outputs, o.oType) {
+		return fmt.Errorf("output type '%s' is not a valid output type. it must be one of '%s'", o.oType, helpers.Join(outputs, "', '"))
 	}
 
 	return nil
 }
 
-func validateReportPath(dirPath string) error {
+func (o *testOptions) validateReportPath() error {
 
-	if dirPath != DEFAULT_REPORT_PATH {
-		info, err := os.Stat(dirPath)
+	if o.oType == CLI {
+		return nil
+	}
+
+	if o.reportPath != DEFAULT_REPORT_PATH {
+		info, err := os.Stat(o.reportPath)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil
 			}
-			return fmt.Errorf("failed to get report path '%s': %w", dirPath, err)
+			return fmt.Errorf("failed to get report path '%s': %w", o.reportPath, err)
 		}
 		if !info.IsDir() {
-			return fmt.Errorf("report path '%s' is not a directory", dirPath)
+			return fmt.Errorf("report path '%s' is not a directory", o.reportPath)
 		}
 	}
 
 	return nil
 }
 
-func execute(testPath string, oType OutputType, reportPath string, verbose bool) error {
-	switch oType {
+func (o *testOptions) buildTestCmdArgs() []string {
+	args := []string{"test", "-count=1", o.testPath} // set default args
+
+	if o.oType != CLI {
+		// NOTE: even when the output type is HTML, add the -json flag to the go test command and use that output for reporting
+		args = append(args, "-json")
+	}
+	if o.verbose {
+		args = append(args, "-v")
+		log.Println("verbose output is enabled.")
+	}
+	if o.race {
+		args = append(args, "-race")
+		log.Println("race detector is enabled.")
+	}
+
+	return args
+}
+
+func execute(opts *testOptions) error {
+	switch opts.oType {
 	case CLI:
 		log.Println("output you want is on CLI.")
-		err := runTestAndShowResultOnCLI(testPath, verbose)
+		err := runTestAndShowResultOnCLI(opts)
 		return err
 
 	case JSON:
 		log.Println("output you want is on JSON.")
-		log.Printf("test result will be output to %s\n", reportPath)
-		report, err := runTestAndOrganizeResult(testPath, verbose)
+		log.Printf("test result will be output to %s\n", opts.reportPath)
+		report, err := runTestAndOrganizeResult(opts)
 		if err != nil {
 			return err
 		}
-		filePath, err := outputReportJSON(report, reportPath)
+		filePath, err := outputReportJSON(report, opts.reportPath)
 		if err != nil {
 			return err
 		}
@@ -205,12 +247,12 @@ func execute(testPath string, oType OutputType, reportPath string, verbose bool)
 
 	case HTML:
 		log.Println("output you want is on HTML.")
-		log.Printf("test result will be output at %s\n", reportPath)
-		report, err := runTestAndOrganizeResult(testPath, verbose)
+		log.Printf("test result will be output at %s\n", opts.reportPath)
+		report, err := runTestAndOrganizeResult(opts)
 		if err != nil {
 			return err
 		}
-		filePath, err := outputReportHTML(report, reportPath)
+		filePath, err := outputReportHTML(report, opts.reportPath)
 		if err != nil {
 			return err
 		}
@@ -218,20 +260,14 @@ func execute(testPath string, oType OutputType, reportPath string, verbose bool)
 		return nil
 
 	default:
-		return fmt.Errorf("output type '%s' is not a valid output type. it must be one of '%s'", oType, helpers.Join(outputs, "', '"))
+		return fmt.Errorf("output type '%s' is not a valid output type. it must be one of '%s'", opts.oType, helpers.Join(outputs, "', '"))
 	}
 }
 
-func runTestAndShowResultOnCLI(testPath string, verbose bool) error {
-	log.Printf("running tests at %s and the result will be output on CLI\n", testPath)
+func runTestAndShowResultOnCLI(opts *testOptions) error {
+	log.Printf("running tests at %s and the result will be output on CLI\n", opts.testPath)
 
-	var cmd *exec.Cmd
-	if verbose {
-		log.Println("output especially for passed or skipped tests will be verbose as well as failed ones.")
-		cmd = exec.Command("go", "test", "-v", "-count=1", testPath)
-	} else {
-		cmd = exec.Command("go", "test", "-count=1", testPath)
-	}
+	cmd := exec.Command("go", opts.buildTestCmdArgs()...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
@@ -243,16 +279,10 @@ func runTestAndShowResultOnCLI(testPath string, verbose bool) error {
 	return err
 }
 
-func runTestAndOrganizeResult(testPath string, verbose bool) (*report, error) {
-	log.Printf("running tests at %s\n", testPath)
+func runTestAndOrganizeResult(opts *testOptions) (*report, error) {
+	log.Printf("running tests at %s\n", opts.testPath)
 
-	if verbose {
-		log.Println("output especially for passed or skipped tests will be verbose as well as failed ones.")
-	}
-
-	// NOTE: if -json flag is set in go test command, logs of skipped and passed tests are also output,
-	// which means it does not matter whether -v flag is set or not.
-	cmd := exec.Command("go", "test", "-count=1", testPath, "-json")
+	cmd := exec.Command("go", opts.buildTestCmdArgs()...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -264,11 +294,11 @@ func runTestAndOrganizeResult(testPath string, verbose bool) (*report, error) {
 	} else {
 		log.Printf("all tests passed.\n")
 	}
-	if stderr.String() != "" {
-		return nil, fmt.Errorf("failed to run tests with standard error: %s", stderr.String())
+	if stderr.String() != "" { // capture problematic errors prior to test execution that are output to stderr
+		return nil, fmt.Errorf("failed to run tests (%s)", stderr.String())
 	}
 
-	pkgRlts, err := organizeResult(stdout, verbose)
+	pkgRlts, err := organizeResult(stdout, opts.verbose)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +310,7 @@ func runTestAndOrganizeResult(testPath string, verbose bool) (*report, error) {
 
 	repo := &report{
 		Project:    project,
-		TestPath:   testPath,
+		TestPath:   opts.testPath,
 		ExecutedAt: reportTime{Time: executedAt},
 		Stats:      stats,
 		PkgResults: pkgRlts,
