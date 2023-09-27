@@ -1,5 +1,7 @@
 GOPATH=$(shell go env GOPATH)
-GOLANGCI_LINT_VERSION=latest
+# v1.47.3 is the latest version of golangci-lint project based on Go 1.18
+# change it according to the Go version this project is using
+GOLANGCI_LINT_VERSION=v1.47.3
 
 all: lint test build
 
@@ -11,6 +13,9 @@ build-race: ## build with race detactor
 
 build-slim: ## build without symbol and DWARF table, smaller binary but no debugging and profiling ability
 	go build -ldflags="-s -w" ./cmd/bean
+
+install: ## install the binary to $GOPATH/bin
+	go install ./cmd/bean
 
 lint: ## run all the lint tools, install golangci-lint if not exist
 ifeq (,$(wildcard $(GOPATH)/bin/golangci-lint))

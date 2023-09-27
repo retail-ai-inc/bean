@@ -22,6 +22,10 @@
 
 package helpers
 
+import (
+	"strings"
+)
+
 // HasStringInSlice will tell whether slice contains str or false
 // If a modifier func is provided, it is called with the slice item before the comparation:
 // 	modifier := func(s string) string {
@@ -49,6 +53,29 @@ func HasStringInSlice(slice []string, str string, modifier func(str string) stri
 	return false
 }
 
+// HasTargetInSlice tells whether slice contains target or false
+func HasTargetInSlice[T comparable](slice []T, target T, modifiers ...func(T) T) bool {
+
+	for _, v := range slice {
+
+		if target == v {
+			return true
+		}
+
+		if len(modifiers) < 1 {
+			continue
+		}
+
+		for _, modifier := range modifiers {
+			if modifier != nil && modifier(v) == target {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // FindStringInSlice returns the smallest index at which str == slice[index], or -1 if there is no such index.
 func FindStringInSlice(slice []string, str string) int {
 
@@ -65,4 +92,20 @@ func FindStringInSlice(slice []string, str string) int {
 // DeleteStringFromSlice will delete a string from a specific index of a slice.
 func DeleteStringFromSlice(slice []string, index int) []string {
 	return append(slice[:index], slice[index+1:]...)
+}
+
+type text interface {
+	~string
+}
+
+// Join converts a slice of text to a string, separated by sep.
+func Join[T text](slice []T, sep string) string {
+	var b strings.Builder
+	for i, v := range slice {
+		if i > 0 {
+			b.WriteString(sep)
+		}
+		b.WriteString(string(v))
+	}
+	return b.String()
 }
