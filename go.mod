@@ -5,7 +5,6 @@ go 1.18
 require (
 	github.com/getsentry/sentry-go v0.13.0
 	github.com/go-playground/validator/v10 v10.9.0
-	github.com/go-redis/redis/v8 v8.11.4
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/google/uuid v1.3.0
 	github.com/labstack/echo-contrib v0.11.0
@@ -13,6 +12,7 @@ require (
 	github.com/labstack/gommon v0.4.0
 	github.com/panjf2000/ants/v2 v2.7.1
 	github.com/pkg/errors v0.9.1
+	github.com/redis/go-redis/v9 v9.2.1
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
 	github.com/spf13/cobra v1.3.0
 	github.com/spf13/viper v1.10.1
@@ -28,7 +28,7 @@ require (
 require (
 	github.com/alphadose/haxmap v1.3.0
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/cespare/xxhash/v2 v2.1.2 // indirect
+	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect

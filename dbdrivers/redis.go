@@ -29,16 +29,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
+	"github.com/redis/go-redis/v9"
 	"github.com/retail-ai-inc/bean/aes"
 	"gorm.io/gorm"
 )
 
 // IMPORTANT: This structure is holding any kind of redis connection using a map in bean.go.
 type RedisDBConn struct {
-	Host *redis.Client
-	Read map[uint64]*redis.Client
+	Host redis.UniversalClient
+	Read map[uint64]redis.UniversalClient
 	Name int
 }
 
@@ -99,7 +99,7 @@ func InitRedisMasterConn(config RedisConfig) *RedisDBConn {
 		)
 
 		if len(masterCfg.Read) > 0 {
-			redisReadConn := make(map[uint64]*redis.Client, len(masterCfg.Read))
+			redisReadConn := make(map[uint64]redis.UniversalClient, len(masterCfg.Read))
 
 			for i, readHost := range masterCfg.Read {
 				var host, port string
@@ -558,7 +558,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 			// IMPORTANT: Let's initialize the read replica connection if it is available.
 			if readHostArray, ok := redisCfg["read"]; ok {
 				if readHost, ok := readHostArray.([]interface{}); ok {
-					redisReadConn := make(map[uint64]*redis.Client, len(readHost))
+					redisReadConn := make(map[uint64]redis.UniversalClient, len(readHost))
 
 					for i, h := range readHost {
 						var host, port string
@@ -594,10 +594,18 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 func connectRedisDB(
 	password, host, port string, dbName int, maxretries, poolsize, minIdleConnections int,
 	dialTimeout, readTimeout, writeTimeout, poolTimeout time.Duration,
-) (*redis.Client, int) {
+) (redis.UniversalClient, int) {
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr:         host + ":" + port,
+	hosts := strings.Split(host, ",")
+	for i, h := range hosts {
+		hs := strings.Split(h, ":")
+		if len(hs) == 1 {
+			hosts[i] = strings.Join([]string{h, port}, ":")
+		}
+	}
+
+	rdb := redis.NewUniversalClient(&redis.UniversalOptions{
+		Addrs:        hosts,
 		Password:     password,
 		DB:           dbName,
 		MaxRetries:   maxretries,
@@ -608,7 +616,6 @@ func connectRedisDB(
 		WriteTimeout: writeTimeout,
 		PoolTimeout:  poolTimeout,
 	})
-
 	return rdb, dbName
 }
 
