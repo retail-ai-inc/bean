@@ -102,18 +102,9 @@ func InitRedisMasterConn(config RedisConfig) *RedisDBConn {
 			redisReadConn := make(map[uint64]redis.UniversalClient, len(masterCfg.Read))
 
 			for i, readHost := range masterCfg.Read {
-				var host, port string
-
-				s := strings.Split(readHost, ":")
-				host = s[0]
-				if len(s) != 2 {
-					port = masterCfg.Port
-				} else {
-					port = s[1]
-				}
 
 				redisReadConn[uint64(i)], _ = connectRedisDB(
-					masterCfg.Password, host, port, masterCfg.Database,
+					masterCfg.Password, readHost, masterCfg.Port, masterCfg.Database,
 					config.Maxretries, config.PoolSize, config.MinIdleConnections, config.DialTimeout,
 					config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, true,
 				)
@@ -561,20 +552,8 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 					redisReadConn := make(map[uint64]redis.UniversalClient, len(readHost))
 
 					for i, h := range readHost {
-						var host, port string
 
-						s := strings.Split(h.(string), ":")
-						host = s[0]
-						if len(s) != 2 {
-							port = redisCfg["port"].(string)
-						} else {
-							port = s[1]
-						}
-
-						var dbName int
-						if dbName, ok = redisCfg["database"].(int); !ok {
-							dbName = 0
-						}
+						var host, port = h.(string), redisCfg["port"].(string)
 
 						redisReadConn[uint64(i)], _ = connectRedisDB(
 							password, host, port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
