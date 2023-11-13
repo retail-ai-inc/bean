@@ -95,7 +95,7 @@ func InitRedisMasterConn(config RedisConfig) *RedisDBConn {
 		masterRedisDB.Host, masterRedisDB.Name = connectRedisDB(
 			masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
 			config.Maxretries, config.PoolSize, config.MinIdleConnections, config.DialTimeout,
-			config.ReadTimeout, config.WriteTimeout, config.PoolTimeout,
+			config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, false,
 		)
 
 		if len(masterCfg.Read) > 0 {
@@ -115,7 +115,7 @@ func InitRedisMasterConn(config RedisConfig) *RedisDBConn {
 				redisReadConn[uint64(i)], _ = connectRedisDB(
 					masterCfg.Password, host, port, masterCfg.Database,
 					config.Maxretries, config.PoolSize, config.MinIdleConnections, config.DialTimeout,
-					config.ReadTimeout, config.WriteTimeout, config.PoolTimeout,
+					config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, true,
 				)
 
 			}
@@ -552,7 +552,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 
 			tenantRedisDB[t.TenantID].Host, tenantRedisDB[t.TenantID].Name = connectRedisDB(
 				password, host, port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
-				config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout,
+				config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, false,
 			)
 
 			// IMPORTANT: Let's initialize the read replica connection if it is available.
@@ -578,7 +578,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 
 						redisReadConn[uint64(i)], _ = connectRedisDB(
 							password, host, port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
-							config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout,
+							config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, true,
 						)
 					}
 
@@ -593,7 +593,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 
 func connectRedisDB(
 	password, host, port string, dbName int, maxretries, poolsize, minIdleConnections int,
-	dialTimeout, readTimeout, writeTimeout, poolTimeout time.Duration,
+	dialTimeout, readTimeout, writeTimeout, poolTimeout time.Duration, readOnly bool,
 ) (redis.UniversalClient, int) {
 
 	hosts := strings.Split(host, ",")
@@ -615,6 +615,7 @@ func connectRedisDB(
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		PoolTimeout:  poolTimeout,
+		ReadOnly:     readOnly,
 	})
 	return rdb, dbName
 }
