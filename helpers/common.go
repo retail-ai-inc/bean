@@ -23,8 +23,8 @@
 package helpers
 
 import (
-	"io/ioutil"
 	"math/rand"
+	"os"
 	"time"
 
 	str "github.com/retail-ai-inc/bean/string"
@@ -36,10 +36,8 @@ type CopyableSlice []interface{}
 // GetRandomNumberFromRange will generate and return a random integer from a range.
 func GetRandomNumberFromRange(min, max int) int {
 
-	rand.Seed(time.Now().UnixNano())
-
-	n := min + rand.Intn(max-min+1)
-
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	n := min + rng.Intn(max-min+1)
 	return n
 }
 
@@ -115,7 +113,7 @@ func IsFilesExistInDirectory(dir string, filesToCheck []string) (bool, error) {
 		return false, nil
 	}
 
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return false, err
 	}
