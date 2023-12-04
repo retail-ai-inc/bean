@@ -62,7 +62,7 @@ func NewMemory() *Memory {
 
 		h := haxmap.New[string, Key]()
 		if h == nil {
-			panic("Failed to initialize the memory!")
+			panic("failed to initialize the memory!")
 		}
 
 		memoryDBConn = &Memory{

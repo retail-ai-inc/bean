@@ -23,8 +23,9 @@
 package str
 
 import (
+	"crypto/rand"
 	"encoding/base64"
-	"math/rand"
+	mrand "math/rand"
 	"net/url"
 	"strings"
 	"unicode"
@@ -226,7 +227,7 @@ func AlphaNumericRandomString(length int) string {
 	b := make([]rune, length)
 
 	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
+		b[i] = letter[mrand.Intn(len(letter))]
 	}
 
 	return string(b)
@@ -294,7 +295,7 @@ func GenerateRandomString(length int, isSpecialCharacter bool) (string, error) {
 // Modifying the elements of the slice implies modifying the elements of the backing array, and so all slices
 // which share the same backing array will "observe" the change.
 
-//`RemoveLeadingZerosFromSlice` this fuction will remove leading "0" from a string of slice.
+// `RemoveLeadingZerosFromSlice` this fuction will remove leading "0" from a string of slice.
 func RemoveLeadingZerosFromSlice(slice []string) []string {
 
 	if len(slice) == 0 {
