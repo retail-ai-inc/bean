@@ -13,6 +13,7 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [Two Build Commands](#two-build-commands)
 - [Additional Features](#additional-features)
   - [Built-In Logging](#built-in-logging)
+  - [Built-In testing](#built-in-testing)
   - [Out of the Box Commands](#out-of-the-box-commands)
     - [Generating Secret Key using gen secret command](#generating-secret-key-using-gen-secret-command)
     - [Cryptography using the aes command](#cryptography-using-the-aes-command)
@@ -128,6 +129,24 @@ Example:-
   ```
   bean.Logger.Debugf("This is a debug message for request %s", c.Request().URL.Path)
   ```
+
+## Built-In testing
+
+Bean provides a built-in testing framework to test your project. To run the test, you need to run the following command from your project directory like below:
+
+```sh
+bean test ./... -output=html -output-file=./your/proejct/report
+```
+
+If you want to know more about the testing command then you can run `bean test --help` from your project directory.
+
+With helper functions under`test` package, you can easily test your project. The `test` package provides the following helper functions:-
+
+- `SetupConfig` - This function will setup the config for your test. You can pass the `env.json` file path as a parameter. It will read config under `test` tag from the `env.json` file and set the config `TestConfig` for your test so that you can use the config in your test easily.
+
+- `SetSeverity` - This function will set different severity levels for different tests so that you can make a result report of your testing more organized; you can see aggregated results of your tests based on the severity level either in JSON or HTML format.
+
+- other util functions - These contains some helper functions like `SkipTestIfInSkipList`(that is supposed to be used along with `TestConfig`) to make your testing easier.
 
 ## Out of the Box Commands
 
