@@ -147,8 +147,9 @@ func RedisGetString(c context.Context, clients *RedisDBConn, key string) (string
 		}
 	} else if noOfReadReplica > 1 {
 		// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
-		rand.Seed(time.Now().UnixNano())
-		readHost := rand.Intn(noOfReadReplica)
+		// TODO: Use global seed and make go version as 1.20 minimum.
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		readHost := rng.Intn(noOfReadReplica)
 
 		str, err = clients.Read[uint64(readHost)].Get(c, key).Result()
 		if err != nil {
@@ -182,8 +183,9 @@ func RedisMGet(c context.Context, clients *RedisDBConn, keys ...string) ([]inter
 		}
 	} else if noOfReadReplica > 1 {
 		// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
-		rand.Seed(time.Now().UnixNano())
-		readHost := rand.Intn(noOfReadReplica)
+		// TODO: Use global seed and make go version as 1.20 minimum.
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		readHost := rng.Intn(noOfReadReplica)
 
 		result, err = clients.Read[uint64(readHost)].MGet(c, keys...).Result()
 		if err != nil {
@@ -215,8 +217,9 @@ func RedisHGet(c context.Context, clients *RedisDBConn, key string, field string
 		}
 	} else if noOfReadReplica > 1 {
 		// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
-		rand.Seed(time.Now().UnixNano())
-		readHost := rand.Intn(noOfReadReplica)
+		// TODO: Use global seed and make go version as 1.20 minimum.
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		readHost := rng.Intn(noOfReadReplica)
 
 		result, err = clients.Read[uint64(readHost)].HGet(c, key, field).Result()
 		if err != nil {
@@ -248,8 +251,9 @@ func RedisHgets(c context.Context, clients *RedisDBConn, redisKeysWithField map[
 		pipe = clients.Read[0].Pipeline()
 	} else if noOfReadReplica > 1 {
 		// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
-		rand.Seed(time.Now().UnixNano())
-		readHost := rand.Intn(noOfReadReplica)
+		// TODO: Use global seed and make go version as 1.20 minimum.
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		readHost := rng.Intn(noOfReadReplica)
 		pipe = clients.Read[uint64(readHost)].Pipeline()
 	} else {
 		// If there is no read replica then just hit the host server.
@@ -292,8 +296,9 @@ func RedisGetLRange(c context.Context, clients *RedisDBConn, key string, start, 
 		}
 	} else if noOfReadReplica > 1 {
 		// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
-		rand.Seed(time.Now().UnixNano())
-		readHost := rand.Intn(noOfReadReplica)
+		// TODO: Use global seed and make go version as 1.20 minimum.
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		readHost := rng.Intn(noOfReadReplica)
 
 		str, err = clients.Read[uint64(readHost)].LRange(c, key, start, stop).Result()
 		if err != nil {
@@ -327,8 +332,9 @@ func RedisSMembers(c context.Context, clients *RedisDBConn, key string) ([]strin
 		}
 	} else if noOfReadReplica > 1 {
 		// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
-		rand.Seed(time.Now().UnixNano())
-		readHost := rand.Intn(noOfReadReplica)
+		// TODO: Use global seed and make go version as 1.20 minimum.
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		readHost := rng.Intn(noOfReadReplica)
 
 		str, err = clients.Read[uint64(readHost)].SMembers(c, key).Result()
 		if err != nil {
@@ -362,8 +368,9 @@ func RedisSIsMember(c context.Context, clients *RedisDBConn, key string, element
 		}
 	} else if noOfReadReplica > 1 {
 		// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
-		rand.Seed(time.Now().UnixNano())
-		readHost := rand.Intn(noOfReadReplica)
+		// TODO: Use global seed and make go version as 1.20 minimum.
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		readHost := rng.Intn(noOfReadReplica)
 
 		found, err = clients.Read[uint64(readHost)].SIsMember(c, key, element).Result()
 		if err != nil {
@@ -395,8 +402,10 @@ func RedisSRandMemberN(c context.Context, clients *RedisDBConn, key string, coun
 		}
 	} else if noOfReadReplica > 1 {
 		// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
-		rand.Seed(time.Now().UnixNano())
-		readHost := rand.Intn(noOfReadReplica)
+		// TODO: Use global seed and make go version as 1.20 minimum.
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		readHost := rng.Intn(noOfReadReplica)
+
 		result, err = clients.Read[uint64(readHost)].SRandMemberN(c, key, count).Result()
 		if err != nil {
 			return nil, errors.WithStack(err)
@@ -596,6 +605,12 @@ func connectRedisDB(
 		PoolTimeout:  poolTimeout,
 		ReadOnly:     readOnly,
 	})
+	// Check the connection
+	_, err := rdb.Ping(context.TODO()).Result()
+	if err != nil {
+		panic(err)
+	}
+
 	return rdb, dbName
 }
 

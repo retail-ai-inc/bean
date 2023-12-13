@@ -141,5 +141,11 @@ func connectMongoDB(userName, password, host, port, dbName string, maxConnection
 		panic(err)
 	}
 
+	// Check the connection
+	err = mdb.Ping(ctx, nil)
+	if err != nil {
+		panic(err)
+	}
+
 	return mdb, dbName
 }
