@@ -35,6 +35,8 @@ import (
 	"gorm.io/gorm"
 )
 
+var ErrRedisInvalidParameter = errors.New("redis invalid parameter")
+
 // IMPORTANT: This structure is holding any kind of redis connection using a map in bean.go.
 type RedisDBConn struct {
 	Host redis.UniversalClient
@@ -169,17 +171,14 @@ func RedisGetString(c context.Context, clients *RedisDBConn, key string) (string
 	return str, nil
 }
 
-func RedisMGet(c context.Context, clients *RedisDBConn, keys ...string) ([]interface{}, error) {
-	var err error
-	var result []interface{}
-
+func RedisMGet(c context.Context, clients *RedisDBConn, keys ...string) (result []interface{}, err error) {
 	noOfReadReplica := len(clients.Read)
 
 	// Check the read replicas are available or not.
 	if noOfReadReplica == 1 {
-		result, err = clients.Read[0].MGet(c, keys...).Result()
+		result, err = wrapMGet(c, clients.Read[0], keys...)
 		if err != nil {
-			result, err = clients.Host.MGet(c, keys...).Result()
+			result, err = wrapMGet(c, clients.Host, keys...)
 		}
 	} else if noOfReadReplica > 1 {
 		// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
@@ -187,13 +186,13 @@ func RedisMGet(c context.Context, clients *RedisDBConn, keys ...string) ([]inter
 		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 		readHost := rng.Intn(noOfReadReplica)
 
-		result, err = clients.Read[uint64(readHost)].MGet(c, keys...).Result()
+		result, err = wrapMGet(c, clients.Read[uint64(readHost)], keys...)
 		if err != nil {
-			result, err = clients.Host.MGet(c, keys...).Result()
+			result, err = wrapMGet(c, clients.Host, keys...)
 		}
 	} else {
 		// If there is no read replica then just hit the host server.
-		result, err = clients.Host.MGet(c, keys...).Result()
+		result, err = wrapMGet(c, clients.Host, keys...)
 	}
 
 	if err != nil {
@@ -201,6 +200,94 @@ func RedisMGet(c context.Context, clients *RedisDBConn, keys ...string) ([]inter
 	}
 
 	return result, nil
+}
+
+func wrapMGet(ctx context.Context, clients redis.UniversalClient, keys ...string) ([]interface{}, error) {
+	var results = make([]interface{}, 0, len(keys))
+	cmder, err := clients.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		for i := 0; i < len(keys); i++ {
+			_, err := pipe.Get(ctx, keys[i]).Result()
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, cmdRes := range cmder {
+		results = append(results, cmdRes.(*redis.StringCmd).Val())
+	}
+	return results, nil
+}
+
+func RedisMSet(c context.Context, clients *RedisDBConn, values ...interface{}) (err error) {
+	noOfReadReplica := len(clients.Read)
+
+	// Check the read replicas are available or not.
+	if noOfReadReplica == 1 {
+		err = wrapMSet(c, clients.Read[0], values...)
+		if err != nil {
+			err = wrapMSet(c, clients.Host, values...)
+		}
+	} else if noOfReadReplica > 1 {
+		// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
+		// TODO: Use global seed and make go version as 1.20 minimum.
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		readHost := rng.Intn(noOfReadReplica)
+		err = wrapMSet(c, clients.Read[uint64(readHost)], values...)
+		if err != nil {
+			err = wrapMSet(c, clients.Host, values...)
+		}
+	} else {
+		// If there is no read replica then just hit the host server.
+		err = wrapMSet(c, clients.Host, values...)
+	}
+
+	return errors.WithStack(err)
+}
+
+func wrapMSet(ctx context.Context, clients redis.UniversalClient, values ...interface{}) error {
+	var dst []interface{}
+	switch len(values) {
+	case 0:
+	case 1:
+		arg := values[0]
+		switch arg := arg.(type) {
+		case []string:
+			for _, s := range arg {
+				dst = append(dst, s)
+			}
+		case []interface{}:
+			dst = append(dst, arg...)
+		case map[string]interface{}:
+			for k, v := range arg {
+				dst = append(dst, k, v)
+			}
+		case map[string]string:
+			for k, v := range arg {
+				dst = append(dst, k, v)
+			}
+		default:
+			dst = append(dst, arg)
+		}
+	default:
+		dst = append(dst, values...)
+	}
+	if len(dst) == 0 || len(dst)%2 != 0 {
+		return ErrRedisInvalidParameter
+	}
+	_, err := clients.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		for i := 0; i < len(dst); i += 2 {
+			cmd := pipe.Set(ctx, dst[i].(string), dst[i+1], 0)
+			if cmd.Err() != nil {
+				return cmd.Err()
+			}
+		}
+		return nil
+	})
+	return err
 }
 
 // To get single redis hash key and it's field from redis.
