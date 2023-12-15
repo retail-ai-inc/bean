@@ -213,7 +213,9 @@ func wrapMGet(ctx context.Context, clients redis.UniversalClient, keys ...string
 		}
 		return nil
 	})
-	if err != nil {
+	if errors.Is(err, redis.Nil) {
+		return nil, nil
+	} else if err != nil {
 		return nil, err
 	}
 	for _, cmdRes := range cmder {
