@@ -505,15 +505,29 @@ func RedisExpireKey(c context.Context, clients *RedisDBConn, key string, ttl tim
 	return nil
 }
 
-func RedisMSet(c context.Context, clients *RedisDBConn, values ...interface{}) (err error) {
-	if err = wrapMSet(c, clients.Host, values...); err != nil {
+// RedisMSetWithTTL For accepts multiple values, see RedisMSet description.
+func RedisMSetWithTTL(c context.Context, clients *RedisDBConn, ttl time.Duration, values ...interface{}) (err error) {
+	if err = wrapMSet(c, clients.Host, ttl, values...); err != nil {
 		return errors.WithStack(err)
 	}
 
 	return nil
 }
 
-func wrapMSet(ctx context.Context, clients redis.UniversalClient, values ...interface{}) error {
+// RedisMSet is like Set but accepts multiple values:
+//   - RedisMSet("key1", "value1", "key2", "value2")
+//   - RedisMSet([]string{"key1", "value1", "key2", "value2"})
+//   - RedisMSet(map[string]interface{}{"key1": "value1", "key2": "value2"})
+//   - RedisMSet(struct), For struct, please implement the `encoding.BinaryMarshaler` interface.
+func RedisMSet(c context.Context, clients *RedisDBConn, values ...interface{}) (err error) {
+	if err = wrapMSet(c, clients.Host, 0, values...); err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+func wrapMSet(ctx context.Context, clients redis.UniversalClient, ttl time.Duration, values ...interface{}) error {
 	var dst []interface{}
 	switch len(values) {
 	case 0:
@@ -545,7 +559,7 @@ func wrapMSet(ctx context.Context, clients redis.UniversalClient, values ...inte
 	}
 	_, err := clients.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 		for i := 0; i < len(dst); i += 2 {
-			cmd := pipe.Set(ctx, dst[i].(string), dst[i+1], 0)
+			cmd := pipe.Set(ctx, dst[i].(string), dst[i+1], ttl)
 			if cmd.Err() != nil {
 				return cmd.Err()
 			}
