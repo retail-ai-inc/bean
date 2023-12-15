@@ -518,7 +518,7 @@ func RedisMSetWithTTL(c context.Context, clients *RedisDBConn, ttl time.Duration
 //   - RedisMSet("key1", "value1", "key2", "value2")
 //   - RedisMSet([]string{"key1", "value1", "key2", "value2"})
 //   - RedisMSet(map[string]interface{}{"key1": "value1", "key2": "value2"})
-//   - RedisMSet(struct), For struct, please implement the `encoding.BinaryMarshaler` interface.
+// For `struct` values, please implement the `encoding.BinaryMarshaler` interface.
 func RedisMSet(c context.Context, clients *RedisDBConn, values ...interface{}) (err error) {
 	if err = wrapMSet(c, clients.Host, 0, values...); err != nil {
 		return errors.WithStack(err)
