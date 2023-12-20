@@ -100,7 +100,8 @@ func InitRedisMasterConn(config RedisConfig) *RedisDBConn {
 			config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, false,
 		)
 
-		if len(masterCfg.Read) > 0 {
+		// when `len(strings.Split(masterCfg.Host, ","))>1`, it means that Redis will operate in `cluster` mode, and the `replica` mode will not take effect.
+		if len(strings.Split(masterCfg.Host, ",")) == 1 && len(masterCfg.Read) > 0 {
 			redisReadConn := make(map[uint64]redis.UniversalClient, len(masterCfg.Read))
 
 			for i, readHost := range masterCfg.Read {
@@ -641,7 +642,8 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 			)
 
 			// IMPORTANT: Let's initialize the read replica connection if it is available.
-			if readHostArray, ok := redisCfg["read"]; ok {
+			// when `len(strings.Split(host, ","))>1`, it means that Redis will operate in `cluster` mode, and the `replica` mode will not take effect.
+			if readHostArray, ok := redisCfg["read"]; ok && len(strings.Split(host, ",")) == 1 {
 				if readHost, ok := readHostArray.([]interface{}); ok {
 					redisReadConn := make(map[uint64]redis.UniversalClient, len(readHost))
 
