@@ -187,42 +187,6 @@ func RedisMGet(c context.Context, clients *RedisDBConn, keys ...string) (result 
 	} else {
 		// Check the read replicas are available or not.
 		if clients.readCount == 1 {
-			result, err = wrapMGet(c, clients.Read[0], keys...)
-			if err != nil {
-				result, err = wrapMGet(c, clients.Host, keys...)
-			}
-		} else if clients.readCount > 1 {
-			// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
-			// TODO: Use global seed and make go version as 1.20 minimum.
-			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-			readHost := rng.Intn(clients.readCount)
-
-			result, err = wrapMGet(c, clients.Read[uint64(readHost)], keys...)
-			if err != nil {
-				result, err = wrapMGet(c, clients.Host, keys...)
-			}
-		} else {
-			// If there is no read replica then just hit the host server.
-			result, err = wrapMGet(c, clients.Host, keys...)
-		}
-	}
-
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	return result, nil
-}
-
-// RedisMGetOriginal This is the original `MGet` method. if you want to use it in `redis-cluster` mode, please make sure to set `tags` in the key.
-func RedisMGetOriginal(c context.Context, clients *RedisDBConn, keys ...string) (result []interface{}, err error) {
-
-	if clients.isCluster {
-		// If client is cluster mode then just hit the host server.
-		result, err = clients.Host.MGet(c, keys...).Result()
-	} else {
-		// Check the read replicas are available or not.
-		if clients.readCount == 1 {
 			result, err = clients.Read[0].MGet(c, keys...).Result()
 			if err != nil {
 				result, err = clients.Host.MGet(c, keys...).Result()
@@ -242,6 +206,7 @@ func RedisMGetOriginal(c context.Context, clients *RedisDBConn, keys ...string) 
 			result, err = clients.Host.MGet(c, keys...).Result()
 		}
 	}
+
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -562,15 +527,6 @@ func RedisExpireKey(c context.Context, clients *RedisDBConn, key string, ttl tim
 	return nil
 }
 
-// RedisMSetWithTTL For accepts multiple values, see RedisMSet description.
-func RedisMSetWithTTL(c context.Context, clients *RedisDBConn, ttl time.Duration, values ...interface{}) (err error) {
-	if err = wrapMSet(c, clients.Host, ttl, values...); err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
-}
-
 // RedisMSet This is a replacement of the original `MSet` method by utilizing the `pipeline` approach.
 // it accepts multiple values:
 //   - RedisMSet("key1", "value1", "key2", "value2")
@@ -578,16 +534,22 @@ func RedisMSetWithTTL(c context.Context, clients *RedisDBConn, ttl time.Duration
 //   - RedisMSet(map[string]interface{}{"key1": "value1", "key2": "value2"})
 // For `struct` values, please implement the `encoding.BinaryMarshaler` interface.
 func RedisMSet(c context.Context, clients *RedisDBConn, values ...interface{}) (err error) {
-	if err = wrapMSet(c, clients.Host, 0, values...); err != nil {
+	if clients.isCluster {
+		err = wrapMSet(c, clients.Host, 0, values...)
+	} else {
+		_, err = clients.Host.MSet(c, values...).Result()
+	}
+
+	if err != nil {
 		return errors.WithStack(err)
 	}
 
 	return nil
 }
 
-// RedisMSetOriginal This is the original `MSet` method. if you want to use it in `redis-cluster` mode, please make sure to set `tags` in the key.
-func RedisMSetOriginal(c context.Context, clients *RedisDBConn, values ...interface{}) (err error) {
-	if _, err = clients.Host.MSet(c, values...).Result(); err != nil {
+// RedisMSetWithTTL For accepts multiple values, see RedisMSet description.
+func RedisMSetWithTTL(c context.Context, clients *RedisDBConn, ttl time.Duration, values ...interface{}) (err error) {
+	if err = wrapMSet(c, clients.Host, ttl, values...); err != nil {
 		return errors.WithStack(err)
 	}
 
