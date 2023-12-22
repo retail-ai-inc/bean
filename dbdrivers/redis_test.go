@@ -30,10 +30,10 @@ func Test_connectRedisDB(t *testing.T) {
 			name: "success",
 			args: args{
 				password:           "AqNUe43qWL",
-				host:               "34.84.252.114:6379,34.85.78.190:6379,34.146.251.57:6379,34.146.231.90:6379,34.146.240.130:6379,35.243.103.175:6379",
+				host:               "34.84.56.20,35.200.65.32,35.243.97.67,35.243.119.218,35.187.198.109,104.198.85.119",
 				port:               "6379",
 				dbName:             0,
-				maxretries:         0,
+				maxretries:         -2,
 				poolsize:           0,
 				minIdleConnections: 0,
 				dialTimeout:        0,
