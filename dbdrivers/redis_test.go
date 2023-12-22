@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// this is for redis v6.x
 func Test_connectRedisDB(t *testing.T) {
 	type args struct {
 		password           string
