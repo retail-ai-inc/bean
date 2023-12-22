@@ -37,7 +37,7 @@ import (
 
 var ErrRedisInvalidParameter = errors.New("redis invalid parameter")
 
-// IMPORTANT: This structure is holding any kind of redis connection using a map in bean.go.
+// RedisDBConn IMPORTANT: This structure is holding any kind of redis connection using a map in bean.go.
 type RedisDBConn struct {
 	Host      redis.UniversalClient
 	Read      map[uint64]redis.UniversalClient
@@ -178,7 +178,7 @@ func RedisGetString(c context.Context, clients *RedisDBConn, key string) (str st
 	return str, nil
 }
 
-// RedisMGet This is a replacement of the original `MGet` method by utilizing the `pipeline` approach.
+// RedisMGet This is a replacement of the original `MGet` method by utilizing the `pipeline` approach when Redis is in `cluster` mode.
 func RedisMGet(c context.Context, clients *RedisDBConn, keys ...string) (result []interface{}, err error) {
 
 	if clients.isCluster {
@@ -527,7 +527,7 @@ func RedisExpireKey(c context.Context, clients *RedisDBConn, key string, ttl tim
 	return nil
 }
 
-// RedisMSet This is a replacement of the original `MSet` method by utilizing the `pipeline` approach.
+// RedisMSet This is a replacement of the original `MSet` method by utilizing the `pipeline` approach when Redis is in `cluster` mode.
 // it accepts multiple values:
 //   - RedisMSet("key1", "value1", "key2", "value2")
 //   - RedisMSet([]string{"key1", "value1", "key2", "value2"})
@@ -547,7 +547,9 @@ func RedisMSet(c context.Context, clients *RedisDBConn, values ...interface{}) (
 	return nil
 }
 
-// RedisMSetWithTTL For accepts multiple values, see RedisMSet description.
+// RedisMSetWithTTL
+// This method is implemented using `pipeline`.
+// For accepts multiple values, see RedisMSet description.
 func RedisMSetWithTTL(c context.Context, clients *RedisDBConn, ttl time.Duration, values ...interface{}) (err error) {
 	if err = wrapMSet(c, clients.Host, ttl, values...); err != nil {
 		return errors.WithStack(err)
