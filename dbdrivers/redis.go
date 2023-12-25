@@ -279,9 +279,9 @@ func RedisHgets(c context.Context, conn *RedisDBConn, redisKeysWithField map[str
 		}
 	}
 
-	commandMapper := map[string]*redis.StringCmd{}
+	results := map[string]*redis.StringCmd{}
 	for key, field := range redisKeysWithField {
-		commandMapper[key] = pipe.HGet(c, key, field)
+		results[key] = pipe.HGet(c, key, field)
 	}
 	_, err := pipe.Exec(c)
 	// for a key in the pipline for which the hget operation is being done
@@ -291,14 +291,14 @@ func RedisHgets(c context.Context, conn *RedisDBConn, redisKeysWithField map[str
 		return nil, errors.WithStack(err)
 	}
 
-	var mappedKeyFieldValues = make(map[string]string)
+	var keyVal = make(map[string]string)
 	// iterate through the commands and their responses from the pipeline execution.
-	for _, v := range commandMapper {
+	for _, v := range results {
 		args := v.Args()
-		redisKey := args[1].(string)
-		mappedKeyFieldValues[redisKey] = v.Val()
+		key := args[1].(string)
+		keyVal[key] = v.Val()
 	}
-	return mappedKeyFieldValues, nil
+	return keyVal, nil
 }
 
 func RedisGetLRange(c context.Context, conn *RedisDBConn, key string, start, stop int64) (str []string, err error) {
@@ -530,7 +530,7 @@ func RedisExpireKey(c context.Context, conn *RedisDBConn, key string, ttl time.D
 }
 
 // RedisMSet This is a replacement of the original `MSet` method by utilizing the `pipeline` approach when Redis is in `cluster` mode.
-// it accepts multiple values:
+// it accepts multiple values in one of the following formats:
 //   - RedisMSet("key1", "value1", "key2", "value2")
 //   - RedisMSet([]string{"key1", "value1", "key2", "value2"})
 //   - RedisMSet(map[string]interface{}{"key1": "value1", "key2": "value2"})
@@ -572,16 +572,20 @@ func (c *RedisDBConn) wrapMSet(ctx context.Context, ttl time.Duration, values ..
 			for _, s := range arg {
 				dst = append(dst, s)
 			}
+
 		case []interface{}:
 			dst = append(dst, arg...)
+
 		case map[string]interface{}:
 			for k, v := range arg {
 				dst = append(dst, k, v)
 			}
+
 		case map[string]string:
 			for k, v := range arg {
 				dst = append(dst, k, v)
 			}
+
 		default:
 			dst = append(dst, arg)
 		}
@@ -605,7 +609,7 @@ func (c *RedisDBConn) wrapMSet(ctx context.Context, ttl time.Duration, values ..
 
 func (c *RedisDBConn) wrapMGet(ctx context.Context, keys ...string) ([]interface{}, error) {
 	var results = make([]interface{}, 0, len(keys))
-	cmder, err := c.Primary.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+	cmders, err := c.Primary.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 		for i := 0; i < len(keys); i++ {
 			_, err := pipe.Get(ctx, keys[i]).Result()
 			if err != nil {
@@ -619,8 +623,8 @@ func (c *RedisDBConn) wrapMGet(ctx context.Context, keys ...string) ([]interface
 	} else if err != nil {
 		return nil, err
 	}
-	for _, cmdRes := range cmder {
-		results = append(results, cmdRes.(*redis.StringCmd).Val())
+	for _, cmder := range cmders {
+		results = append(results, cmder.(*redis.StringCmd).Val())
 	}
 	return results, nil
 }
