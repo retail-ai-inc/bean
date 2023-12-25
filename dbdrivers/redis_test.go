@@ -10,7 +10,7 @@ import (
 func Test_connectRedisDB(t *testing.T) {
 	type args struct {
 		password           string
-		host               string
+		hosts              string
 		port               string
 		dbName             int
 		maxretries         int
@@ -30,7 +30,7 @@ func Test_connectRedisDB(t *testing.T) {
 			name: "success",
 			args: args{
 				password:           "AqNUe43qWL",
-				host:               "34.84.56.20,35.200.65.32,35.243.97.67,35.243.119.218,35.187.198.109,104.198.85.119",
+				hosts:              "34.84.56.20,35.200.65.32,35.243.97.67,35.243.119.218,35.187.198.109,104.198.85.119",
 				port:               "6379",
 				dbName:             0,
 				maxretries:         -2,
@@ -47,7 +47,7 @@ func Test_connectRedisDB(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.NotPanics(t, func() {
-				connectRedisDB(tt.args.password, tt.args.host, tt.args.port, tt.args.dbName, tt.args.maxretries, tt.args.poolsize, tt.args.minIdleConnections, tt.args.dialTimeout, tt.args.readTimeout, tt.args.writeTimeout, tt.args.poolTimeout, tt.args.readOnly)
+				connectRedisDB(tt.args.password, tt.args.hosts, tt.args.port, tt.args.dbName, tt.args.maxretries, tt.args.poolsize, tt.args.minIdleConnections, tt.args.dialTimeout, tt.args.readTimeout, tt.args.writeTimeout, tt.args.poolTimeout, tt.args.readOnly)
 			})
 		})
 	}
