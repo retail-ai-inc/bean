@@ -1,6 +1,9 @@
 package dbdrivers
 
 import (
+	"fmt"
+	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -51,4 +54,17 @@ func Test_connectRedisDB(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestRand(t *testing.T) {
+	var wg sync.WaitGroup
+	var count = 10000
+	wg.Add(count)
+	for i := 0; i < count; i++ {
+		go func() {
+			fmt.Printf("%d,", rand.Intn(count))
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
