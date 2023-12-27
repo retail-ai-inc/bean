@@ -1,6 +1,6 @@
 module github.com/retail-ai-inc/bean
 
-go 1.21
+go 1.20
 
 require (
 	github.com/getsentry/sentry-go v0.13.0
