@@ -40,7 +40,7 @@ var ErrRedisInvalidParameter = errors.New("redis invalid parameter")
 // RedisDBConn IMPORTANT: This structure is holding any kind of redis connection using a map in bean.go.
 type RedisDBConn struct {
 	Host      redis.UniversalClient
-	Read      map[uint64]redis.UniversalClient
+	Reads     map[uint64]redis.UniversalClient
 	Name      int
 	readCount int
 	isCluster bool
@@ -52,7 +52,7 @@ type RedisConfig struct {
 		Password string
 		Host     string
 		Port     string
-		Read     []string
+		Reads    []string
 	}
 	Prefix             string
 	Maxretries         int
@@ -107,10 +107,10 @@ func InitRedisMasterConn(config RedisConfig) *RedisDBConn {
 
 			masterRedisDB.isCluster = true
 
-		} else if len(strings.Split(masterCfg.Host, ",")) == 1 && len(masterCfg.Read) > 0 {
-			redisReadConn := make(map[uint64]redis.UniversalClient, len(masterCfg.Read))
+		} else if len(strings.Split(masterCfg.Host, ",")) == 1 && len(masterCfg.Reads) > 0 {
+			redisReadConn := make(map[uint64]redis.UniversalClient, len(masterCfg.Reads))
 
-			for i, readHost := range masterCfg.Read {
+			for i, readHost := range masterCfg.Reads {
 				redisReadConn[uint64(i)], _ = connectRedisDB(
 					masterCfg.Password, readHost, masterCfg.Port, masterCfg.Database,
 					config.Maxretries, config.PoolSize, config.MinIdleConnections, config.DialTimeout,
@@ -118,15 +118,15 @@ func InitRedisMasterConn(config RedisConfig) *RedisDBConn {
 				)
 			}
 
-			masterRedisDB.Read = redisReadConn
-			masterRedisDB.readCount = len(masterRedisDB.Read)
+			masterRedisDB.Reads = redisReadConn
+			masterRedisDB.readCount = len(masterRedisDB.Reads)
 		}
 	}
 
 	return masterRedisDB
 }
 
-func RedisIsKeyExists(c context.Context, clients *RedisDBConn, key string) (bool, error) {
+func (clients *RedisDBConn) IsKeyExists(c context.Context, key string) (bool, error) {
 	result, err := clients.Host.Exists(c, key).Result()
 	if err != nil {
 		return false, errors.WithStack(err)
@@ -141,7 +141,7 @@ func RedisIsKeyExists(c context.Context, clients *RedisDBConn, key string) (bool
 	return false, nil
 }
 
-func RedisGetString(c context.Context, clients *RedisDBConn, key string) (str string, err error) {
+func (clients *RedisDBConn) GetString(c context.Context, key string) (str string, err error) {
 
 	if clients.isCluster {
 		// If client is cluster mode then just hit the host server.
@@ -149,7 +149,7 @@ func RedisGetString(c context.Context, clients *RedisDBConn, key string) (str st
 	} else {
 		// Check the read replicas are available or not.
 		if clients.readCount == 1 {
-			str, err = clients.Read[0].Get(c, key).Result()
+			str, err = clients.Reads[0].Get(c, key).Result()
 			if err != nil {
 				str, err = clients.Host.Get(c, key).Result()
 			}
@@ -159,7 +159,7 @@ func RedisGetString(c context.Context, clients *RedisDBConn, key string) (str st
 			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 			readHost := rng.Intn(clients.readCount)
 
-			str, err = clients.Read[uint64(readHost)].Get(c, key).Result()
+			str, err = clients.Reads[uint64(readHost)].Get(c, key).Result()
 			if err != nil {
 				str, err = clients.Host.Get(c, key).Result()
 			}
@@ -178,8 +178,8 @@ func RedisGetString(c context.Context, clients *RedisDBConn, key string) (str st
 	return str, nil
 }
 
-// RedisMGet This is a replacement of the original `MGet` method by utilizing the `pipeline` approach when Redis is in `cluster` mode.
-func RedisMGet(c context.Context, clients *RedisDBConn, keys ...string) (result []interface{}, err error) {
+// MGet This is a replacement of the original `MGet` method by utilizing the `pipeline` approach when Redis is in `cluster` mode.
+func (clients *RedisDBConn) MGet(c context.Context, keys ...string) (result []interface{}, err error) {
 
 	if clients.isCluster {
 		// If client is cluster mode then just hit the host server.
@@ -187,7 +187,7 @@ func RedisMGet(c context.Context, clients *RedisDBConn, keys ...string) (result 
 	} else {
 		// Check the read replicas are available or not.
 		if clients.readCount == 1 {
-			result, err = clients.Read[0].MGet(c, keys...).Result()
+			result, err = clients.Reads[0].MGet(c, keys...).Result()
 			if err != nil {
 				result, err = clients.Host.MGet(c, keys...).Result()
 			}
@@ -197,7 +197,7 @@ func RedisMGet(c context.Context, clients *RedisDBConn, keys ...string) (result 
 			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 			readHost := rng.Intn(clients.readCount)
 
-			result, err = clients.Read[uint64(readHost)].MGet(c, keys...).Result()
+			result, err = clients.Reads[uint64(readHost)].MGet(c, keys...).Result()
 			if err != nil {
 				result, err = clients.Host.MGet(c, keys...).Result()
 			}
@@ -214,8 +214,8 @@ func RedisMGet(c context.Context, clients *RedisDBConn, keys ...string) (result 
 	return result, nil
 }
 
-// RedisHGet To get single redis hash key and it's field from redis.
-func RedisHGet(c context.Context, clients *RedisDBConn, key string, field string) (result string, err error) {
+// HGet To get single redis hash key and it's field from redis.
+func (clients *RedisDBConn) HGet(c context.Context, key string, field string) (result string, err error) {
 
 	if clients.isCluster {
 		// If client is cluster mode then just hit the host server.
@@ -223,7 +223,7 @@ func RedisHGet(c context.Context, clients *RedisDBConn, key string, field string
 	} else {
 		// Check the read replicas are available or not.
 		if clients.readCount == 1 {
-			result, err = clients.Read[0].HGet(c, key, field).Result()
+			result, err = clients.Reads[0].HGet(c, key, field).Result()
 			if err != nil {
 				result, err = clients.Host.HGet(c, key, field).Result()
 			}
@@ -233,7 +233,7 @@ func RedisHGet(c context.Context, clients *RedisDBConn, key string, field string
 			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 			readHost := rng.Intn(clients.readCount)
 
-			result, err = clients.Read[uint64(readHost)].HGet(c, key, field).Result()
+			result, err = clients.Reads[uint64(readHost)].HGet(c, key, field).Result()
 			if err != nil {
 				result, err = clients.Host.HGet(c, key, field).Result()
 			}
@@ -252,10 +252,10 @@ func RedisHGet(c context.Context, clients *RedisDBConn, key string, field string
 	return result, nil
 }
 
-// RedisHgets To get one field from multiple redis hashes in one call to redis.
+// HGets To get one field from multiple redis hashes in one call to redis.
 // Input is a map of keys and the respective field for those keys.
 // Output is a map of keys and the respective values for those keys in redis.
-func RedisHgets(c context.Context, clients *RedisDBConn, redisKeysWithField map[string]string) (map[string]string, error) {
+func (clients *RedisDBConn) HGets(c context.Context, redisKeysWithField map[string]string) (map[string]string, error) {
 
 	var pipe redis.Pipeliner
 	if clients.isCluster {
@@ -264,13 +264,13 @@ func RedisHgets(c context.Context, clients *RedisDBConn, redisKeysWithField map[
 	} else {
 		// Check the read replicas are available or not.
 		if clients.readCount == 1 {
-			pipe = clients.Read[0].Pipeline()
+			pipe = clients.Reads[0].Pipeline()
 		} else if clients.readCount > 1 {
 			// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
 			// TODO: Use global seed and make go version as 1.20 minimum.
 			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 			readHost := rng.Intn(clients.readCount)
-			pipe = clients.Read[uint64(readHost)].Pipeline()
+			pipe = clients.Reads[uint64(readHost)].Pipeline()
 		} else {
 			// If there is no read replica then just hit the host server.
 			pipe = clients.Host.Pipeline()
@@ -299,7 +299,7 @@ func RedisHgets(c context.Context, clients *RedisDBConn, redisKeysWithField map[
 	return mappedKeyFieldValues, nil
 }
 
-func RedisGetLRange(c context.Context, clients *RedisDBConn, key string, start, stop int64) (str []string, err error) {
+func (clients *RedisDBConn) GetLRange(c context.Context, key string, start, stop int64) (str []string, err error) {
 
 	if clients.isCluster {
 		// If client is cluster mode then just hit the host server.
@@ -307,7 +307,7 @@ func RedisGetLRange(c context.Context, clients *RedisDBConn, key string, start, 
 	} else {
 		// Check the read replicas are available or not.
 		if clients.readCount == 1 {
-			str, err = clients.Read[0].LRange(c, key, start, stop).Result()
+			str, err = clients.Reads[0].LRange(c, key, start, stop).Result()
 			if err != nil {
 				str, err = clients.Host.LRange(c, key, start, stop).Result()
 			}
@@ -317,7 +317,7 @@ func RedisGetLRange(c context.Context, clients *RedisDBConn, key string, start, 
 			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 			readHost := rng.Intn(clients.readCount)
 
-			str, err = clients.Read[uint64(readHost)].LRange(c, key, start, stop).Result()
+			str, err = clients.Reads[uint64(readHost)].LRange(c, key, start, stop).Result()
 			if err != nil {
 				str, err = clients.Host.LRange(c, key, start, stop).Result()
 			}
@@ -336,7 +336,7 @@ func RedisGetLRange(c context.Context, clients *RedisDBConn, key string, start, 
 	return str, nil
 }
 
-func RedisSMembers(c context.Context, clients *RedisDBConn, key string) (str []string, err error) {
+func (clients *RedisDBConn) SMembers(c context.Context, key string) (str []string, err error) {
 
 	if clients.isCluster {
 		// If client is cluster mode then just hit the host server.
@@ -344,7 +344,7 @@ func RedisSMembers(c context.Context, clients *RedisDBConn, key string) (str []s
 	} else {
 		// Check the read replicas are available or not.
 		if clients.readCount == 1 {
-			str, err = clients.Read[0].SMembers(c, key).Result()
+			str, err = clients.Reads[0].SMembers(c, key).Result()
 			if err != nil {
 				str, err = clients.Host.SMembers(c, key).Result()
 			}
@@ -354,7 +354,7 @@ func RedisSMembers(c context.Context, clients *RedisDBConn, key string) (str []s
 			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 			readHost := rng.Intn(clients.readCount)
 
-			str, err = clients.Read[uint64(readHost)].SMembers(c, key).Result()
+			str, err = clients.Reads[uint64(readHost)].SMembers(c, key).Result()
 			if err != nil {
 				str, err = clients.Host.SMembers(c, key).Result()
 			}
@@ -373,7 +373,7 @@ func RedisSMembers(c context.Context, clients *RedisDBConn, key string) (str []s
 	return str, nil
 }
 
-func RedisSIsMember(c context.Context, clients *RedisDBConn, key string, element interface{}) (found bool, err error) {
+func (clients *RedisDBConn) SIsMember(c context.Context, key string, element interface{}) (found bool, err error) {
 
 	if clients.isCluster {
 		// If client is cluster mode then just hit the host server.
@@ -381,7 +381,7 @@ func RedisSIsMember(c context.Context, clients *RedisDBConn, key string, element
 	} else {
 		// Check the read replicas are available or not.
 		if clients.readCount == 1 {
-			found, err = clients.Read[0].SIsMember(c, key, element).Result()
+			found, err = clients.Reads[0].SIsMember(c, key, element).Result()
 			if err != nil {
 				found, err = clients.Host.SIsMember(c, key, element).Result()
 			}
@@ -391,7 +391,7 @@ func RedisSIsMember(c context.Context, clients *RedisDBConn, key string, element
 			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 			readHost := rng.Intn(clients.readCount)
 
-			found, err = clients.Read[uint64(readHost)].SIsMember(c, key, element).Result()
+			found, err = clients.Reads[uint64(readHost)].SIsMember(c, key, element).Result()
 			if err != nil {
 				found, err = clients.Host.SIsMember(c, key, element).Result()
 			}
@@ -408,7 +408,7 @@ func RedisSIsMember(c context.Context, clients *RedisDBConn, key string, element
 	return found, nil
 }
 
-func RedisSRandMemberN(c context.Context, clients *RedisDBConn, key string, count int64) (result []string, err error) {
+func (clients *RedisDBConn) SRandMemberN(c context.Context, key string, count int64) (result []string, err error) {
 
 	if clients.isCluster {
 		// If client is cluster mode then just hit the host server.
@@ -416,7 +416,7 @@ func RedisSRandMemberN(c context.Context, clients *RedisDBConn, key string, coun
 	} else {
 		// Check the read replicas are available or not.
 		if clients.readCount == 1 {
-			result, err = clients.Read[0].SRandMemberN(c, key, count).Result()
+			result, err = clients.Reads[0].SRandMemberN(c, key, count).Result()
 			if err != nil {
 				return nil, errors.WithStack(err)
 			}
@@ -426,7 +426,7 @@ func RedisSRandMemberN(c context.Context, clients *RedisDBConn, key string, coun
 			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 			readHost := rng.Intn(clients.readCount)
 
-			result, err = clients.Read[uint64(readHost)].SRandMemberN(c, key, count).Result()
+			result, err = clients.Reads[uint64(readHost)].SRandMemberN(c, key, count).Result()
 			if err != nil {
 				return nil, errors.WithStack(err)
 			}
@@ -439,7 +439,7 @@ func RedisSRandMemberN(c context.Context, clients *RedisDBConn, key string, coun
 	return result, err
 }
 
-func RedisSetJSON(c context.Context, clients *RedisDBConn, key string, data interface{}, ttl time.Duration) error {
+func (clients *RedisDBConn) SetJSON(c context.Context, key string, data interface{}, ttl time.Duration) error {
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
 		return errors.WithStack(err)
@@ -452,7 +452,7 @@ func RedisSetJSON(c context.Context, clients *RedisDBConn, key string, data inte
 	return nil
 }
 
-func RedisSet(c context.Context, clients *RedisDBConn, key string, data interface{}, ttl time.Duration) error {
+func (clients *RedisDBConn) Set(c context.Context, key string, data interface{}, ttl time.Duration) error {
 	if err := clients.Host.Set(c, key, data, ttl).Err(); err != nil {
 		return errors.WithStack(err)
 	}
@@ -460,7 +460,7 @@ func RedisSet(c context.Context, clients *RedisDBConn, key string, data interfac
 	return nil
 }
 
-func RedisHSet(c context.Context, clients *RedisDBConn, key string, field string, data interface{}, ttl time.Duration) error {
+func (clients *RedisDBConn) HSet(c context.Context, key string, field string, data interface{}, ttl time.Duration) error {
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
 		return errors.WithStack(err)
@@ -479,7 +479,7 @@ func RedisHSet(c context.Context, clients *RedisDBConn, key string, field string
 	return nil
 }
 
-func RedisRPush(c context.Context, clients *RedisDBConn, key string, valueList []string) error {
+func (clients *RedisDBConn) RPush(c context.Context, key string, valueList []string) error {
 	if err := clients.Host.RPush(c, key, &valueList).Err(); err != nil {
 		return errors.WithStack(err)
 	}
@@ -487,7 +487,7 @@ func RedisRPush(c context.Context, clients *RedisDBConn, key string, valueList [
 	return nil
 }
 
-func RedisIncrementValue(c context.Context, clients *RedisDBConn, key string) error {
+func (clients *RedisDBConn) IncrementValue(c context.Context, key string) error {
 	if err := clients.Host.Incr(c, key).Err(); err != nil {
 		return errors.WithStack(err)
 	}
@@ -495,7 +495,7 @@ func RedisIncrementValue(c context.Context, clients *RedisDBConn, key string) er
 	return nil
 }
 
-func RedisSAdd(c context.Context, clients *RedisDBConn, key string, elements interface{}) error {
+func (clients *RedisDBConn) SAdd(c context.Context, key string, elements interface{}) error {
 	if err := clients.Host.SAdd(c, key, elements).Err(); err != nil {
 		return errors.WithStack(err)
 	}
@@ -503,7 +503,7 @@ func RedisSAdd(c context.Context, clients *RedisDBConn, key string, elements int
 	return nil
 }
 
-func RedisSRem(c context.Context, clients *RedisDBConn, key string, elements interface{}) error {
+func (clients *RedisDBConn) SRem(c context.Context, key string, elements interface{}) error {
 	if err := clients.Host.SRem(c, key, elements).Err(); err != nil {
 		return errors.WithStack(err)
 	}
@@ -511,7 +511,7 @@ func RedisSRem(c context.Context, clients *RedisDBConn, key string, elements int
 	return nil
 }
 
-func RedisDelKey(c context.Context, clients *RedisDBConn, keys ...string) error {
+func (clients *RedisDBConn) DelKey(c context.Context, keys ...string) error {
 	if err := clients.Host.Del(c, keys...).Err(); err != nil {
 		return errors.WithStack(err)
 	}
@@ -519,7 +519,7 @@ func RedisDelKey(c context.Context, clients *RedisDBConn, keys ...string) error 
 	return nil
 }
 
-func RedisExpireKey(c context.Context, clients *RedisDBConn, key string, ttl time.Duration) error {
+func (clients *RedisDBConn) ExpireKey(c context.Context, key string, ttl time.Duration) error {
 	if err := clients.Host.Expire(c, key, ttl).Err(); err != nil {
 		return errors.WithStack(err)
 	}
@@ -527,13 +527,14 @@ func RedisExpireKey(c context.Context, clients *RedisDBConn, key string, ttl tim
 	return nil
 }
 
-// RedisMSet This is a replacement of the original `MSet` method by utilizing the `pipeline` approach when Redis is in `cluster` mode.
+// MSet This is a replacement of the original `MSet` method by utilizing the `pipeline` approach when Redis is in `cluster` mode.
 // it accepts multiple values:
 //   - RedisMSet("key1", "value1", "key2", "value2")
 //   - RedisMSet([]string{"key1", "value1", "key2", "value2"})
 //   - RedisMSet(map[string]interface{}{"key1": "value1", "key2": "value2"})
+//
 // For `struct` values, please implement the `encoding.BinaryMarshaler` interface.
-func RedisMSet(c context.Context, clients *RedisDBConn, values ...interface{}) (err error) {
+func (clients *RedisDBConn) MSet(c context.Context, values ...interface{}) (err error) {
 	if clients.isCluster {
 		err = wrapMSet(c, clients.Host, 0, values...)
 	} else {
@@ -547,10 +548,10 @@ func RedisMSet(c context.Context, clients *RedisDBConn, values ...interface{}) (
 	return nil
 }
 
-// RedisMSetWithTTL
+// MSetWithTTL
 // This method is implemented using `pipeline`.
 // For accepts multiple values, see RedisMSet description.
-func RedisMSetWithTTL(c context.Context, clients *RedisDBConn, ttl time.Duration, values ...interface{}) (err error) {
+func (clients *RedisDBConn) MSetWithTTL(c context.Context, ttl time.Duration, values ...interface{}) (err error) {
 	if err = wrapMSet(c, clients.Host, ttl, values...); err != nil {
 		return errors.WithStack(err)
 	}
@@ -691,8 +692,8 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 						)
 					}
 
-					tenantRedisDB[t.TenantID].Read = redisReadConn
-					tenantRedisDB[t.TenantID].readCount = len(tenantRedisDB[t.TenantID].Read)
+					tenantRedisDB[t.TenantID].Reads = redisReadConn
+					tenantRedisDB[t.TenantID].readCount = len(tenantRedisDB[t.TenantID].Reads)
 				}
 			}
 		}
