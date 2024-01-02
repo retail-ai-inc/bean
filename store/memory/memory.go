@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package dbdrivers
+package memory
 
 import (
 	"sync"
@@ -29,7 +29,7 @@ import (
 	"github.com/alphadose/haxmap"
 )
 
-type MemoryConfig struct {
+type Config struct {
 	On        bool
 	DelKeyAPI struct {
 		EndPoint        string

@@ -53,6 +53,7 @@ import (
 	"github.com/retail-ai-inc/bean/helpers"
 	"github.com/retail-ai-inc/bean/middleware"
 	broute "github.com/retail-ai-inc/bean/route"
+	"github.com/retail-ai-inc/bean/store/memory"
 	"github.com/retail-ai-inc/bean/validator"
 	"github.com/rs/dnscache"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -71,7 +72,7 @@ type DBDeps struct {
 	TenantMongoDBNames map[uint64]string
 	MasterRedisDB      *dbdrivers.RedisDBConn
 	TenantRedisDBs     map[uint64]*dbdrivers.RedisDBConn
-	MemoryDB           *dbdrivers.Memory
+	MemoryDB           *memory.Memory
 }
 
 type Bean struct {
@@ -191,7 +192,7 @@ type Config struct {
 		MySQL  dbdrivers.SQLConfig
 		Mongo  dbdrivers.MongoConfig
 		Redis  dbdrivers.RedisConfig
-		Memory dbdrivers.MemoryConfig
+		Memory memory.Config
 	}
 	Sentry   SentryConfig
 	Security struct {
@@ -582,7 +583,7 @@ func (b *Bean) InitDB() {
 	var tenantMongoDBs map[uint64]*mongo.Client
 	var tenantMongoDBNames map[uint64]string
 	var tenantRedisDBs map[uint64]*dbdrivers.RedisDBConn
-	var masterMemoryDB *dbdrivers.Memory
+	var masterMemoryDB *memory.Memory
 
 	if b.Config.Database.Tenant.On {
 		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
@@ -597,7 +598,7 @@ func (b *Bean) InitDB() {
 	}
 
 	if b.Config.Database.Memory.On {
-		masterMemoryDB = dbdrivers.NewMemory()
+		masterMemoryDB = memory.NewMemory()
 	}
 
 	b.DBConn = &DBDeps{

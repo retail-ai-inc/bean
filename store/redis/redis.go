@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package dbdrivers
+package redis
 
 import (
 	"context"
@@ -28,10 +28,11 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/retail-ai-inc/bean/dbdrivers"
 	"github.com/retail-ai-inc/bean/trace"
 )
 
-type RedisRepository interface {
+type Cache interface {
 	GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error)
 	GetString(c context.Context, tenantID uint64, key string) (string, error)
 	MGetJson(c context.Context, tenantID uint64, dst interface{}, keys ...string) error
@@ -53,16 +54,16 @@ type RedisRepository interface {
 	Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error
 }
 
-type redisRepository struct {
-	clients     map[uint64]*RedisDBConn
+type redisCache struct {
+	clients     map[uint64]*dbdrivers.RedisDBConn
 	cachePrefix string
 }
 
-func NewRedisRepository(clients map[uint64]*RedisDBConn, cachePrefix string) *redisRepository {
-	return &redisRepository{clients, cachePrefix}
+func NewRedisCache(clients map[uint64]*dbdrivers.RedisDBConn, cachePrefix string) Cache {
+	return &redisCache{clients, cachePrefix}
 }
 
-func (r *redisRepository) GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error) {
+func (r *redisCache) GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error) {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -81,7 +82,7 @@ func (r *redisRepository) GetJSON(c context.Context, tenantID uint64, key string
 	return true, nil
 }
 
-func (r *redisRepository) GetString(c context.Context, tenantID uint64, key string) (string, error) {
+func (r *redisCache) GetString(c context.Context, tenantID uint64, key string) (string, error) {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -89,7 +90,7 @@ func (r *redisRepository) GetString(c context.Context, tenantID uint64, key stri
 	return r.clients[tenantID].GetString(c, prefixKey)
 }
 
-func (r *redisRepository) MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error) {
+func (r *redisCache) MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error) {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -102,7 +103,7 @@ func (r *redisRepository) MGet(c context.Context, tenantID uint64, keys ...strin
 	return r.clients[tenantID].MGet(c, prefixedKeysSlice...)
 }
 
-func (r *redisRepository) MGetJson(c context.Context, tenantID uint64, dst interface{}, keys ...string) error {
+func (r *redisCache) MGetJson(c context.Context, tenantID uint64, dst interface{}, keys ...string) error {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -135,7 +136,7 @@ func (r *redisRepository) MGetJson(c context.Context, tenantID uint64, dst inter
 	return nil
 }
 
-func (r *redisRepository) HGet(c context.Context, tenantID uint64, key, field string) (string, error) {
+func (r *redisCache) HGet(c context.Context, tenantID uint64, key, field string) (string, error) {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -143,7 +144,7 @@ func (r *redisRepository) HGet(c context.Context, tenantID uint64, key, field st
 	return r.clients[tenantID].HGet(c, prefixKey, field)
 }
 
-func (r *redisRepository) HGets(c context.Context, tenantID uint64, keysWithFields map[string]string) (map[string]string, error) {
+func (r *redisCache) HGets(c context.Context, tenantID uint64, keysWithFields map[string]string) (map[string]string, error) {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -157,7 +158,7 @@ func (r *redisRepository) HGets(c context.Context, tenantID uint64, keysWithFiel
 	return r.clients[tenantID].HGets(c, mappedKeyFieldValues)
 }
 
-func (r *redisRepository) LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error) {
+func (r *redisCache) LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error) {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -165,7 +166,7 @@ func (r *redisRepository) LRange(c context.Context, tenantID uint64, key string,
 	return r.clients[tenantID].GetLRange(c, prefixKey, start, stop)
 }
 
-func (r *redisRepository) SMembers(c context.Context, tenantID uint64, key string) ([]string, error) {
+func (r *redisCache) SMembers(c context.Context, tenantID uint64, key string) ([]string, error) {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -173,7 +174,7 @@ func (r *redisRepository) SMembers(c context.Context, tenantID uint64, key strin
 	return r.clients[tenantID].SMembers(c, prefixKey)
 }
 
-func (r *redisRepository) SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error) {
+func (r *redisCache) SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error) {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -181,7 +182,7 @@ func (r *redisRepository) SIsMember(c context.Context, tenantID uint64, key stri
 	return r.clients[tenantID].SIsMember(c, prefixKey, element)
 }
 
-func (r *redisRepository) SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error {
+func (r *redisCache) SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -189,7 +190,7 @@ func (r *redisRepository) SetJSON(c context.Context, tenantID uint64, key string
 	return r.clients[tenantID].SetJSON(c, prefixKey, data, ttl)
 }
 
-func (r *redisRepository) MSetJSON(c context.Context, tenantID uint64, keys []string, data []interface{}, ttl time.Duration) error {
+func (r *redisCache) MSetJSON(c context.Context, tenantID uint64, keys []string, data []interface{}, ttl time.Duration) error {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -213,7 +214,7 @@ func (r *redisRepository) MSetJSON(c context.Context, tenantID uint64, keys []st
 	return nil
 }
 
-func (r *redisRepository) SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error {
+func (r *redisCache) SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -221,7 +222,7 @@ func (r *redisRepository) SetString(c context.Context, tenantID uint64, key stri
 	return r.clients[tenantID].Set(c, prefixKey, data, ttl)
 }
 
-func (r *redisRepository) HSet(c context.Context, tenantID uint64, key string, field string, data interface{}, ttl time.Duration) error {
+func (r *redisCache) HSet(c context.Context, tenantID uint64, key string, field string, data interface{}, ttl time.Duration) error {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -229,7 +230,7 @@ func (r *redisRepository) HSet(c context.Context, tenantID uint64, key string, f
 	return r.clients[tenantID].HSet(c, prefixKey, field, data, ttl)
 }
 
-func (r *redisRepository) RPush(c context.Context, tenantID uint64, key string, valueList []string) error {
+func (r *redisCache) RPush(c context.Context, tenantID uint64, key string, valueList []string) error {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -237,7 +238,7 @@ func (r *redisRepository) RPush(c context.Context, tenantID uint64, key string, 
 	return r.clients[tenantID].RPush(c, prefixKey, valueList)
 }
 
-func (r *redisRepository) IncrementValue(c context.Context, tenantID uint64, key string) error {
+func (r *redisCache) IncrementValue(c context.Context, tenantID uint64, key string) error {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -245,7 +246,7 @@ func (r *redisRepository) IncrementValue(c context.Context, tenantID uint64, key
 	return r.clients[tenantID].IncrementValue(c, prefixKey)
 }
 
-func (r *redisRepository) SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error {
+func (r *redisCache) SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -253,7 +254,7 @@ func (r *redisRepository) SAdd(c context.Context, tenantID uint64, key string, e
 	return r.clients[tenantID].SAdd(c, prefixKey, elements)
 }
 
-func (r *redisRepository) SRem(c context.Context, tenantID uint64, key string, elements interface{}) error {
+func (r *redisCache) SRem(c context.Context, tenantID uint64, key string, elements interface{}) error {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -261,7 +262,7 @@ func (r *redisRepository) SRem(c context.Context, tenantID uint64, key string, e
 	return r.clients[tenantID].SRem(c, prefixKey, elements)
 }
 
-func (r *redisRepository) DelKey(c context.Context, tenantID uint64, keys ...string) error {
+func (r *redisCache) DelKey(c context.Context, tenantID uint64, keys ...string) error {
 	finish := trace.Start(c, "db")
 	defer finish()
 
@@ -273,7 +274,7 @@ func (r *redisRepository) DelKey(c context.Context, tenantID uint64, keys ...str
 	return r.clients[tenantID].DelKey(c, prefixKeys...)
 }
 
-func (r *redisRepository) Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error {
+func (r *redisCache) Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error {
 	finish := trace.Start(c, "db")
 	defer finish()
 

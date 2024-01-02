@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 // go test -bench=. -benchmem -benchtime=4s -cpu 2
-package dbdrivers
+package memory
 
 import (
 	"sync/atomic"
