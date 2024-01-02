@@ -29,16 +29,15 @@ import (
 	"github.com/alphadose/haxmap"
 )
 
-type Config struct {
-	On        bool
-	DelKeyAPI struct {
-		EndPoint        string
-		AuthBearerToken string
-	}
+type Cache interface {
+	GetMemory(k string) (interface{}, bool)
+	SetMemory(key string, value any, duration time.Duration)
+	DelMemory(key string)
+	CloseMemory()
 }
 
-// Memory stores arbitrary data with ttl.
-type Memory struct {
+// memoryCache stores arbitrary data with ttl.
+type memoryCache struct {
 	keys *haxmap.Map[string, Key]
 	done chan struct{}
 }
@@ -50,11 +49,11 @@ type Key struct {
 }
 
 // memoryDBConn is a singleton memory database connection.
-var memoryDBConn *Memory
+var memoryDBConn *memoryCache
 var memoryOnce sync.Once
 
-// New creates a new memory that asynchronously cleans expired entries after the given ttl passes.
-func NewMemory() *Memory {
+// NewMemoryCache New creates a new memory that asynchronously cleans expired entries after the given ttl passes.
+func NewMemoryCache() Cache {
 	memoryOnce.Do(func() {
 
 		// XXX: IMPORTANT - Run the ttl cleaning process in every 60 seconds.
@@ -65,7 +64,7 @@ func NewMemory() *Memory {
 			panic("failed to initialize the memory!")
 		}
 
-		memoryDBConn = &Memory{
+		memoryDBConn = &memoryCache{
 			keys: h,
 			done: make(chan struct{}),
 		}
@@ -97,8 +96,8 @@ func NewMemory() *Memory {
 	return memoryDBConn
 }
 
-// Get gets the value for the given key.
-func (mem *Memory) GetMemory(k string) (interface{}, bool) {
+// GetMemory Get gets the value for the given key.
+func (mem *memoryCache) GetMemory(k string) (interface{}, bool) {
 	key, exists := mem.keys.Get(k)
 	if !exists {
 		return nil, false
@@ -111,9 +110,9 @@ func (mem *Memory) GetMemory(k string) (interface{}, bool) {
 	return key.value, true
 }
 
-// Set sets a value for the given key with an expiration duration.
+// SetMemory Set sets a value for the given key with an expiration duration.
 // If the duration is 0 or less, it will be stored forever.
-func (mem *Memory) SetMemory(key string, value any, duration time.Duration) {
+func (mem *memoryCache) SetMemory(key string, value any, duration time.Duration) {
 	var expires int64
 
 	if duration > 0 {
@@ -126,12 +125,12 @@ func (mem *Memory) SetMemory(key string, value any, duration time.Duration) {
 	})
 }
 
-// Del deletes the key and its value from the memory cache.
-func (mem *Memory) DelMemory(key string) {
+// DelMemory Del deletes the key and its value from the memory cache.
+func (mem *memoryCache) DelMemory(key string) {
 	mem.keys.Del(key)
 }
 
-// Close closes the memory cache and frees up resources.
-func (mem *Memory) CloseMemory() {
+// CloseMemory Close closes the memory cache and frees up resources.
+func (mem *memoryCache) CloseMemory() {
 	mem.done <- struct{}{}
 }

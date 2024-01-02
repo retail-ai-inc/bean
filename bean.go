@@ -72,7 +72,7 @@ type DBDeps struct {
 	TenantMongoDBNames map[uint64]string
 	MasterRedisDB      *dbdrivers.RedisDBConn
 	TenantRedisDBs     map[uint64]*dbdrivers.RedisDBConn
-	MemoryDB           *memory.Memory
+	MemoryDB           memory.Cache
 }
 
 type Bean struct {
@@ -192,7 +192,7 @@ type Config struct {
 		MySQL  dbdrivers.SQLConfig
 		Mongo  dbdrivers.MongoConfig
 		Redis  dbdrivers.RedisConfig
-		Memory memory.Config
+		Memory dbdrivers.MemoryConfig
 	}
 	Sentry   SentryConfig
 	Security struct {
@@ -583,7 +583,7 @@ func (b *Bean) InitDB() {
 	var tenantMongoDBs map[uint64]*mongo.Client
 	var tenantMongoDBNames map[uint64]string
 	var tenantRedisDBs map[uint64]*dbdrivers.RedisDBConn
-	var masterMemoryDB *memory.Memory
+	var masterMemoryDB memory.Cache
 
 	if b.Config.Database.Tenant.On {
 		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
@@ -598,7 +598,7 @@ func (b *Bean) InitDB() {
 	}
 
 	if b.Config.Database.Memory.On {
-		masterMemoryDB = memory.NewMemory()
+		masterMemoryDB = memory.NewMemoryCache()
 	}
 
 	b.DBConn = &DBDeps{

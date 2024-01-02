@@ -31,7 +31,7 @@ import (
 
 func TestGetSet(t *testing.T) {
 	cycle := 100 * time.Millisecond
-	m := NewMemory()
+	m := NewMemoryCache()
 
 	m.SetMemory("sticky", "forever", 0)
 	m.SetMemory("hello", "Hello", cycle/2)
@@ -69,7 +69,7 @@ func TestGetSet(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	m := NewMemory()
+	m := NewMemoryCache()
 	m.SetMemory("hello", "Hello", time.Hour)
 	_, found := m.GetMemory("hello")
 
@@ -91,13 +91,13 @@ func BenchmarkNew(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			NewMemory()
+			NewMemoryCache()
 		}
 	})
 }
 
 func BenchmarkGet(b *testing.B) {
-	m := NewMemory()
+	m := NewMemoryCache()
 	m.SetMemory("Hello", "World", 0)
 
 	b.ReportAllocs()
@@ -115,7 +115,7 @@ const (
 )
 
 func BenchmarkGetWithSet(b *testing.B) {
-	m := NewMemory()
+	m := NewMemoryCache()
 
 	var writer uintptr
 	b.ResetTimer()
@@ -141,7 +141,7 @@ func BenchmarkGetWithSet(b *testing.B) {
 }
 
 func BenchmarkSet(b *testing.B) {
-	m := NewMemory()
+	m := NewMemoryCache()
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -154,7 +154,7 @@ func BenchmarkSet(b *testing.B) {
 }
 
 func BenchmarkDel(b *testing.B) {
-	m := NewMemory()
+	m := NewMemoryCache()
 
 	b.ResetTimer()
 	b.ReportAllocs()
