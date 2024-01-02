@@ -29,7 +29,7 @@ import (
 
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/validator"
+	"github.com/retail-ai-inc/bean/internal/validator"
 	"github.com/spf13/viper"
 )
 

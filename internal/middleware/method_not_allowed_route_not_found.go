@@ -30,7 +30,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	berror "github.com/retail-ai-inc/bean/error"
-	broute "github.com/retail-ai-inc/bean/route"
+	broute "github.com/retail-ai-inc/bean/internal/route"
 	"github.com/spf13/viper"
 )
 
