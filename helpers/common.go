@@ -25,7 +25,6 @@ package helpers
 import (
 	"math/rand"
 	"os"
-	"time"
 
 	str "github.com/retail-ai-inc/bean/string"
 )
@@ -35,10 +34,7 @@ type CopyableSlice []interface{}
 
 // GetRandomNumberFromRange will generate and return a random integer from a range.
 func GetRandomNumberFromRange(min, max int) int {
-
-	// TODO: Use global seed and make go version as 1.20 minimum.
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	n := min + rng.Intn(max-min+1)
+	n := min + rand.Intn(max-min+1)
 	return n
 }
 
