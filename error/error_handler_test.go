@@ -34,7 +34,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/echoview"
 	"github.com/retail-ai-inc/bean/goview"
-	"github.com/retail-ai-inc/bean/validator"
+	"github.com/retail-ai-inc/bean/internal/validator"
 	"github.com/stretchr/testify/assert"
 )
 

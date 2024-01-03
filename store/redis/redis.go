@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/retail-ai-inc/bean/dbdrivers"
+	"github.com/retail-ai-inc/bean/internal/dbdrivers"
 	"github.com/retail-ai-inc/bean/trace"
 )
 
