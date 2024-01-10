@@ -6,7 +6,7 @@ import (
 
 	"{{ .PkgPath }}/repositories"
 
-	"github.com/retail-ai-inc/bean/trace"
+	"github.com/retail-ai-inc/bean/v2/trace"
 )
 
 type ExampleService interface {

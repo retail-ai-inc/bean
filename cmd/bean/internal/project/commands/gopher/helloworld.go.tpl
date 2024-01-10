@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/retail-ai-inc/bean"
+	"github.com/retail-ai-inc/bean/v2"
 	"github.com/spf13/cobra"
 )
 

@@ -33,7 +33,7 @@ import (
 	"text/template"
 
 	"github.com/go-playground/validator/v10"
-	str "github.com/retail-ai-inc/bean/string"
+	str "github.com/retail-ai-inc/bean/v2/string"
 	"github.com/spf13/cobra"
 )
 
@@ -51,7 +51,7 @@ var (
 		Short: "Initialize a project in current directory",
 		Long: `Init generates all the directories and files structures needed in the current
 directory. the suffix of the package_name should match the current directory.`,
-		Example: "bean init github.com/retail-ai-inc/bean",
+		Example: "bean init github.com/retail-ai-inc/bean/v2",
 		Args:    cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			pkgPath := args[0]

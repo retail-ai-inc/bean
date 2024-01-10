@@ -27,7 +27,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/retail-ai-inc/bean/aes"
+	"github.com/retail-ai-inc/bean/v2/aes"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/gorm"

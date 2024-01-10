@@ -24,7 +24,7 @@ package main
 import (
 	"embed"
 
-	"github.com/retail-ai-inc/bean/cmd"
+	"github.com/retail-ai-inc/bean/v2/cmd"
 )
 
 // Diretory of template files.

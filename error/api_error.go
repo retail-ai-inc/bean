@@ -25,7 +25,7 @@ package error
 import (
 	"fmt"
 
-	"github.com/retail-ai-inc/bean/stacktrace"
+	"github.com/retail-ai-inc/bean/v2/stacktrace"
 )
 
 // APIError represents the error object of {{ .PkgPath }} API error.

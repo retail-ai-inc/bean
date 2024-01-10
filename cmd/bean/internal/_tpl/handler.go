@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/async"
-	berror "github.com/retail-ai-inc/bean/error"
-	"github.com/retail-ai-inc/bean/trace"
+	"github.com/retail-ai-inc/bean/v2/async"
+	berror "github.com/retail-ai-inc/bean/v2/error"
+	"github.com/retail-ai-inc/bean/v2/trace"
 	{{if .ServiceExists}}"{{.ProjectObject.PkgPath}}/services"{{end}}
 )
 

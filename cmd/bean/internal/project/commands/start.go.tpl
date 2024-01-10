@@ -9,9 +9,9 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
-	"github.com/retail-ai-inc/bean"
-	berror "github.com/retail-ai-inc/bean/error"
-	"github.com/retail-ai-inc/bean/helpers"
+	"github.com/retail-ai-inc/bean/v2"
+	berror "github.com/retail-ai-inc/bean/v2/error"
+	"github.com/retail-ai-inc/bean/v2/helpers"
 	"github.com/spf13/cobra"
 )
 

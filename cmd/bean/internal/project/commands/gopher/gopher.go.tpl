@@ -9,8 +9,8 @@ import (
 	// "{{ .PkgName }}/services"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/retail-ai-inc/bean"
-	"github.com/retail-ai-inc/bean/helpers"
+	"github.com/retail-ai-inc/bean/v2"
+	"github.com/retail-ai-inc/bean/v2/helpers"
 	"github.com/spf13/cobra"
 )
 
@@ -31,7 +31,7 @@ type gopherServices struct {
 var GopherCmd = &cobra.Command{
 	Use:   "gopher [command]",
 	Short: "This command requires a sub command parameter of your own.",
-	Long:  "This command requires a sub command parameter. You can create a new sub command by creating a new go file under `gopher` directory. An example can be found here: https://github.com/retail-ai-inc/bean#make-your-own-commands",
+	Long:  "This command requires a sub command parameter. You can create a new sub command by creating a new go file under `gopher` directory. An example can be found here: https://github.com/retail-ai-inc/bean/v2#make-your-own-commands",
 }
 
 var b *bean.Bean
