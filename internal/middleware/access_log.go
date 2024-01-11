@@ -39,7 +39,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/color"
-	"github.com/retail-ai-inc/bean/helpers"
+	"github.com/retail-ai-inc/bean/v2/helpers"
 	"github.com/spf13/viper"
 	"github.com/valyala/fasttemplate"
 )

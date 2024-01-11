@@ -7,8 +7,8 @@ import (
 
 	"{{ .PkgName }}/commands/gopher"
 
-	"github.com/retail-ai-inc/bean"
-	"github.com/retail-ai-inc/bean/helpers"
+	"github.com/retail-ai-inc/bean/v2"
+	"github.com/retail-ai-inc/bean/v2/helpers"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

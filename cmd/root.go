@@ -39,7 +39,7 @@ var InternalFS fs.FS
 type Project struct {
 	// Copyright is the copyright text on the top of every files.
 	Copyright string
-	// PkgPath is the full string of the generated package. (example: github.com/retail-ai-inc/bean)
+	// PkgPath is the full string of the generated package. (example: github.com/retail-ai-inc/bean/v2)
 	PkgPath string
 	// PkgName is the suffix of the package path, it should match the current directory name.
 	PkgName string

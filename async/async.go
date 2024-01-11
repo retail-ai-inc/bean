@@ -30,9 +30,9 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean"
-	"github.com/retail-ai-inc/bean/helpers"
-	"github.com/retail-ai-inc/bean/internal/gopool"
+	"github.com/retail-ai-inc/bean/v2"
+	"github.com/retail-ai-inc/bean/v2/helpers"
+	"github.com/retail-ai-inc/bean/v2/internal/gopool"
 	"github.com/spf13/viper"
 )
 

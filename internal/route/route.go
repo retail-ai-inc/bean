@@ -24,7 +24,7 @@ package route
 
 import (
 	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/internal/url"
+	"github.com/retail-ai-inc/bean/v2/internal/url"
 )
 
 // Route contains all the registered routes name, URI path, request method and URI path template.

@@ -9,7 +9,7 @@ import (
 	"{{ .PkgPath }}/services"
 
 	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean"
+	"github.com/retail-ai-inc/bean/v2"
 )
 
 type Repositories struct {

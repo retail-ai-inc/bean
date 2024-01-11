@@ -1,4 +1,4 @@
-module github.com/retail-ai-inc/bean
+module github.com/retail-ai-inc/bean/v2
 
 go 1.20
 

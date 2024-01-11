@@ -28,8 +28,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/retail-ai-inc/bean/internal/dbdrivers"
-	"github.com/retail-ai-inc/bean/trace"
+	"github.com/retail-ai-inc/bean/v2/internal/dbdrivers"
+	"github.com/retail-ai-inc/bean/v2/trace"
 )
 
 type Cache interface {

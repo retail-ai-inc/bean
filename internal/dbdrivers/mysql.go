@@ -27,7 +27,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/retail-ai-inc/bean/aes"
+	"github.com/retail-ai-inc/bean/v2/aes"
 	"gorm.io/datatypes"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"

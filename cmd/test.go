@@ -35,8 +35,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/retail-ai-inc/bean/helpers"
-	"github.com/retail-ai-inc/bean/test"
+	"github.com/retail-ai-inc/bean/v2/helpers"
+	"github.com/retail-ai-inc/bean/v2/test"
 
 	"github.com/spf13/cobra"
 )

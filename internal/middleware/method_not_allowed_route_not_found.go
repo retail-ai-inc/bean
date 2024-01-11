@@ -29,8 +29,8 @@ import (
 	"sync"
 
 	"github.com/labstack/echo/v4"
-	berror "github.com/retail-ai-inc/bean/error"
-	broute "github.com/retail-ai-inc/bean/internal/route"
+	berror "github.com/retail-ai-inc/bean/v2/error"
+	broute "github.com/retail-ai-inc/bean/v2/internal/route"
 	"github.com/spf13/viper"
 )
 

@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/retail-ai-inc/bean/aes"
+	"github.com/retail-ai-inc/bean/v2/aes"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

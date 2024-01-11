@@ -26,7 +26,7 @@ import (
 	"io"
 
 	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/goview"
+	"github.com/retail-ai-inc/bean/v2/goview"
 )
 
 const templateEngineKey = "foolin-goview-echoview"

@@ -32,9 +32,9 @@ import (
 
 	validatorV10 "github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/echoview"
-	"github.com/retail-ai-inc/bean/goview"
-	"github.com/retail-ai-inc/bean/internal/validator"
+	"github.com/retail-ai-inc/bean/v2/echoview"
+	"github.com/retail-ai-inc/bean/v2/goview"
+	"github.com/retail-ai-inc/bean/v2/internal/validator"
 	"github.com/stretchr/testify/assert"
 )
 

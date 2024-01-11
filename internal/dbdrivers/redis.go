@@ -31,7 +31,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
-	"github.com/retail-ai-inc/bean/aes"
+	"github.com/retail-ai-inc/bean/v2/aes"
 	"gorm.io/gorm"
 )
 
