@@ -29,7 +29,7 @@ A web framework written in GO on-top of `echo` to ease your application developm
 ### Initialize a project
 1. Install the package by
 ```
-go install github.com/retail-ai-inc/bean/cmd/bean@latest
+go install github.com/retail-ai-inc/bean/v2/cmd/bean@latest
 ```
 2. Create a project directory
 ```
