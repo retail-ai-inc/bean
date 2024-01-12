@@ -39,7 +39,7 @@ import (
 
 type (
 	Task        func(c echo.Context)
-	TimeoutTask func(c context.Context)
+	TimeoutTask func(c context.Context) error
 )
 
 // `Execute` provides a safe way to execute a function asynchronously without any context, recovering if they panic
@@ -130,21 +130,24 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 }
 
 func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutTask, poolName ...string) {
+	hub := sentry.GetHubFromContext(ctx)
+
 	Execute(func() {
 		c, cancel := context.WithTimeout(context.TODO(), duration)
 		defer cancel()
 
-		hub := sentry.GetHubFromContext(ctx)
 		if hub == nil {
 			hub = sentry.CurrentHub().Clone()
-			ctx = sentry.SetHubOnContext(ctx, hub)
+			c = sentry.SetHubOnContext(c, hub)
+		} else {
+			c = sentry.SetHubOnContext(c, hub)
 		}
 
 		// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
 		// can pull the right hub and send the exception message to sentry.
 		if bean.BeanConfig.Sentry.On {
 			if helpers.FloatInRange(viper.GetFloat64("sentry.tracesSampleRate"), 0.0, 1.0) > 0.0 {
-				span := sentry.StartSpan(ctx, "async")
+				span := sentry.StartSpan(c, "async")
 				span.Description = helpers.CurrFuncName()
 
 				defer span.Finish()
@@ -154,7 +157,10 @@ func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutT
 		// This defer will be executed first.
 		defer recoverPanic(nil)
 
-		fn(c)
+		err := fn(c)
+		if err != nil {
+			hub.CaptureException(err)
+		}
 	}, poolName...)
 }
 
