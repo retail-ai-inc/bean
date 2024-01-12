@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
@@ -36,7 +37,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Task func(c echo.Context)
+type (
+	Task        func(c echo.Context)
+	TimeoutTask func(c context.Context)
+)
 
 // `Execute` provides a safe way to execute a function asynchronously without any context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
@@ -122,6 +126,35 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 		defer recoverPanic(ec)
 
 		fn(ec)
+	}, poolName...)
+}
+
+func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutTask, poolName ...string) {
+	Execute(func() {
+		c, cancel := context.WithTimeout(context.TODO(), duration)
+		defer cancel()
+
+		hub := sentry.GetHubFromContext(ctx)
+		if hub == nil {
+			hub = sentry.CurrentHub().Clone()
+			ctx = sentry.SetHubOnContext(ctx, hub)
+		}
+
+		// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
+		// can pull the right hub and send the exception message to sentry.
+		if bean.BeanConfig.Sentry.On {
+			if helpers.FloatInRange(viper.GetFloat64("sentry.tracesSampleRate"), 0.0, 1.0) > 0.0 {
+				span := sentry.StartSpan(ctx, "async")
+				span.Description = helpers.CurrFuncName()
+
+				defer span.Finish()
+			}
+		}
+
+		// This defer will be executed first.
+		defer recoverPanic(nil)
+
+		fn(c)
 	}, poolName...)
 }
 
