@@ -76,9 +76,9 @@ type FieldValuePair struct {
 
 var cachePrefix string
 
-func InitRedisTenantConns(config RedisConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string) map[uint64]*RedisDBConn {
+func InitRedisTenantConns(config RedisConfig, masterMySQL *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string) map[uint64]*RedisDBConn {
 	cachePrefix = config.Prefix
-	tenantCfgs := GetAllTenantCfgs(master)
+	tenantCfgs := GetAllTenantCfgs(masterMySQL)
 
 	if len(tenantCfgs) > 0 {
 		return getAllRedisTenantDB(config, tenantCfgs, tenantAlterDbHostParam, tenantDBPassPhraseKey)
@@ -630,7 +630,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 		if redisCfg, ok := cfgsMap["redis"]; ok {
 			password := redisCfg["password"].(string)
 
-			// IMPORTANT: If tenant database password is encrypted in master db config.
+			// IMPORTANT: If tenant database password is encrypted in master mysql db config.
 			if tenantDBPassPhraseKey != "" {
 				password, err = aes.BeanAESDecrypt(tenantDBPassPhraseKey, password)
 				if err != nil {
