@@ -20,9 +20,9 @@ install: ## install the binary to $GOPATH/bin
 lint: ## run all the lint tools, install golangci-lint if not exist
 ifeq (,$(wildcard $(GOPATH)/bin/golangci-lint))
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) > /dev/null
-	$(GOPATH)/bin/golangci-lint run || exit 0
+	$(GOPATH)/bin/golangci-lint run
 else
-	$(GOPATH)/bin/golangci-lint run || exit 0
+	$(GOPATH)/bin/golangci-lint run
 endif
 
 test: ## run tests with race detactor
