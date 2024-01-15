@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/retail-ai-inc/bean/v2"
 	"github.com/retail-ai-inc/bean/v2/internal/dbdrivers"
 )
 
@@ -59,18 +58,19 @@ type masterCache struct {
 }
 
 // NewMasterCache creates a new MasterCache.
-// This assumes it is called after the (*Bean).InitDB() func.
-func NewMasterCache(dbDeps bean.DBDeps) MasterCache {
+// This assumes it is called after the (*Bean).InitDB() func and takes (bean.DBDeps).MasterRedisDB as input.
+func NewMasterCache(master *dbdrivers.RedisDBConn, prefix string) MasterCache {
 
-	if dbDeps.MasterRedisDB == nil {
-		bean.Logger().Error("master redis db is not initialized properly")
+	if master == nil {
+		panic("master redis db is not initialized properly")
 	}
 
 	return &masterCache{
-		&tenantCache{
+		cache: &tenantCache{
 			clients: map[uint64]*dbdrivers.RedisDBConn{
-				masterID: dbDeps.MasterRedisDB,
+				masterID: master,
 			},
+			prefix: prefix,
 		},
 	}
 }
