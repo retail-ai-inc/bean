@@ -126,7 +126,7 @@ func InitRedisMasterConn(config RedisConfig) *RedisDBConn {
 	return masterRedisDB
 }
 
-func (clients *RedisDBConn) IsKeyExists(c context.Context, key string) (bool, error) {
+func (clients *RedisDBConn) KeyExists(c context.Context, key string) (bool, error) {
 	result, err := clients.Primary.Exists(c, key).Result()
 	if err != nil {
 		return false, errors.WithStack(err)
@@ -509,6 +509,10 @@ func (clients *RedisDBConn) ExpireKey(c context.Context, key string, ttl time.Du
 	}
 
 	return nil
+}
+
+func (clients *RedisDBConn) Pipelined(c context.Context, fn func(redis.Pipeliner) error) ([]redis.Cmder, error) {
+	return clients.Primary.Pipelined(c, fn)
 }
 
 // MSet This is a replacement of the original `MSet` method by utilizing the `pipeline` approach when Redis is in `cluster` mode.
