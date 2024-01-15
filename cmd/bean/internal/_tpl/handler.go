@@ -55,7 +55,7 @@ func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c
 		defer asyncFinish()
 
 		// example function that you want to execute asynchronously.
-		files, err := ioutil.ReadDir("./")
+		files, err := os.ReadDir("./")
 		for _, f := range files {
             fmt.Println(f.Name())
 		}

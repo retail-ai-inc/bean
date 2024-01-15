@@ -26,7 +26,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -66,7 +65,7 @@ func (cb *CustomBinder) Bind(i interface{}, c echo.Context) (err error) {
 		}
 
 		// Restore the io.ReadCloser to its original state so that we can read c.Request().Body somewhere else.
-		c.Request().Body = ioutil.NopCloser(bodyBytes)
+		c.Request().Body = io.NopCloser(bodyBytes)
 
 		data, _ := helpers.PostDataStripTags(c, false)
 

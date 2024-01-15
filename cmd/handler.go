@@ -26,8 +26,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
@@ -125,7 +125,7 @@ func handler(cmd *cobra.Command, args []string) {
 
 	defer file.Close()
 
-	fileData, err := ioutil.ReadAll(file)
+	fileData, err := io.ReadAll(file)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -273,7 +273,7 @@ func insertStringToNthLineOfFile(filePath, textToInsert string, lineNumber int) 
 		fileContent += "\n"
 	}
 
-	return ioutil.WriteFile(filePath, []byte(fileContent), 0644)
+	return os.WriteFile(filePath, []byte(fileContent), 0644)
 }
 
 // Replace sting to n-th line of file.
@@ -304,12 +304,12 @@ func replaceStringToNthLineOfFile(filePath, newText string, lineNumber int) erro
 		}
 	}
 
-	return ioutil.WriteFile(filePath, []byte(fileContent), 0644)
+	return os.WriteFile(filePath, []byte(fileContent), 0644)
 }
 
 func replaceStringFromFileByRegex(filePath, regex, additonal, replaceWith string) error {
 
-	input, err := ioutil.ReadFile(filePath)
+	input, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
@@ -320,7 +320,7 @@ func replaceStringFromFileByRegex(filePath, regex, additonal, replaceWith string
 		replaceMe := additonal + match[1]
 		output := bytes.Replace(input, []byte(replaceMe), []byte(replaceWith), -1)
 
-		if err = ioutil.WriteFile(filePath, output, 0664); err != nil {
+		if err = os.WriteFile(filePath, output, 0664); err != nil {
 			return err
 		}
 	}
@@ -329,13 +329,13 @@ func replaceStringFromFileByRegex(filePath, regex, additonal, replaceWith string
 }
 
 func replaceStringFromFileByExactMatches(filePath, replaceMe, replaceWith string) error {
-	input, err := ioutil.ReadFile(filePath)
+	input, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
 
 	output := bytes.Replace(input, []byte(replaceMe), []byte(replaceWith), -1)
-	if err = ioutil.WriteFile(filePath, output, 0664); err != nil {
+	if err = os.WriteFile(filePath, output, 0664); err != nil {
 		return err
 	}
 

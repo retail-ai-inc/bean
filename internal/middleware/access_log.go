@@ -27,7 +27,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"strconv"
@@ -160,9 +159,9 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 			// IMPORTANT: Get a copy of the request body for body dumper.
 			reqBody := []byte{}
 			if c.Request().Body != nil { // Read
-				reqBody, _ = ioutil.ReadAll(c.Request().Body)
+				reqBody, _ = io.ReadAll(c.Request().Body)
 			}
-			c.Request().Body = ioutil.NopCloser(bytes.NewBuffer(reqBody)) // Reset
+			c.Request().Body = io.NopCloser(bytes.NewBuffer(reqBody)) // Reset
 
 			// IMPORTANT: Create a multiWriter writes to both response
 			// and the local body dumper buffer. (`resBody` variable below)
