@@ -147,10 +147,12 @@ func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutT
 		// can pull the right hub and send the exception message to sentry.
 		if bean.BeanConfig.Sentry.On {
 			if helpers.FloatInRange(viper.GetFloat64("sentry.tracesSampleRate"), 0.0, 1.0) > 0.0 {
-				span := sentry.StartSpan(c, "async")
+				span := sentry.StartSpan(c, "http",
+					sentry.TransactionName(fmt.Sprintf("%s ASYNC", hub.Scope().Transaction())))
 				span.Description = helpers.CurrFuncName()
 
 				defer span.Finish()
+				c = span.Context()
 			}
 		}
 
