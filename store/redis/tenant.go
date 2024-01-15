@@ -226,12 +226,10 @@ func (t *tenantCache) MSetJSON(c context.Context, tenantID uint64, keys []string
 	if ln != len(data) {
 		return errors.New("key and data length mismatch")
 	}
-	for i, key := range keys {
-		keys[i] = t.prefix + "_" + key
-	}
-	var values = make([]interface{}, 0, ln*2)
-	for i, datum := range data {
-		values = append(values, keys[i], datum)
+	values := make([]interface{}, 0, ln*2)
+	for i := range keys {
+		pk := t.prefix + "_" + keys[i]
+		values = append(values, pk, data[i])
 	}
 
 	err := t.clients[tenantID].MSetWithTTL(c, ttl, values)
