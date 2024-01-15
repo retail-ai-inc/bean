@@ -24,8 +24,8 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"strings"
 	"text/template"
@@ -111,7 +111,7 @@ func command(cmd *cobra.Command, args []string) {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	fileData, err := ioutil.ReadAll(file)
+	fileData, err := io.ReadAll(file)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

@@ -24,8 +24,8 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	fpath "path"
@@ -187,12 +187,12 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 				return err
 			}
 
-			content, err := ioutil.ReadAll(file)
+			content, err := io.ReadAll(file)
 			if err != nil {
 				return err
 			}
 
-			err = ioutil.WriteFile(p.RootDir+"/"+path, content, 0664)
+			err = os.WriteFile(p.RootDir+"/"+path, content, 0664)
 			if err != nil {
 				return err
 			}
