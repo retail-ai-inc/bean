@@ -530,6 +530,29 @@ data, err := helpers.SingleDoChan(c, "key", func() (string, error) {
 }, 2, time.Second)
 ```
 
+---
+**async.ExecuteWithTimeout(c, duration time.Duration, fn TimeoutTask, poolName ...string)
+> `ExecuteWithTimeout` is an asynchronous execution with a timeout, you can execute it in any service layer.
+- `c` is generally the context in http-request, usually it carries information about sentry hub.
+- `duration` is the set timeout.
+- `fn` is a callback method for executing tasks. This is its defining type: `func(c context.Context) error`
+```
+	async.ExecuteWithTimeout(c, time.Second*3, func(ctx context.Context) error {
+		asyncCtx := trace.NewTraceableContext(ctx)
+		asyncFinish := trace.Start(asyncCtx, "http.async")
+		defer asyncFinish()
+
+		select {
+		case <-asyncCtx.Done():
+			return errors.WithStack(asyncCtx.Err())
+		case <-time.After(time.Second * time.Duration(rand.Intn(5))):
+			sentry.GetHubFromContext(asyncCtx).CaptureException(errors.New("work done"))
+		}
+
+		return nil
+	})
+```
+
 ## Bean Config 
 
 Bean provides the `BeanConfig` struct to enable the user to tweak the configuration of their consumer project as per their requirement .
