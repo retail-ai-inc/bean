@@ -26,6 +26,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"html/template"
 	"net"
 	"net/http"
@@ -634,7 +635,7 @@ func SentryCaptureException(c echo.Context, err error) {
 		if hub := sentryecho.GetHubFromContext(c); hub != nil {
 			hub.CaptureException(err)
 		} else {
-			sentry.CurrentHub().Clone().CaptureMessage("echo context is missing hub information")
+			sentry.CurrentHub().Clone().CaptureException(fmt.Errorf("echo context is missing hub information: %w", err))
 		}
 
 		return

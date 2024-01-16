@@ -185,7 +185,7 @@ func CaptureException(c context.Context, err error) {
 		if hub := sentry.GetHubFromContext(c); hub != nil {
 			hub.CaptureException(err)
 		} else {
-			sentry.CurrentHub().Clone().CaptureMessage("async context is missing hub information")
+			sentry.CurrentHub().Clone().CaptureException(fmt.Errorf("async context is missing hub information: %w", err))
 		}
 		return
 	}
