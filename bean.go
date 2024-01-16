@@ -634,7 +634,7 @@ func SentryCaptureException(c echo.Context, err error) {
 		if hub := sentryecho.GetHubFromContext(c); hub != nil {
 			hub.CaptureException(err)
 		} else {
-			Logger().Warnf("echo context is missing hub information")
+			sentry.CurrentHub().Clone().CaptureMessage("echo context is missing hub information")
 		}
 
 		return
