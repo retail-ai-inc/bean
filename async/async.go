@@ -47,7 +47,7 @@ type (
 func Execute(fn func(), poolName ...string) {
 	var asyncFunc = func(task func()) {
 		go func() {
-			defer recoverPanic(nil)
+			defer recoverPanic(context.TODO())
 			task()
 		}()
 	}
@@ -56,7 +56,7 @@ func Execute(fn func(), poolName ...string) {
 		pool, err := gopool.GetPool(poolName[0])
 		if err == nil && pool != nil {
 			asyncFunc = func(task func()) {
-				defer recoverPanic(nil)
+				defer recoverPanic(context.TODO())
 				err = pool.Submit(task)
 				if err != nil {
 					panic(err)
@@ -132,8 +132,16 @@ func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutT
 	hub := sentry.GetHubFromContext(ctx)
 
 	Execute(func() {
-		c, cancel := context.WithTimeout(context.TODO(), duration)
-		defer cancel()
+		var (
+			c      context.Context
+			cancel context.CancelFunc
+		)
+		if duration <= 0 {
+			c = context.TODO()
+		} else {
+			c, cancel = context.WithTimeout(context.TODO(), duration)
+			defer cancel()
+		}
 
 		if hub == nil {
 			hub = sentry.CurrentHub().Clone()
