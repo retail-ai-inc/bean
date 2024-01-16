@@ -24,8 +24,8 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"runtime"
 	"strings"
@@ -105,7 +105,7 @@ func docker(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	fileData, err := ioutil.ReadAll(file)
+	fileData, err := io.ReadAll(file)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -160,7 +160,7 @@ func docker(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	fileData, err = ioutil.ReadAll(file)
+	fileData, err = io.ReadAll(file)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

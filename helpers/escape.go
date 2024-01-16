@@ -28,7 +28,6 @@ import (
 	"errors"
 	"html"
 	"io"
-	"io/ioutil"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -85,7 +84,7 @@ func PostDataStripTags(c echo.Context, trimSpace bool) (map[string]interface{}, 
 			}
 
 			// Restore the io.ReadCloser to its original state so that we can read c.Request().Body somewhere else
-			c.Request().Body = ioutil.NopCloser(bodyBytes)
+			c.Request().Body = io.NopCloser(bodyBytes)
 
 		} else {
 
@@ -145,7 +144,7 @@ func InterfaceStripTags(data interface{}, trimSpace bool) interface{} {
 // 		Age: 40,
 // 	}
 
-// 	helpers.StructStripTags(&test, true)
+// helpers.StructStripTags(&test, true)
 func StructStripTags(data interface{}, trimSpace bool) error {
 
 	bytes, err := json.Marshal(data)

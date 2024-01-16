@@ -1,7 +1,7 @@
 GOPATH=$(shell go env GOPATH)
-# v1.47.3 is the latest version of golangci-lint project based on Go 1.18
+# v1.55.2 is the latest version of golangci-lint project based on Go 1.20
 # change it according to the Go version this project is using
-GOLANGCI_LINT_VERSION=v1.47.3
+GOLANGCI_LINT_VERSION=v1.55.2
 
 all: lint test build
 
@@ -20,9 +20,9 @@ install: ## install the binary to $GOPATH/bin
 lint: ## run all the lint tools, install golangci-lint if not exist
 ifeq (,$(wildcard $(GOPATH)/bin/golangci-lint))
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) > /dev/null
-	$(GOPATH)/bin/golangci-lint run || exit 0
+	$(GOPATH)/bin/golangci-lint run
 else
-	$(GOPATH)/bin/golangci-lint run || exit 0
+	$(GOPATH)/bin/golangci-lint run
 endif
 
 test: ## run tests with race detactor

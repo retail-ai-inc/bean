@@ -76,9 +76,9 @@ type FieldValuePair struct {
 
 var cachePrefix string
 
-func InitRedisTenantConns(config RedisConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string) map[uint64]*RedisDBConn {
+func InitRedisTenantConns(config RedisConfig, masterMySQL *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string) map[uint64]*RedisDBConn {
 	cachePrefix = config.Prefix
-	tenantCfgs := GetAllTenantCfgs(master)
+	tenantCfgs := GetAllTenantCfgs(masterMySQL)
 
 	if len(tenantCfgs) > 0 {
 		return getAllRedisTenantDB(config, tenantCfgs, tenantAlterDbHostParam, tenantDBPassPhraseKey)
@@ -126,7 +126,7 @@ func InitRedisMasterConn(config RedisConfig) *RedisDBConn {
 	return masterRedisDB
 }
 
-func (clients *RedisDBConn) IsKeyExists(c context.Context, key string) (bool, error) {
+func (clients *RedisDBConn) KeyExists(c context.Context, key string) (bool, error) {
 	result, err := clients.Primary.Exists(c, key).Result()
 	if err != nil {
 		return false, errors.WithStack(err)
@@ -511,6 +511,10 @@ func (clients *RedisDBConn) ExpireKey(c context.Context, key string, ttl time.Du
 	return nil
 }
 
+func (clients *RedisDBConn) Pipelined(c context.Context, fn func(redis.Pipeliner) error) ([]redis.Cmder, error) {
+	return clients.Primary.Pipelined(c, fn)
+}
+
 // MSet This is a replacement of the original `MSet` method by utilizing the `pipeline` approach when Redis is in `cluster` mode.
 // it accepts multiple values:
 //   - RedisMSet("key1", "value1", "key2", "value2")
@@ -626,7 +630,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 		if redisCfg, ok := cfgsMap["redis"]; ok {
 			password := redisCfg["password"].(string)
 
-			// IMPORTANT: If tenant database password is encrypted in master db config.
+			// IMPORTANT: If tenant database password is encrypted in master mysql db config.
 			if tenantDBPassPhraseKey != "" {
 				password, err = aes.BeanAESDecrypt(tenantDBPassPhraseKey, password)
 				if err != nil {
