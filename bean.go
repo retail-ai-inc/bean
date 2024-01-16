@@ -216,9 +216,6 @@ type Config struct {
 // This is a global variable to hold the debug logger so that we can log data from service, repository or anywhere.
 var BeanLogger echo.Logger
 
-// This key is inherited from `sentryecho` package as the package doesn't support the key for external use.
-const SentryHubContextKey = "sentry"
-
 // If a command or service wants to use a different `host` parameter for tenant database connection
 // then it's easy to do just by passing that parameter string name using `bean.TenantAlterDbHostParam`.
 // Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
@@ -621,8 +618,13 @@ func Logger() echo.Logger {
 	return BeanLogger
 }
 
-// This is a global function to send sentry exception if you configure the sentry through env.json. You cann pass a proper context or nil.
+// SentryCaptureException  This is a global function to send sentry exception if you configure the sentry through env.json. You cann pass a proper context or nil.
+// if you want to capture exception in async function, please use async.CaptureException.
 func SentryCaptureException(c echo.Context, err error) {
+	if err == nil {
+		return
+	}
+
 	if !BeanConfig.Sentry.On {
 		return
 	}
@@ -631,6 +633,8 @@ func SentryCaptureException(c echo.Context, err error) {
 		// If the function get a proper context then push the request headers and URI along with other meaningful info.
 		if hub := sentryecho.GetHubFromContext(c); hub != nil {
 			hub.CaptureException(err)
+		} else {
+			Logger().Warnf("echo context is missing hub information")
 		}
 
 		return

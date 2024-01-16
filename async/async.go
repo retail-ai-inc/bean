@@ -83,7 +83,7 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 
 		// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
 		// can pull the right hub and send the exception message to sentry.
-		if bean.BeanConfig.Sentry.On {
+		if viper.GetBool("sentry.on") {
 			ctx := ec.Request().Context()
 			hub := sentry.GetHubFromContext(ctx)
 			if hub == nil {
@@ -92,7 +92,6 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 
 			hub.Scope().SetRequest(ec.Request())
 			ctx = sentry.SetHubOnContext(ctx, hub)
-			ec.Set(bean.SentryHubContextKey, hub)
 
 			if helpers.FloatInRange(viper.GetFloat64("sentry.tracesSampleRate"), 0.0, 1.0) > 0.0 {
 				path := ec.Request().URL.Path
@@ -123,7 +122,7 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 		defer ec.Echo().ReleaseContext(ec)
 
 		// This defer will be executed first.
-		defer recoverPanic(ec)
+		defer recoverPanic(ec.Request().Context())
 
 		fn(ec)
 	}, poolName...)
@@ -143,9 +142,9 @@ func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutT
 			c = sentry.SetHubOnContext(c, hub)
 		}
 
-		// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
 		// can pull the right hub and send the exception message to sentry.
-		if bean.BeanConfig.Sentry.On {
+		sentryOn := viper.GetBool("sentry.on")
+		if sentryOn {
 			if helpers.FloatInRange(viper.GetFloat64("sentry.tracesSampleRate"), 0.0, 1.0) > 0.0 {
 				span := sentry.StartSpan(c, "http",
 					sentry.TransactionName(fmt.Sprintf("%s ASYNC", hub.Scope().Transaction())))
@@ -157,24 +156,48 @@ func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutT
 		}
 
 		// This defer will be executed first.
-		defer recoverPanic(nil)
+		defer recoverPanic(c)
 
-		err := fn(c)
-		if err != nil {
-			hub.CaptureException(err)
-		}
+		CaptureException(c, fn(c))
 	}, poolName...)
 }
 
+func CaptureException(c context.Context, err error) {
+	if err == nil {
+		return
+	}
+
+	if !viper.GetBool("sentry.on") {
+		bean.Logger().Error(err)
+		return
+	}
+
+	if c != nil {
+		// If the function get a proper context then push the request headers and URI along with other meaningful info.
+		if hub := sentry.GetHubFromContext(c); hub != nil {
+			hub.CaptureException(err)
+		} else {
+			bean.Logger().Warn("async context is missing hub information")
+		}
+		return
+	}
+
+	// If someone call the function from service/repository without a proper context.
+	sentry.CurrentHub().Clone().CaptureException(err)
+}
+
 // Recover the panic and send the exception to sentry.
-func recoverPanic(c echo.Context) {
+func recoverPanic(c context.Context) {
 	if err := recover(); err != nil {
 		// Create a new Hub by cloning the existing one.
-		if bean.BeanConfig.Sentry.On {
+		if viper.GetBool("sentry.on") {
 			localHub := sentry.CurrentHub().Clone()
 
 			if c != nil {
-				localHub.Scope().SetRequest(c.Request())
+				hub := sentry.GetHubFromContext(c)
+				if hub != nil {
+					localHub = hub.Clone()
+				}
 			}
 
 			localHub.ConfigureScope(func(scope *sentry.Scope) {

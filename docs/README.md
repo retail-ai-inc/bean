@@ -546,7 +546,7 @@ data, err := helpers.SingleDoChan(c, "key", func() (string, error) {
 		case <-asyncCtx.Done():
 			return errors.WithStack(asyncCtx.Err())
 		case <-time.After(time.Second * time.Duration(rand.Intn(5))):
-			sentry.GetHubFromContext(asyncCtx).CaptureException(errors.New("work done"))
+			async.CaptureException(asyncCtx, errors.New("work done"))
 		}
 
 		return nil
