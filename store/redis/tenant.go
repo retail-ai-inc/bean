@@ -88,6 +88,8 @@ func (t *tenantCache) KeyExists(c context.Context, tenantID uint64, key string) 
 }
 
 func (t *tenantCache) GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error) {
+	finish := trace.Start(c, "db")
+	defer finish()
 
 	pk := t.prefix + "_" + key
 	jsonStr, err := t.clients[tenantID].GetString(c, pk)
