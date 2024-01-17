@@ -196,13 +196,14 @@ func recoverPanic(c context.Context) {
 	if err := recover(); err != nil {
 		// Create a new Hub by cloning the existing one.
 		if bean.BeanConfig.Sentry.On {
-			localHub := sentry.CurrentHub().Clone()
+			var localHub *sentry.Hub
 
 			if c != nil {
-				hub := sentry.GetHubFromContext(c)
-				if hub != nil {
-					localHub = hub.Clone()
-				}
+				localHub = sentry.GetHubFromContext(c)
+			}
+
+			if localHub == nil {
+				localHub = sentry.CurrentHub().Clone()
 			}
 
 			localHub.ConfigureScope(func(scope *sentry.Scope) {
