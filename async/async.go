@@ -83,7 +83,7 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 
 		// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
 		// can pull the right hub and send the exception message to sentry.
-		if viper.GetBool("sentry.on") {
+		if bean.BeanConfig.Sentry.On {
 			ctx := ec.Request().Context()
 			hub := sentry.GetHubFromContext(ctx)
 			if hub == nil {
@@ -151,16 +151,13 @@ func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutT
 		}
 
 		// can pull the right hub and send the exception message to sentry.
-		sentryOn := viper.GetBool("sentry.on")
-		if sentryOn {
-			if helpers.FloatInRange(viper.GetFloat64("sentry.tracesSampleRate"), 0.0, 1.0) > 0.0 {
-				span := sentry.StartSpan(c, "http",
-					sentry.TransactionName(fmt.Sprintf("%s ASYNC", hub.Scope().Transaction())))
-				span.Description = helpers.CurrFuncName()
+		if bean.BeanConfig.Sentry.On && helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
+			span := sentry.StartSpan(c, "http",
+				sentry.TransactionName(fmt.Sprintf("%s ASYNC", hub.Scope().Transaction())))
+			span.Description = helpers.CurrFuncName()
 
-				defer span.Finish()
-				c = span.Context()
-			}
+			defer span.Finish()
+			c = span.Context()
 		}
 
 		// This defer will be executed first.
@@ -175,7 +172,7 @@ func CaptureException(c context.Context, err error) {
 		return
 	}
 
-	if !viper.GetBool("sentry.on") {
+	if !bean.BeanConfig.Sentry.On {
 		bean.Logger().Error(err)
 		return
 	}
@@ -198,7 +195,7 @@ func CaptureException(c context.Context, err error) {
 func recoverPanic(c context.Context) {
 	if err := recover(); err != nil {
 		// Create a new Hub by cloning the existing one.
-		if viper.GetBool("sentry.on") {
+		if bean.BeanConfig.Sentry.On {
 			localHub := sentry.CurrentHub().Clone()
 
 			if c != nil {
