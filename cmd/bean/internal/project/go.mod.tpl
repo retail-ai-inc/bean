@@ -1,6 +1,6 @@
 module {{ .PkgPath }}
 
-go 1.18
+go 1.20
 
 require (
 	github.com/getsentry/sentry-go v0.13.0

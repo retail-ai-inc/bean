@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
@@ -36,14 +37,17 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Task func(c echo.Context)
+type (
+	Task        func(c echo.Context)
+	TimeoutTask func(c context.Context) error
+)
 
 // `Execute` provides a safe way to execute a function asynchronously without any context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
 func Execute(fn func(), poolName ...string) {
 	var asyncFunc = func(task func()) {
 		go func() {
-			defer recoverPanic(nil)
+			defer recoverPanic(context.TODO())
 			task()
 		}()
 	}
@@ -52,7 +56,7 @@ func Execute(fn func(), poolName ...string) {
 		pool, err := gopool.GetPool(poolName[0])
 		if err == nil && pool != nil {
 			asyncFunc = func(task func()) {
-				defer recoverPanic(nil)
+				defer recoverPanic(context.TODO())
 				err = pool.Submit(task)
 				if err != nil {
 					panic(err)
@@ -88,7 +92,6 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 
 			hub.Scope().SetRequest(ec.Request())
 			ctx = sentry.SetHubOnContext(ctx, hub)
-			ec.Set(bean.SentryHubContextKey, hub)
 
 			if helpers.FloatInRange(viper.GetFloat64("sentry.tracesSampleRate"), 0.0, 1.0) > 0.0 {
 				path := ec.Request().URL.Path
@@ -119,21 +122,88 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 		defer ec.Echo().ReleaseContext(ec)
 
 		// This defer will be executed first.
-		defer recoverPanic(ec)
+		defer recoverPanic(ec.Request().Context())
 
 		fn(ec)
 	}, poolName...)
 }
 
+func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutTask, poolName ...string) {
+	hub := sentry.GetHubFromContext(ctx)
+
+	Execute(func() {
+		var (
+			c      context.Context
+			cancel context.CancelFunc
+		)
+		if duration <= 0 {
+			c = context.TODO()
+		} else {
+			c, cancel = context.WithTimeout(context.TODO(), duration)
+			defer cancel()
+		}
+
+		if hub == nil {
+			hub = sentry.CurrentHub().Clone()
+			c = sentry.SetHubOnContext(c, hub)
+		} else {
+			c = sentry.SetHubOnContext(c, hub)
+		}
+
+		// can pull the right hub and send the exception message to sentry.
+		if bean.BeanConfig.Sentry.On && helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
+			span := sentry.StartSpan(c, "http",
+				sentry.TransactionName(fmt.Sprintf("%s ASYNC", hub.Scope().Transaction())))
+			span.Description = helpers.CurrFuncName()
+
+			defer span.Finish()
+			c = span.Context()
+		}
+
+		// This defer will be executed first.
+		defer recoverPanic(c)
+
+		CaptureException(c, fn(c))
+	}, poolName...)
+}
+
+func CaptureException(c context.Context, err error) {
+	if err == nil {
+		return
+	}
+
+	if !bean.BeanConfig.Sentry.On {
+		bean.Logger().Error(err)
+		return
+	}
+
+	if c != nil {
+		// If the function get a proper context then push the request headers and URI along with other meaningful info.
+		if hub := sentry.GetHubFromContext(c); hub != nil {
+			hub.CaptureException(err)
+		} else {
+			sentry.CurrentHub().Clone().CaptureException(fmt.Errorf("async context is missing hub information: %w", err))
+		}
+		return
+	}
+
+	// If someone call the function from service/repository without a proper context.
+	sentry.CurrentHub().Clone().CaptureException(err)
+}
+
 // Recover the panic and send the exception to sentry.
-func recoverPanic(c echo.Context) {
+func recoverPanic(c context.Context) {
 	if err := recover(); err != nil {
 		// Create a new Hub by cloning the existing one.
 		if bean.BeanConfig.Sentry.On {
-			localHub := sentry.CurrentHub().Clone()
+			var localHub *sentry.Hub
 
 			if c != nil {
-				localHub.Scope().SetRequest(c.Request())
+				localHub = sentry.GetHubFromContext(c)
+			}
+
+			if localHub == nil {
+				localHub = sentry.CurrentHub().Clone()
 			}
 
 			localHub.ConfigureScope(func(scope *sentry.Scope) {

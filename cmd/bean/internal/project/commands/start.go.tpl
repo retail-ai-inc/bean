@@ -8,7 +8,6 @@ import (
 	"{{ .PkgPath }}/validations"
 
 	"github.com/getsentry/sentry-go"
-	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"github.com/retail-ai-inc/bean/v2"
 	berror "github.com/retail-ai-inc/bean/v2/error"
 	"github.com/retail-ai-inc/bean/v2/helpers"
