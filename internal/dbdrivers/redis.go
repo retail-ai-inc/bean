@@ -666,7 +666,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 
 				tenantRedisDB[t.TenantID].isCluster = true
 
-			} else if readHostArray, ok := redisCfg["read"]; ok && len(strings.Split(host, ",")) == 1 {
+			} else if readHostArray, ok := redisCfg["reads"]; ok && len(strings.Split(host, ",")) == 1 {
 				if readHost, ok := readHostArray.([]interface{}); ok {
 					redisReadConn := make(map[uint64]redis.UniversalClient, len(readHost))
 
