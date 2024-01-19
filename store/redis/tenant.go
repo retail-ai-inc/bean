@@ -69,10 +69,6 @@ type tenantCache struct {
 // This assumes it is called after the (*Bean).InitDB() func and takes (bean.DBDeps).TenantRedisDBs as input.
 func NewTenantCache(tenants map[uint64]*dbdrivers.RedisDBConn, prefix string) TenantCache {
 
-	if len(tenants) == 0 {
-		panic("tenant mode is diable or tenant redis dbs are not initialized properly")
-	}
-
 	return &tenantCache{
 		clients: tenants,
 		prefix:  prefix,
