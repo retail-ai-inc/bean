@@ -48,9 +48,9 @@ func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c
 	// !!! https://github.com/labstack/echo/issues/1633
 	// However there is a recoverPanic function inside the ExecuteWithContext that will
 	// prevent this from happening and not crash the app.
-	async.ExecuteWithContext(func(asyncC echo.Context) {
+	async.ExecuteWithContext(func(asyncC context.Context) {
 		c.Logger().Debug(output)
-		traceableContext := trace.NewTraceableContext(asyncC.Request().Context())
+		traceableContext := trace.NewTraceableContext(asyncC)
 		asyncFinish := trace.Start(traceableContext, "http.async")
 		defer asyncFinish()
 
@@ -64,7 +64,7 @@ func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c
 			fmt.Println(err)
 			// This is a global function to send sentry exception if you configure the sentry through env.json. 
 			// You cann pass a proper context or nil.
-			// bean.SentryCaptureException(asyncC, err)
+			// async.CaptureException(traceableContext, err)
 		}
 
 	},c)

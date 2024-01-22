@@ -34,11 +34,10 @@ import (
 	"github.com/retail-ai-inc/bean/v2"
 	"github.com/retail-ai-inc/bean/v2/helpers"
 	"github.com/retail-ai-inc/bean/v2/internal/gopool"
-	"github.com/spf13/viper"
 )
 
 type (
-	Task        func(c echo.Context)
+	Task        func(c context.Context)
 	TimeoutTask func(c context.Context) error
 )
 
@@ -80,11 +79,10 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 	ec.Reset(c.Request().WithContext(context.TODO()), nil)
 
 	Execute(func() {
-
+		ctx := ec.Request().Context()
 		// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
 		// can pull the right hub and send the exception message to sentry.
 		if bean.BeanConfig.Sentry.On {
-			ctx := ec.Request().Context()
 			hub := sentry.GetHubFromContext(ctx)
 			if hub == nil {
 				hub = sentry.CurrentHub().Clone()
@@ -93,7 +91,7 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 			hub.Scope().SetRequest(ec.Request())
 			ctx = sentry.SetHubOnContext(ctx, hub)
 
-			if helpers.FloatInRange(viper.GetFloat64("sentry.tracesSampleRate"), 0.0, 1.0) > 0.0 {
+			if helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
 				path := ec.Request().URL.Path
 
 				span := sentry.StartSpan(ctx, "http",
@@ -103,7 +101,7 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 				span.Description = helpers.CurrFuncName()
 
 				// If `skipTracesEndpoints` has some path(s) then let's skip performance sample for those URI.
-				skipTracesEndpoints := viper.GetStringSlice("sentry.skipTracesEndpoints")
+				skipTracesEndpoints := bean.BeanConfig.Sentry.SkipTracesEndpoints
 
 				for _, endpoint := range skipTracesEndpoints {
 					if regexp.MustCompile(endpoint).MatchString(path) {
@@ -113,18 +111,17 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 				}
 
 				defer span.Finish()
-				r := ec.Request().WithContext(span.Context())
-				ec.SetRequest(r)
+				ctx = span.Context()
 			}
 		}
 
 		// Release the acquired context. This defer will be executed second.
-		defer ec.Echo().ReleaseContext(ec)
+		defer c.Echo().ReleaseContext(ec)
 
 		// This defer will be executed first.
-		defer recoverPanic(ec.Request().Context())
+		defer recoverPanic(ctx)
 
-		fn(ec)
+		fn(ctx)
 	}, poolName...)
 }
 
