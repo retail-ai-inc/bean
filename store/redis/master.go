@@ -61,10 +61,6 @@ type masterCache struct {
 // This assumes it is called after the (*Bean).InitDB() func and takes (bean.DBDeps).MasterRedisDB as input.
 func NewMasterCache(master *dbdrivers.RedisDBConn, prefix string) MasterCache {
 
-	if master == nil {
-		panic("master redis db is not initialized properly")
-	}
-
 	return &masterCache{
 		cache: &tenantCache{
 			clients: map[uint64]*dbdrivers.RedisDBConn{
