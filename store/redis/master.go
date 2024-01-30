@@ -54,20 +54,43 @@ type MasterCache interface {
 }
 
 type masterCache struct {
-	cache TenantCache
+	cache TenantCache // cache is a tenantCache with only master redis db; map[masterID]*redis.Client
 }
 
 // NewMasterCache creates a new MasterCache.
 // This assumes it is called after the (*Bean).InitDB() func and takes (bean.DBDeps).MasterRedisDB as input.
-func NewMasterCache(master *dbdrivers.RedisDBConn, prefix string) MasterCache {
+func NewMasterCache(master *dbdrivers.RedisDBConn, prefix string, opts ...MasterCacheOption) MasterCache {
 
-	return &masterCache{
+	m := &masterCache{
 		cache: &tenantCache{
 			clients: map[uint64]*dbdrivers.RedisDBConn{
 				masterID: master,
 			},
 			prefix: prefix,
 		},
+	}
+
+	for _, opt := range opts {
+		opt(m)
+	}
+
+	return m
+}
+
+type MasterCacheOption func(*masterCache)
+
+// OptTraceMC is an option that enables tracing for all redis operations in MasterCache with the given operation name
+// if you enable Sentry's sampling for traces in cofing.
+// The operation name will be `master-cache` by default if it is passed an empty string.
+func OptTraceMC(operation string) MasterCacheOption {
+	return func(m *masterCache) {
+		if t, ok := m.cache.(*tenantCache); ok {
+			if operation != "" {
+				t.operation = operation
+			} else {
+				t.operation = "master-cache" // by default
+			}
+		}
 	}
 }
 

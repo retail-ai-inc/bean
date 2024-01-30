@@ -61,22 +61,44 @@ type TenantCache interface {
 }
 
 type tenantCache struct {
-	clients map[uint64]*dbdrivers.RedisDBConn
-	prefix  string
+	clients   map[uint64]*dbdrivers.RedisDBConn // map[tenantID]*redis.Client
+	prefix    string                            // prefix for all keys cocatenated with underscore "_"
+	operation string                            // operation name for tracing
 }
 
 // NewTenantCache creates a new TenantCache if you enable tenant mode (`detabase.tenant.on` in config).
 // This assumes it is called after the (*Bean).InitDB() func and takes (bean.DBDeps).TenantRedisDBs as input.
-func NewTenantCache(tenants map[uint64]*dbdrivers.RedisDBConn, prefix string) TenantCache {
+func NewTenantCache(tenants map[uint64]*dbdrivers.RedisDBConn, prefix string, opts ...TenantCacheOption) TenantCache {
 
-	return &tenantCache{
+	t := &tenantCache{
 		clients: tenants,
 		prefix:  prefix,
+	}
+
+	for _, opt := range opts {
+		opt(t)
+	}
+
+	return t
+}
+
+type TenantCacheOption func(*tenantCache)
+
+// OptTraceTC is an option that enables tracing for all redis operations in TenantCache with the given operation name
+// if you enable Sentry's sampling for traces in cofing.
+// The operation name will be `tenant-cache` by default if it is passed an empty string.
+func OptTraceTC(operation string) func(*tenantCache) {
+	return func(t *tenantCache) {
+		if operation != "" {
+			t.operation = operation
+		} else {
+			t.operation = "tenant-cache" // by default
+		}
 	}
 }
 
 func (t *tenantCache) KeyExists(c context.Context, tenantID uint64, key string) (bool, error) {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -84,7 +106,7 @@ func (t *tenantCache) KeyExists(c context.Context, tenantID uint64, key string) 
 }
 
 func (t *tenantCache) GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error) {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -103,7 +125,7 @@ func (t *tenantCache) GetJSON(c context.Context, tenantID uint64, key string, ds
 }
 
 func (t *tenantCache) GetString(c context.Context, tenantID uint64, key string) (string, error) {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -111,7 +133,7 @@ func (t *tenantCache) GetString(c context.Context, tenantID uint64, key string) 
 }
 
 func (t *tenantCache) MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error) {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pks := make([]string, 0, len(keys))
@@ -123,7 +145,7 @@ func (t *tenantCache) MGet(c context.Context, tenantID uint64, keys ...string) (
 }
 
 func (t *tenantCache) MGetJSON(c context.Context, tenantID uint64, dst interface{}, keys ...string) error {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pks := make([]string, 0, len(keys))
@@ -156,7 +178,7 @@ func (t *tenantCache) MGetJSON(c context.Context, tenantID uint64, dst interface
 }
 
 func (t *tenantCache) HGet(c context.Context, tenantID uint64, key, field string) (string, error) {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -164,7 +186,7 @@ func (t *tenantCache) HGet(c context.Context, tenantID uint64, key, field string
 }
 
 func (t *tenantCache) HGets(c context.Context, tenantID uint64, keysWithFields map[string]string) (map[string]string, error) {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	var pksWithFields = make(map[string]string, len(keysWithFields))
@@ -177,7 +199,7 @@ func (t *tenantCache) HGets(c context.Context, tenantID uint64, keysWithFields m
 }
 
 func (t *tenantCache) LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error) {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -185,7 +207,7 @@ func (t *tenantCache) LRange(c context.Context, tenantID uint64, key string, sta
 }
 
 func (t *tenantCache) SMembers(c context.Context, tenantID uint64, key string) ([]string, error) {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -193,7 +215,7 @@ func (t *tenantCache) SMembers(c context.Context, tenantID uint64, key string) (
 }
 
 func (t *tenantCache) SRandMemberN(c context.Context, tenantID uint64, key string, count int64) ([]string, error) {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -201,7 +223,7 @@ func (t *tenantCache) SRandMemberN(c context.Context, tenantID uint64, key strin
 }
 
 func (t *tenantCache) SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error) {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -209,7 +231,7 @@ func (t *tenantCache) SIsMember(c context.Context, tenantID uint64, key string, 
 }
 
 func (t *tenantCache) SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -217,7 +239,7 @@ func (t *tenantCache) SetJSON(c context.Context, tenantID uint64, key string, da
 }
 
 func (t *tenantCache) MSetJSON(c context.Context, tenantID uint64, keys []string, data []interface{}, ttl time.Duration) error {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	ln := len(keys)
@@ -239,7 +261,7 @@ func (t *tenantCache) MSetJSON(c context.Context, tenantID uint64, keys []string
 }
 
 func (t *tenantCache) SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -247,7 +269,7 @@ func (t *tenantCache) SetString(c context.Context, tenantID uint64, key string, 
 }
 
 func (t *tenantCache) HSet(c context.Context, tenantID uint64, key string, field string, data interface{}, ttl time.Duration) error {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -255,7 +277,7 @@ func (t *tenantCache) HSet(c context.Context, tenantID uint64, key string, field
 }
 
 func (t *tenantCache) RPush(c context.Context, tenantID uint64, key string, valueList []string) error {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -263,7 +285,7 @@ func (t *tenantCache) RPush(c context.Context, tenantID uint64, key string, valu
 }
 
 func (t *tenantCache) IncrementValue(c context.Context, tenantID uint64, key string) error {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -271,7 +293,7 @@ func (t *tenantCache) IncrementValue(c context.Context, tenantID uint64, key str
 }
 
 func (t *tenantCache) SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -279,7 +301,7 @@ func (t *tenantCache) SAdd(c context.Context, tenantID uint64, key string, eleme
 }
 
 func (t *tenantCache) SRem(c context.Context, tenantID uint64, key string, elements interface{}) error {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -287,7 +309,7 @@ func (t *tenantCache) SRem(c context.Context, tenantID uint64, key string, eleme
 }
 
 func (t *tenantCache) DelKey(c context.Context, tenantID uint64, keys ...string) error {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pks := make([]string, len(keys))
@@ -299,7 +321,7 @@ func (t *tenantCache) DelKey(c context.Context, tenantID uint64, keys ...string)
 }
 
 func (t *tenantCache) Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
@@ -307,7 +329,7 @@ func (t *tenantCache) Expire(c context.Context, tenantID uint64, key string, ttl
 }
 
 func (t *tenantCache) Pipelined(c context.Context, tenantID uint64, fn func(redis.Pipeliner) error) ([]redis.Cmder, error) {
-	finish := trace.Start(c, "db")
+	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	return t.clients[tenantID].Pipelined(c, fn)
