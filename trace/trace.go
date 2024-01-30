@@ -30,73 +30,23 @@ import (
 	"github.com/spf13/viper"
 )
 
-// TraceableContext contains a stack which holds the sentry span context information.
-// Not thread safe.
-type TraceableContext struct {
-	stack []context.Context
-	context.Context
-}
-
-func (c *TraceableContext) Push(ctx context.Context) {
-	c.stack = append(c.stack, ctx)
-	c.Context = ctx
-}
-
-func (c *TraceableContext) Pop() context.Context {
-	if len(c.stack) <= 1 { // To sure the stack will always have a base context
-		return c.Context
-	}
-
-	n := len(c.stack) - 1
-	ctx := c.stack[n]        // Top element
-	c.stack = c.stack[:n]    // Remove the top element in the stack
-	c.Context = c.stack[n-1] // Set c.Context point to the new top element
-
-	return ctx
-}
-
-// Start starts a span and return a finish() function to finish the corresponding span.
-func Start(c context.Context, operation string, spanOpts ...sentry.SpanOption) func() {
-	// if trace sample rate is 0.0 or 0 or sentry is off
+// StartSpan starts a span and returns context containing the span and a function to finish the corresponding span.
+// Make sure to call the returned function to finish the span.
+func StartSpan(c context.Context, operation string, spanOpts ...sentry.SpanOption) (context.Context, func()) {
+	// If trace sample rate is 0.0 or 0 or Sentry is off, use the provided context as-is.
 	if viper.GetFloat64("sentry.tracesSampleRate") == 0 || !viper.GetBool("sentry.on") {
-		return func() {}
-	} else {
-		functionName := "unknown function"
-		pc, _, _, ok := runtime.Caller(1)
-		if ok {
-			functionName = runtime.FuncForPC(pc).Name()
-		}
-
-		var span *sentry.Span
-
-		ctx, ok := c.(*TraceableContext)
-		if ok {
-			span = sentry.StartSpan(ctx.Context, operation, spanOpts...)
-			ctx.Push(span.Context())
-		} else {
-			span = sentry.StartSpan(c, operation, spanOpts...)
-			sentry.CurrentHub().Clone().CaptureMessage(functionName + "not using a traceable context")
-		}
-
-		span.Description = functionName
-
-		finish := func() {
-			if ctx != nil {
-				ctx.Pop()
-			}
-			span.Finish()
-		}
-		return finish
+		return c, func() {}
 	}
-}
 
-// NewTraceableContext return a traceable context which can hold different level of span information.
-// This function Should be called in the upper layer only (handler, middleware...) and the lower layer
-// reuse this context to create a hierarchy span tree.
-func NewTraceableContext(ctx context.Context) *TraceableContext {
-	stack := []context.Context{ctx}
-	return &TraceableContext{
-		stack:   stack,
-		Context: ctx,
+	functionName := "unknown function"
+	if pc, _, _, ok := runtime.Caller(1); ok {
+		functionName = runtime.FuncForPC(pc).Name()
+	}
+	span := sentry.StartSpan(c, operation, spanOpts...)
+	span.Description = functionName
+	newCtx := span.Context()
+
+	return newCtx, func() {
+		span.Finish()
 	}
 }
