@@ -85,8 +85,8 @@ func NewTenantCache(tenants map[uint64]*dbdrivers.RedisDBConn, prefix string, op
 
 type TenantCacheOption func(*tenantCache)
 
-// OptTraceOperation is an option to set the operation name for tracing in TenantCache.
-// It overrides the default value as long as the given operation name is not empty.
+// OptTraceOperation is an option to set an operation name for tracing in TenantCache.
+// It overrides a default value as long as the given operation name is not empty.
 func OptTraceTCOperation(operation string) func(*tenantCache) {
 	return func(t *tenantCache) {
 		if operation != "" {

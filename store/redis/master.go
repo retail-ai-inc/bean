@@ -54,7 +54,7 @@ type MasterCache interface {
 }
 
 type masterCache struct {
-	cache TenantCache // cache is a tenantCache with only master redis db; map[masterID]*redis.Client
+	cache *tenantCache // cache is a tenantCache with only master redis db; map[masterID]*redis.Client
 }
 
 // NewMasterCache creates a new MasterCache.
@@ -80,14 +80,12 @@ func NewMasterCache(master *dbdrivers.RedisDBConn, prefix string, opts ...Master
 
 type MasterCacheOption func(*masterCache)
 
-// OptTraceMCOperation is an option to set the operation name for tracing in MasterCache.
-// It overrides the default value as long as the given operation name is not empty.
+// OptTraceMCOperation is an option to set an operation name for tracing in MasterCache.
+// It overrides a default value as long as the given operation name is not empty.
 func OptTraceMCOperation(operation string) MasterCacheOption {
 	return func(m *masterCache) {
-		if t, ok := m.cache.(*tenantCache); ok {
-			if operation != "" {
-				t.operation = operation
-			}
+		if operation != "" {
+			m.cache.operation = operation
 		}
 	}
 }
