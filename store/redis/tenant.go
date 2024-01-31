@@ -71,8 +71,9 @@ type tenantCache struct {
 func NewTenantCache(tenants map[uint64]*dbdrivers.RedisDBConn, prefix string, opts ...TenantCacheOption) TenantCache {
 
 	t := &tenantCache{
-		clients: tenants,
-		prefix:  prefix,
+		clients:   tenants,
+		prefix:    prefix,
+		operation: "tenant-cache", // by default
 	}
 
 	for _, opt := range opts {
@@ -84,15 +85,12 @@ func NewTenantCache(tenants map[uint64]*dbdrivers.RedisDBConn, prefix string, op
 
 type TenantCacheOption func(*tenantCache)
 
-// OptTraceTC is an option that enables tracing for all redis operations in TenantCache with the given operation name
-// if you enable Sentry's sampling for traces in cofing.
-// The operation name will be `tenant-cache` by default if it is passed an empty string.
-func OptTraceTC(operation string) func(*tenantCache) {
+// OptTraceOperation is an option to set the operation name for tracing in TenantCache.
+// It overrides the default value as long as the given operation name is not empty.
+func OptTraceTCOperation(operation string) func(*tenantCache) {
 	return func(t *tenantCache) {
 		if operation != "" {
 			t.operation = operation
-		} else {
-			t.operation = "tenant-cache" // by default
 		}
 	}
 }

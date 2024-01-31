@@ -66,7 +66,8 @@ func NewMasterCache(master *dbdrivers.RedisDBConn, prefix string, opts ...Master
 			clients: map[uint64]*dbdrivers.RedisDBConn{
 				masterID: master,
 			},
-			prefix: prefix,
+			prefix:    prefix,
+			operation: "master-cache", // by default
 		},
 	}
 
@@ -79,16 +80,13 @@ func NewMasterCache(master *dbdrivers.RedisDBConn, prefix string, opts ...Master
 
 type MasterCacheOption func(*masterCache)
 
-// OptTraceMC is an option that enables tracing for all redis operations in MasterCache with the given operation name
-// if you enable Sentry's sampling for traces in cofing.
-// The operation name will be `master-cache` by default if it is passed an empty string.
-func OptTraceMC(operation string) MasterCacheOption {
+// OptTraceMCOperation is an option to set the operation name for tracing in MasterCache.
+// It overrides the default value as long as the given operation name is not empty.
+func OptTraceMCOperation(operation string) MasterCacheOption {
 	return func(m *masterCache) {
 		if t, ok := m.cache.(*tenantCache); ok {
 			if operation != "" {
 				t.operation = operation
-			} else {
-				t.operation = "master-cache" // by default
 			}
 		}
 	}
