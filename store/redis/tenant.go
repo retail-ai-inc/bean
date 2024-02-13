@@ -37,6 +37,8 @@ import (
 // You pass in tenantID to connect to the corresponding redis db.
 type TenantCache interface {
 	KeyExists(c context.Context, tenantID uint64, key string) (bool, error)
+	Keys(c context.Context, tenantID uint64, pattern string) ([]string, error)
+	Ttl(c context.Context, tenantID uint64, key string) (time.Duration, error)
 	GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error)
 	GetString(c context.Context, tenantID uint64, key string) (string, error)
 	MGetJSON(c context.Context, tenantID uint64, dst interface{}, keys ...string) error
@@ -50,7 +52,7 @@ type TenantCache interface {
 	SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error)
 	SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error
 	SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error
-	HSet(c context.Context, tenantID uint64, key string, field string, data interface{}, ttl time.Duration) error
+	HSet(c context.Context, tenantID uint64, key string, args ...interface{}) error
 	RPush(c context.Context, tenantID uint64, key string, valueList []string) error
 	IncrementValue(c context.Context, tenantID uint64, key string) error
 	SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error
@@ -101,6 +103,22 @@ func (t *tenantCache) KeyExists(c context.Context, tenantID uint64, key string) 
 
 	pk := t.prefix + "_" + key
 	return t.clients[tenantID].KeyExists(c, pk)
+}
+
+func (t *tenantCache) Keys(c context.Context, tenantID uint64, pattern string) ([]string, error) {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	pk := t.prefix + "_" + pattern
+	return t.clients[tenantID].Keys(c, pk)
+}
+
+func (t *tenantCache) Ttl(c context.Context, tenantID uint64, key string) (time.Duration, error) {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	pk := t.prefix + "_" + key
+	return t.clients[tenantID].Ttl(c, pk)
 }
 
 func (t *tenantCache) GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error) {
@@ -266,12 +284,12 @@ func (t *tenantCache) SetString(c context.Context, tenantID uint64, key string, 
 	return t.clients[tenantID].Set(c, pk, data, ttl)
 }
 
-func (t *tenantCache) HSet(c context.Context, tenantID uint64, key string, field string, data interface{}, ttl time.Duration) error {
+func (t *tenantCache) HSet(c context.Context, tenantID uint64, key string, args ...interface{}) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
-	return t.clients[tenantID].HSet(c, pk, field, data, ttl)
+	return t.clients[tenantID].HSet(c, pk, args...)
 }
 
 func (t *tenantCache) RPush(c context.Context, tenantID uint64, key string, valueList []string) error {

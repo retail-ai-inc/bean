@@ -141,6 +141,76 @@ func (clients *RedisDBConn) KeyExists(c context.Context, key string) (bool, erro
 	return false, nil
 }
 
+func (clients *RedisDBConn) Ttl(c context.Context, key string) (ttl time.Duration, err error) {
+
+	if clients.isCluster {
+		// If client is cluster mode then just hit the host server.
+		ttl, err = clients.Primary.TTL(c, key).Result()
+	} else {
+		// Check the read replicas are available or not.
+		if clients.readCount == 1 {
+			ttl, err = clients.Reads[0].TTL(c, key).Result()
+			if err != nil {
+				ttl, err = clients.Primary.TTL(c, key).Result()
+			}
+		} else if clients.readCount > 1 {
+			// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
+			readHost := rand.Intn(clients.readCount)
+
+			ttl, err = clients.Reads[uint64(readHost)].TTL(c, key).Result()
+			if err != nil {
+				ttl, err = clients.Primary.TTL(c, key).Result()
+			}
+		} else {
+			// If there is no read replica then just hit the host server.
+			ttl, err = clients.Primary.TTL(c, key).Result()
+		}
+	}
+
+	if err == redis.Nil {
+		return ttl, nil
+	} else if err != nil {
+		return ttl, errors.WithStack(err)
+	}
+
+	return ttl, nil
+}
+
+func (clients *RedisDBConn) Keys(c context.Context, pattern string) (keys []string, err error) {
+
+	if clients.isCluster {
+		// If client is cluster mode then just hit the host server.
+		keys, err = clients.Primary.Keys(c, pattern).Result()
+	} else {
+		// Check the read replicas are available or not.
+		if clients.readCount == 1 {
+			keys, err = clients.Reads[0].Keys(c, pattern).Result()
+			if err != nil {
+				keys, err = clients.Primary.Keys(c, pattern).Result()
+			}
+		} else if clients.readCount > 1 {
+			// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
+			readHost := rand.Intn(clients.readCount)
+
+			keys, err = clients.Reads[uint64(readHost)].Keys(c, pattern).Result()
+			if err != nil {
+				keys, err = clients.Primary.Keys(c, pattern).Result()
+			}
+		} else {
+			// If there is no read replica then just hit the host server.
+			keys, err = clients.Primary.Keys(c, pattern).Result()
+		}
+	}
+
+	if err == redis.Nil {
+		return keys, nil
+	} else if err != nil {
+		return keys, errors.WithStack(err)
+	}
+
+	return keys, nil
+}
+
 func (clients *RedisDBConn) GetString(c context.Context, key string) (str string, err error) {
 
 	if clients.isCluster {
@@ -241,6 +311,41 @@ func (clients *RedisDBConn) HGet(c context.Context, key string, field string) (r
 		return "", nil
 	} else if err != nil {
 		return "", errors.WithStack(err)
+	}
+
+	return result, nil
+}
+
+// HGet To get all fields with their corresponding values in a hash in a single call to redis.
+func (clients *RedisDBConn) HGetAll(c context.Context, key string) (result map[string]string, err error) {
+	if clients.isCluster {
+		// If client is cluster mode then just hit the host server.
+		result, err = clients.Primary.HGetAll(c, key).Result()
+	} else {
+		// Check the read replicas are available or not.
+		if clients.readCount == 1 {
+			result, err = clients.Reads[0].HGetAll(c, key).Result()
+			if err != nil {
+				result, err = clients.Primary.HGetAll(c, key).Result()
+			}
+		} else if clients.readCount > 1 {
+			// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
+			readHost := rand.Intn(clients.readCount)
+
+			result, err = clients.Reads[uint64(readHost)].HGetAll(c, key).Result()
+			if err != nil {
+				result, err = clients.Primary.HGetAll(c, key).Result()
+			}
+		} else {
+			// If there is no read replica then just hit the host server.
+			result, err = clients.Primary.HGetAll(c, key).Result()
+		}
+	}
+
+	if err == redis.Nil {
+		return map[string]string{}, nil
+	} else if err != nil {
+		return map[string]string{}, errors.WithStack(err)
 	}
 
 	return result, nil
@@ -444,22 +549,28 @@ func (clients *RedisDBConn) Set(c context.Context, key string, data interface{},
 	return nil
 }
 
-func (clients *RedisDBConn) HSet(c context.Context, key string, field string, data interface{}, ttl time.Duration) error {
-	jsonBytes, err := json.Marshal(data)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	if err := clients.Primary.HSet(c, key, field, jsonBytes).Err(); err != nil {
-		return errors.WithStack(err)
-	}
-
-	if ttl > 0 {
-		if err := clients.Primary.Expire(c, key, ttl).Err(); err != nil {
+// - HSet("myhash", map[string]interface{}{"key1": "value1", "key2": "value2"})
+// - HSet("myhash", []string{"key1", "value1", "key2", "value2"})
+// - HSet("myhash", "key1", "value1", "key2", "value2")
+func (clients *RedisDBConn) HSet(c context.Context, key string, args ...interface{}) error {
+	switch args[0].(type) {
+	case map[string]interface{}:
+		fieldWithValuesMap := args[0]
+		if err := clients.Primary.HSet(c, key, fieldWithValuesMap).Err(); err != nil {
 			return errors.WithStack(err)
 		}
+	case []string:
+		fieldWithValuesArray := args[0]
+		if err := clients.Primary.HSet(c, key, fieldWithValuesArray).Err(); err != nil {
+			return errors.WithStack(err)
+		}
+	case string:
+		if err := clients.Primary.HSet(c, key, args).Err(); err != nil {
+			return errors.WithStack(err)
+		}
+	default:
+		return ErrRedisInvalidParameter
 	}
-
 	return nil
 }
 

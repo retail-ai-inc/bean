@@ -43,7 +43,7 @@ type MasterCache interface {
 	SIsMember(c context.Context, key string, element interface{}) (bool, error)
 	SetJSON(c context.Context, key string, data interface{}, ttl time.Duration) error
 	SetString(c context.Context, key string, data string, ttl time.Duration) error
-	HSet(c context.Context, key string, field string, data interface{}, ttl time.Duration) error
+	HSet(c context.Context, key string, args ...interface{}) error
 	RPush(c context.Context, key string, valueList []string) error
 	IncrementValue(c context.Context, key string) error
 	SAdd(c context.Context, key string, elements interface{}) error
@@ -90,6 +90,14 @@ func OptTraceMCOperation(operation string) MasterCacheOption {
 	}
 }
 
+func (m *masterCache) Keys(c context.Context, pattern string) ([]string, error) {
+	return m.cache.Keys(c, masterID, pattern)
+}
+
+func (m *masterCache) Ttl(c context.Context, key string) (time.Duration, error) {
+	return m.cache.Ttl(c, masterID, key)
+}
+
 func (m *masterCache) GetJSON(c context.Context, key string, dst interface{}) (bool, error) {
 	return m.cache.GetJSON(c, masterID, key, dst)
 }
@@ -126,8 +134,8 @@ func (m *masterCache) SetString(c context.Context, key string, data string, ttl 
 	return m.cache.SetString(c, masterID, key, data, ttl)
 }
 
-func (m *masterCache) HSet(c context.Context, key string, field string, data interface{}, ttl time.Duration) error {
-	return m.cache.HSet(c, masterID, key, field, data, ttl)
+func (m *masterCache) HSet(c context.Context, key string, args ...interface{}) error {
+	return m.cache.HSet(c, masterID, key, args...)
 }
 
 func (m *masterCache) RPush(c context.Context, key string, valueList []string) error {
