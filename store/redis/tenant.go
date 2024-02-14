@@ -39,24 +39,25 @@ type TenantCache interface {
 	KeyExists(c context.Context, tenantID uint64, key string) (bool, error)
 	Keys(c context.Context, tenantID uint64, pattern string) ([]string, error)
 	Ttl(c context.Context, tenantID uint64, key string) (time.Duration, error)
-	GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error)
+	SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error
 	GetString(c context.Context, tenantID uint64, key string) (string, error)
-	MGetJSON(c context.Context, tenantID uint64, dst interface{}, keys ...string) error
+	SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error
+	GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error)
 	MSetJSON(c context.Context, tenantID uint64, keys []string, data []interface{}, ttl time.Duration) error
+	MGetJSON(c context.Context, tenantID uint64, dst interface{}, keys ...string) error
 	MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error)
+	HSet(c context.Context, tenantID uint64, key string, args ...interface{}) error
 	HGet(c context.Context, tenantID uint64, key string, field string) (string, error)
+	HGetAll(c context.Context, tenantID uint64, key string) (map[string]string, error)
 	HGets(c context.Context, tenantID uint64, keysWithFields map[string]string) (map[string]string, error)
+	RPush(c context.Context, tenantID uint64, key string, valueList []string) error
 	LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error)
+	SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error
+	SRem(c context.Context, tenantID uint64, key string, elements interface{}) error
 	SMembers(c context.Context, tenantID uint64, key string) ([]string, error)
 	SRandMemberN(c context.Context, tenantID uint64, key string, count int64) ([]string, error)
 	SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error)
-	SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error
-	SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error
-	HSet(c context.Context, tenantID uint64, key string, args ...interface{}) error
-	RPush(c context.Context, tenantID uint64, key string, valueList []string) error
 	IncrementValue(c context.Context, tenantID uint64, key string) error
-	SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error
-	SRem(c context.Context, tenantID uint64, key string, elements interface{}) error
 	DelKey(c context.Context, tenantID uint64, keys ...string) error
 	Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error
 	Pipelined(c context.Context, tenantID uint64, fn func(redis.Pipeliner) error) ([]redis.Cmder, error)
@@ -121,6 +122,30 @@ func (t *tenantCache) Ttl(c context.Context, tenantID uint64, key string) (time.
 	return t.clients[tenantID].Ttl(c, pk)
 }
 
+func (t *tenantCache) SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	pk := t.prefix + "_" + key
+	return t.clients[tenantID].Set(c, pk, data, ttl)
+}
+
+func (t *tenantCache) GetString(c context.Context, tenantID uint64, key string) (string, error) {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	pk := t.prefix + "_" + key
+	return t.clients[tenantID].GetString(c, pk)
+}
+
+func (t *tenantCache) SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	pk := t.prefix + "_" + key
+	return t.clients[tenantID].SetJSON(c, pk, data, ttl)
+}
+
 func (t *tenantCache) GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
@@ -140,24 +165,26 @@ func (t *tenantCache) GetJSON(c context.Context, tenantID uint64, key string, ds
 	return true, nil
 }
 
-func (t *tenantCache) GetString(c context.Context, tenantID uint64, key string) (string, error) {
+func (t *tenantCache) MSetJSON(c context.Context, tenantID uint64, keys []string, data []interface{}, ttl time.Duration) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].GetString(c, pk)
-}
-
-func (t *tenantCache) MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error) {
-	c, finish := trace.StartSpan(c, t.operation)
-	defer finish()
-
-	pks := make([]string, 0, len(keys))
-	for _, key := range keys {
-		pk := t.prefix + "_" + key
-		pks = append(pks, pk)
+	ln := len(keys)
+	if ln != len(data) {
+		return errors.New("key and data length mismatch")
 	}
-	return t.clients[tenantID].MGet(c, pks...)
+	values := make([]interface{}, 0, ln*2)
+	for i := range keys {
+		pk := t.prefix + "_" + keys[i]
+		values = append(values, pk, data[i])
+	}
+
+	err := t.clients[tenantID].MSetWithTTL(c, ttl, values)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
 }
 
 func (t *tenantCache) MGetJSON(c context.Context, tenantID uint64, dst interface{}, keys ...string) error {
@@ -193,12 +220,40 @@ func (t *tenantCache) MGetJSON(c context.Context, tenantID uint64, dst interface
 	return nil
 }
 
+func (t *tenantCache) MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error) {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	pks := make([]string, 0, len(keys))
+	for _, key := range keys {
+		pk := t.prefix + "_" + key
+		pks = append(pks, pk)
+	}
+	return t.clients[tenantID].MGet(c, pks...)
+}
+
+func (t *tenantCache) HSet(c context.Context, tenantID uint64, key string, args ...interface{}) error {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	pk := t.prefix + "_" + key
+	return t.clients[tenantID].HSet(c, pk, args...)
+}
+
 func (t *tenantCache) HGet(c context.Context, tenantID uint64, key, field string) (string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
 	return t.clients[tenantID].HGet(c, pk, field)
+}
+
+func (t *tenantCache) HGetAll(c context.Context, tenantID uint64, key string) (map[string]string, error) {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	pk := t.prefix + "_" + key
+	return t.clients[tenantID].HGetAll(c, pk)
 }
 
 func (t *tenantCache) HGets(c context.Context, tenantID uint64, keysWithFields map[string]string) (map[string]string, error) {
@@ -214,12 +269,36 @@ func (t *tenantCache) HGets(c context.Context, tenantID uint64, keysWithFields m
 	return t.clients[tenantID].HGets(c, pksWithFields)
 }
 
+func (t *tenantCache) RPush(c context.Context, tenantID uint64, key string, valueList []string) error {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	pk := t.prefix + "_" + key
+	return t.clients[tenantID].RPush(c, pk, valueList)
+}
+
 func (t *tenantCache) LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
 	return t.clients[tenantID].GetLRange(c, pk, start, stop)
+}
+
+func (t *tenantCache) SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	pk := t.prefix + "_" + key
+	return t.clients[tenantID].SAdd(c, pk, elements)
+}
+
+func (t *tenantCache) SRem(c context.Context, tenantID uint64, key string, elements interface{}) error {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	pk := t.prefix + "_" + key
+	return t.clients[tenantID].SRem(c, pk, elements)
 }
 
 func (t *tenantCache) SMembers(c context.Context, tenantID uint64, key string) ([]string, error) {
@@ -246,82 +325,12 @@ func (t *tenantCache) SIsMember(c context.Context, tenantID uint64, key string, 
 	return t.clients[tenantID].SIsMember(c, pk, element)
 }
 
-func (t *tenantCache) SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error {
-	c, finish := trace.StartSpan(c, t.operation)
-	defer finish()
-
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].SetJSON(c, pk, data, ttl)
-}
-
-func (t *tenantCache) MSetJSON(c context.Context, tenantID uint64, keys []string, data []interface{}, ttl time.Duration) error {
-	c, finish := trace.StartSpan(c, t.operation)
-	defer finish()
-
-	ln := len(keys)
-	if ln != len(data) {
-		return errors.New("key and data length mismatch")
-	}
-	values := make([]interface{}, 0, ln*2)
-	for i := range keys {
-		pk := t.prefix + "_" + keys[i]
-		values = append(values, pk, data[i])
-	}
-
-	err := t.clients[tenantID].MSetWithTTL(c, ttl, values)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	return nil
-}
-
-func (t *tenantCache) SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error {
-	c, finish := trace.StartSpan(c, t.operation)
-	defer finish()
-
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].Set(c, pk, data, ttl)
-}
-
-func (t *tenantCache) HSet(c context.Context, tenantID uint64, key string, args ...interface{}) error {
-	c, finish := trace.StartSpan(c, t.operation)
-	defer finish()
-
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].HSet(c, pk, args...)
-}
-
-func (t *tenantCache) RPush(c context.Context, tenantID uint64, key string, valueList []string) error {
-	c, finish := trace.StartSpan(c, t.operation)
-	defer finish()
-
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].RPush(c, pk, valueList)
-}
-
 func (t *tenantCache) IncrementValue(c context.Context, tenantID uint64, key string) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
 	return t.clients[tenantID].IncrementValue(c, pk)
-}
-
-func (t *tenantCache) SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error {
-	c, finish := trace.StartSpan(c, t.operation)
-	defer finish()
-
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].SAdd(c, pk, elements)
-}
-
-func (t *tenantCache) SRem(c context.Context, tenantID uint64, key string, elements interface{}) error {
-	c, finish := trace.StartSpan(c, t.operation)
-	defer finish()
-
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].SRem(c, pk, elements)
 }
 
 func (t *tenantCache) DelKey(c context.Context, tenantID uint64, keys ...string) error {
