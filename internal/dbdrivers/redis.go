@@ -141,7 +141,7 @@ func (clients *RedisDBConn) KeyExists(c context.Context, key string) (bool, erro
 	return false, nil
 }
 
-func (clients *RedisDBConn) Ttl(c context.Context, key string) (ttl time.Duration, err error) {
+func (clients *RedisDBConn) TTL(c context.Context, key string) (ttl time.Duration, err error) {
 
 	if clients.isCluster {
 		// If client is cluster mode then just hit the host server.
@@ -343,9 +343,9 @@ func (clients *RedisDBConn) HGetAll(c context.Context, key string) (result map[s
 	}
 
 	if err == redis.Nil {
-		return map[string]string{}, nil
+		return nil, nil
 	} else if err != nil {
-		return map[string]string{}, errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
 	return result, nil
@@ -553,6 +553,9 @@ func (clients *RedisDBConn) Set(c context.Context, key string, data interface{},
 // - HSet("myhash", []string{"key1", "value1", "key2", "value2"})
 // - HSet("myhash", "key1", "value1", "key2", "value2")
 func (clients *RedisDBConn) HSet(c context.Context, key string, args ...interface{}) error {
+	if len(args) == 0 {
+		return ErrRedisInvalidParameter
+	}
 	switch args[0].(type) {
 	case map[string]interface{}:
 		fieldWithValuesMap := args[0]

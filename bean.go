@@ -393,9 +393,9 @@ func NewEcho() *echo.Echo {
 			} else {
 				accessLogConfig.Output = file
 			}
-			if len(BeanConfig.AccessLog.BodyDumpMaskParam) > 0 {
-				accessLogConfig.MaskedParameters = BeanConfig.AccessLog.BodyDumpMaskParam
-			}
+		}
+		if len(BeanConfig.AccessLog.BodyDumpMaskParam) > 0 {
+			accessLogConfig.MaskedParameters = BeanConfig.AccessLog.BodyDumpMaskParam
 		}
 		accessLogger := middleware.AccessLoggerWithConfig(accessLogConfig)
 		e.Use(accessLogger)

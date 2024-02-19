@@ -38,7 +38,7 @@ import (
 type TenantCache interface {
 	KeyExists(c context.Context, tenantID uint64, key string) (bool, error)
 	Keys(c context.Context, tenantID uint64, pattern string) ([]string, error)
-	Ttl(c context.Context, tenantID uint64, key string) (time.Duration, error)
+	TTL(c context.Context, tenantID uint64, key string) (time.Duration, error)
 	SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error
 	GetString(c context.Context, tenantID uint64, key string) (string, error)
 	SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error
@@ -114,12 +114,12 @@ func (t *tenantCache) Keys(c context.Context, tenantID uint64, pattern string) (
 	return t.clients[tenantID].Keys(c, pk)
 }
 
-func (t *tenantCache) Ttl(c context.Context, tenantID uint64, key string) (time.Duration, error) {
+func (t *tenantCache) TTL(c context.Context, tenantID uint64, key string) (time.Duration, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
 	pk := t.prefix + "_" + key
-	return t.clients[tenantID].Ttl(c, pk)
+	return t.clients[tenantID].TTL(c, pk)
 }
 
 func (t *tenantCache) SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error {
