@@ -48,6 +48,7 @@ type TenantCache interface {
 	MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error)
 	HSet(c context.Context, tenantID uint64, key string, args ...interface{}) error
 	HGet(c context.Context, tenantID uint64, key string, field string) (string, error)
+	HMGet(c context.Context, tenantID uint64, key string, fields ...string) ([]interface{}, error)
 	HGetAll(c context.Context, tenantID uint64, key string) (map[string]string, error)
 	HGets(c context.Context, tenantID uint64, keysWithFields map[string]string) (map[string]string, error)
 	RPush(c context.Context, tenantID uint64, key string, valueList []string) error
@@ -246,6 +247,14 @@ func (t *tenantCache) HGet(c context.Context, tenantID uint64, key, field string
 
 	pk := t.prefix + "_" + key
 	return t.clients[tenantID].HGet(c, pk, field)
+}
+
+func (t *tenantCache) HMGet(c context.Context, tenantID uint64, key string, fields ...string) ([]interface{}, error) {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	pk := t.prefix + "_" + key
+	return t.clients[tenantID].HMGet(c, pk, fields...)
 }
 
 func (t *tenantCache) HGetAll(c context.Context, tenantID uint64, key string) (map[string]string, error) {
