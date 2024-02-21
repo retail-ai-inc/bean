@@ -144,7 +144,7 @@ func (clients *RedisDBConn) KeyExists(c context.Context, key string) (bool, erro
 func (clients *RedisDBConn) Ttl(c context.Context, key string) (ttl time.Duration, err error) {
 
 	if clients.isCluster {
-		// If client is cluster mode then just hit the host server.
+		// If client is cluster mode then just hit the primary server.
 		ttl, err = clients.Primary.TTL(c, key).Result()
 	} else {
 		// Check the read replicas are available or not.
@@ -162,7 +162,7 @@ func (clients *RedisDBConn) Ttl(c context.Context, key string) (ttl time.Duratio
 				ttl, err = clients.Primary.TTL(c, key).Result()
 			}
 		} else {
-			// If there is no read replica then just hit the host server.
+			// If there is no read replica then just hit the primary server.
 			ttl, err = clients.Primary.TTL(c, key).Result()
 		}
 	}
@@ -179,7 +179,7 @@ func (clients *RedisDBConn) Ttl(c context.Context, key string) (ttl time.Duratio
 func (clients *RedisDBConn) Keys(c context.Context, pattern string) (keys []string, err error) {
 
 	if clients.isCluster {
-		// If client is cluster mode then just hit the host server.
+		// If client is cluster mode then just hit the primary server.
 		keys, err = clients.Primary.Keys(c, pattern).Result()
 	} else {
 		// Check the read replicas are available or not.
@@ -197,7 +197,7 @@ func (clients *RedisDBConn) Keys(c context.Context, pattern string) (keys []stri
 				keys, err = clients.Primary.Keys(c, pattern).Result()
 			}
 		} else {
-			// If there is no read replica then just hit the host server.
+			// If there is no read replica then just hit the primary server.
 			keys, err = clients.Primary.Keys(c, pattern).Result()
 		}
 	}
@@ -214,7 +214,7 @@ func (clients *RedisDBConn) Keys(c context.Context, pattern string) (keys []stri
 func (clients *RedisDBConn) GetString(c context.Context, key string) (str string, err error) {
 
 	if clients.isCluster {
-		// If client is cluster mode then just hit the host server.
+		// If client is cluster mode then just hit the primary server.
 		str, err = clients.Primary.Get(c, key).Result()
 	} else {
 		// Check the read replicas are available or not.
@@ -232,7 +232,7 @@ func (clients *RedisDBConn) GetString(c context.Context, key string) (str string
 				str, err = clients.Primary.Get(c, key).Result()
 			}
 		} else {
-			// If there is no read replica then just hit the host server.
+			// If there is no read replica then just hit the primary server.
 			str, err = clients.Primary.Get(c, key).Result()
 		}
 	}
@@ -250,7 +250,7 @@ func (clients *RedisDBConn) GetString(c context.Context, key string) (str string
 func (clients *RedisDBConn) MGet(c context.Context, keys ...string) (result []interface{}, err error) {
 
 	if clients.isCluster {
-		// If client is cluster mode then just hit the host server.
+		// If client is cluster mode then just hit the primary server.
 		result, err = wrapMGet(c, clients.Primary, keys...)
 	} else {
 		// Check the read replicas are available or not.
@@ -268,7 +268,7 @@ func (clients *RedisDBConn) MGet(c context.Context, keys ...string) (result []in
 				result, err = clients.Primary.MGet(c, keys...).Result()
 			}
 		} else {
-			// If there is no read replica then just hit the host server.
+			// If there is no read replica then just hit the primary server.
 			result, err = clients.Primary.MGet(c, keys...).Result()
 		}
 	}
@@ -284,7 +284,7 @@ func (clients *RedisDBConn) MGet(c context.Context, keys ...string) (result []in
 func (clients *RedisDBConn) HGet(c context.Context, key string, field string) (result string, err error) {
 
 	if clients.isCluster {
-		// If client is cluster mode then just hit the host server.
+		// If client is cluster mode then just hit the primary server.
 		result, err = clients.Primary.HGet(c, key, field).Result()
 	} else {
 		// Check the read replicas are available or not.
@@ -302,7 +302,7 @@ func (clients *RedisDBConn) HGet(c context.Context, key string, field string) (r
 				result, err = clients.Primary.HGet(c, key, field).Result()
 			}
 		} else {
-			// If there is no read replica then just hit the host server.
+			// If there is no read replica then just hit the primary server.
 			result, err = clients.Primary.HGet(c, key, field).Result()
 		}
 	}
@@ -316,10 +316,45 @@ func (clients *RedisDBConn) HGet(c context.Context, key string, field string) (r
 	return result, nil
 }
 
+func (clients *RedisDBConn) HMGet(c context.Context, key string, fields ...string) (result []interface{}, err error) {
+
+	if clients.isCluster {
+		// If client is cluster mode then just hit the primary server.
+		result, err = clients.Primary.HMGet(c, key, fields...).Result()
+	} else {
+		// Check the read replicas are available or not.
+		if clients.readCount == 1 {
+			result, err = clients.Reads[0].HMGet(c, key, fields...).Result()
+			if err != nil {
+				result, err = clients.Primary.HMGet(c, key, fields...).Result()
+			}
+		} else if clients.readCount > 1 {
+			// Select a read replica between 0 ~ noOfReadReplica-1 randomly.
+			readHost := rand.Intn(clients.readCount)
+
+			result, err = clients.Reads[uint64(readHost)].HMGet(c, key, fields...).Result()
+			if err != nil {
+				result, err = clients.Primary.HMGet(c, key, fields...).Result()
+			}
+		} else {
+			// If there is no read replica then just hit the primary server.
+			result, err = clients.Primary.HMGet(c, key, fields...).Result()
+		}
+	}
+
+	if err == redis.Nil {
+		return nil, nil
+	} else if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return result, nil
+}
+
 // HGet To get all fields with their corresponding values in a hash in a single call to redis.
 func (clients *RedisDBConn) HGetAll(c context.Context, key string) (result map[string]string, err error) {
 	if clients.isCluster {
-		// If client is cluster mode then just hit the host server.
+		// If client is cluster mode then just hit the primary server.
 		result, err = clients.Primary.HGetAll(c, key).Result()
 	} else {
 		// Check the read replicas are available or not.
@@ -337,7 +372,7 @@ func (clients *RedisDBConn) HGetAll(c context.Context, key string) (result map[s
 				result, err = clients.Primary.HGetAll(c, key).Result()
 			}
 		} else {
-			// If there is no read replica then just hit the host server.
+			// If there is no read replica then just hit the primary server.
 			result, err = clients.Primary.HGetAll(c, key).Result()
 		}
 	}
@@ -358,7 +393,7 @@ func (clients *RedisDBConn) HGets(c context.Context, redisKeysWithField map[stri
 
 	var pipe redis.Pipeliner
 	if clients.isCluster {
-		// If client is cluster mode then just hit the host server.
+		// If client is cluster mode then just hit the primary server.
 		pipe = clients.Primary.Pipeline()
 	} else {
 		// Check the read replicas are available or not.
@@ -369,7 +404,7 @@ func (clients *RedisDBConn) HGets(c context.Context, redisKeysWithField map[stri
 			readHost := rand.Intn(clients.readCount)
 			pipe = clients.Reads[uint64(readHost)].Pipeline()
 		} else {
-			// If there is no read replica then just hit the host server.
+			// If there is no read replica then just hit the primary server.
 			pipe = clients.Primary.Pipeline()
 		}
 	}
@@ -399,7 +434,7 @@ func (clients *RedisDBConn) HGets(c context.Context, redisKeysWithField map[stri
 func (clients *RedisDBConn) GetLRange(c context.Context, key string, start, stop int64) (str []string, err error) {
 
 	if clients.isCluster {
-		// If client is cluster mode then just hit the host server.
+		// If client is cluster mode then just hit the primary server.
 		str, err = clients.Primary.LRange(c, key, start, stop).Result()
 	} else {
 		// Check the read replicas are available or not.
@@ -417,7 +452,7 @@ func (clients *RedisDBConn) GetLRange(c context.Context, key string, start, stop
 				str, err = clients.Primary.LRange(c, key, start, stop).Result()
 			}
 		} else {
-			// If there is no read replica then just hit the host server.
+			// If there is no read replica then just hit the primary server.
 			str, err = clients.Primary.LRange(c, key, start, stop).Result()
 		}
 	}
@@ -434,7 +469,7 @@ func (clients *RedisDBConn) GetLRange(c context.Context, key string, start, stop
 func (clients *RedisDBConn) SMembers(c context.Context, key string) (str []string, err error) {
 
 	if clients.isCluster {
-		// If client is cluster mode then just hit the host server.
+		// If client is cluster mode then just hit the primary server.
 		str, err = clients.Primary.SMembers(c, key).Result()
 	} else {
 		// Check the read replicas are available or not.
@@ -452,7 +487,7 @@ func (clients *RedisDBConn) SMembers(c context.Context, key string) (str []strin
 				str, err = clients.Primary.SMembers(c, key).Result()
 			}
 		} else {
-			// If there is no read replica then just hit the host server.
+			// If there is no read replica then just hit the primary server.
 			str, err = clients.Primary.SMembers(c, key).Result()
 		}
 	}
@@ -469,7 +504,7 @@ func (clients *RedisDBConn) SMembers(c context.Context, key string) (str []strin
 func (clients *RedisDBConn) SIsMember(c context.Context, key string, element interface{}) (found bool, err error) {
 
 	if clients.isCluster {
-		// If client is cluster mode then just hit the host server.
+		// If client is cluster mode then just hit the primary server.
 		found, err = clients.Primary.SIsMember(c, key, element).Result()
 	} else {
 		// Check the read replicas are available or not.
@@ -487,7 +522,7 @@ func (clients *RedisDBConn) SIsMember(c context.Context, key string, element int
 				found, err = clients.Primary.SIsMember(c, key, element).Result()
 			}
 		} else {
-			// If there is no read replica then just hit the host server.
+			// If there is no read replica then just hit the primary server.
 			found, err = clients.Primary.SIsMember(c, key, element).Result()
 		}
 	}
@@ -502,7 +537,7 @@ func (clients *RedisDBConn) SIsMember(c context.Context, key string, element int
 func (clients *RedisDBConn) SRandMemberN(c context.Context, key string, count int64) (result []string, err error) {
 
 	if clients.isCluster {
-		// If client is cluster mode then just hit the host server.
+		// If client is cluster mode then just hit the primary server.
 		result, err = clients.Primary.SRandMemberN(c, key, count).Result()
 	} else {
 		// Check the read replicas are available or not.
@@ -520,7 +555,7 @@ func (clients *RedisDBConn) SRandMemberN(c context.Context, key string, count in
 				return nil, errors.WithStack(err)
 			}
 		} else {
-			// If there is no read replica then just hit the host server.
+			// If there is no read replica then just hit the primary server.
 			result, err = clients.Primary.SRandMemberN(c, key, count).Result()
 		}
 	}

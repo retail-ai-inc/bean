@@ -46,6 +46,7 @@ type MasterCache interface {
 	MGet(c context.Context, keys ...string) ([]interface{}, error)
 	HSet(c context.Context, key string, args ...interface{}) error
 	HGet(c context.Context, key string, field string) (string, error)
+	HMGet(c context.Context, key string, fields ...string) ([]interface{}, error)
 	HGetAll(c context.Context, key string) (map[string]string, error)
 	HGets(c context.Context, keysWithFields map[string]string) (map[string]string, error)
 	RPush(c context.Context, key string, valueList []string) error
@@ -144,6 +145,10 @@ func (m *masterCache) HSet(c context.Context, key string, args ...interface{}) e
 
 func (m *masterCache) HGet(c context.Context, key string, field string) (string, error) {
 	return m.cache.HGet(c, masterID, key, field)
+}
+
+func (m *masterCache) HMGet(c context.Context, key string, fields ...string) ([]interface{}, error) {
+	return m.cache.HMGet(c, masterID, key, fields...)
 }
 
 func (m *masterCache) HGetAll(c context.Context, key string) (map[string]string, error) {
