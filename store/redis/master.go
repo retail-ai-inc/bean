@@ -36,7 +36,7 @@ const masterID uint64 = 0
 type MasterCache interface {
 	KeyExists(c context.Context, key string) (bool, error)
 	Keys(c context.Context, pattern string) ([]string, error)
-	Ttl(c context.Context, key string) (time.Duration, error)
+	TTL(c context.Context, key string) (time.Duration, error)
 	SetString(c context.Context, key string, data string, ttl time.Duration) error
 	GetString(c context.Context, key string) (string, error)
 	SetJSON(c context.Context, key string, data interface{}, ttl time.Duration) error
@@ -107,8 +107,8 @@ func (m *masterCache) Keys(c context.Context, pattern string) ([]string, error) 
 	return m.cache.Keys(c, masterID, pattern)
 }
 
-func (m *masterCache) Ttl(c context.Context, key string) (time.Duration, error) {
-	return m.cache.Ttl(c, masterID, key)
+func (m *masterCache) TTL(c context.Context, key string) (time.Duration, error) {
+	return m.cache.TTL(c, masterID, key)
 }
 
 func (m *masterCache) SetString(c context.Context, key string, data string, ttl time.Duration) error {
