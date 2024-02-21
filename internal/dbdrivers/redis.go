@@ -378,9 +378,9 @@ func (clients *RedisDBConn) HGetAll(c context.Context, key string) (result map[s
 	}
 
 	if err == redis.Nil {
-		return map[string]string{}, nil
+		return nil, nil
 	} else if err != nil {
-		return map[string]string{}, errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
 	return result, nil
