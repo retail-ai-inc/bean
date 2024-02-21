@@ -659,6 +659,9 @@ func (clients *RedisDBConn) ExpireKey(c context.Context, key string, ttl time.Du
 
 	return nil
 }
+func (clients *RedisDBConn) Pipeline(c context.Context) redis.Pipeliner {
+	return clients.Primary.Pipeline()
+}
 
 func (clients *RedisDBConn) Pipelined(c context.Context, fn func(redis.Pipeliner) error) ([]redis.Cmder, error) {
 	return clients.Primary.Pipelined(c, fn)
