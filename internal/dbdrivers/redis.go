@@ -589,7 +589,7 @@ func (clients *RedisDBConn) Set(c context.Context, key string, data interface{},
 // - HSet("myhash", "key1", "value1", "key2", "value2")
 func (clients *RedisDBConn) HSet(c context.Context, key string, args ...interface{}) error {
 	if len(args) == 0 {
-		return ErrRedisInvalidParameter
+		return errors.WithStack(ErrRedisInvalidParameter)
 	}
 	if err := clients.Primary.HSet(c, key, args...).Err(); err != nil {
 		return errors.WithStack(err)
