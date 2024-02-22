@@ -59,7 +59,7 @@ type MasterCache interface {
 	IncrementValue(c context.Context, key string) error
 	DelKey(c context.Context, keys ...string) error
 	Expire(c context.Context, key string, ttl time.Duration) error
-	Pipeline(c context.Context) redis.Pipeliner
+	Pipeline() redis.Pipeliner
 	Pipelined(c context.Context, fn func(redis.Pipeliner) error) ([]redis.Cmder, error)
 }
 
@@ -200,8 +200,8 @@ func (m *masterCache) Expire(c context.Context, key string, ttl time.Duration) e
 	return m.cache.Expire(c, masterID, key, ttl)
 }
 
-func (m *masterCache) Pipeline(c context.Context) redis.Pipeliner {
-	return m.cache.Pipeline(c, masterID)
+func (m *masterCache) Pipeline() redis.Pipeliner {
+	return m.cache.Pipeline(masterID)
 }
 
 func (m *masterCache) Pipelined(c context.Context, fn func(redis.Pipeliner) error) ([]redis.Cmder, error) {

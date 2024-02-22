@@ -659,7 +659,7 @@ func (clients *RedisDBConn) ExpireKey(c context.Context, key string, ttl time.Du
 
 	return nil
 }
-func (clients *RedisDBConn) Pipeline(c context.Context) redis.Pipeliner {
+func (clients *RedisDBConn) Pipeline() redis.Pipeliner {
 	return clients.Primary.Pipeline()
 }
 

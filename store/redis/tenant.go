@@ -61,7 +61,7 @@ type TenantCache interface {
 	IncrementValue(c context.Context, tenantID uint64, key string) error
 	DelKey(c context.Context, tenantID uint64, keys ...string) error
 	Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error
-	Pipeline(c context.Context, tenantID uint64) redis.Pipeliner
+	Pipeline(tenantID uint64) redis.Pipeliner
 	Pipelined(c context.Context, tenantID uint64, fn func(redis.Pipeliner) error) ([]redis.Cmder, error)
 }
 
@@ -363,11 +363,8 @@ func (t *tenantCache) Expire(c context.Context, tenantID uint64, key string, ttl
 	return t.clients[tenantID].ExpireKey(c, pk, ttl)
 }
 
-func (t *tenantCache) Pipeline(c context.Context, tenantID uint64) redis.Pipeliner {
-	c, finish := trace.StartSpan(c, t.operation)
-	defer finish()
-
-	return t.clients[tenantID].Pipeline(c)
+func (t *tenantCache) Pipeline(tenantID uint64) redis.Pipeliner {
+	return t.clients[tenantID].Pipeline()
 }
 
 func (t *tenantCache) Pipelined(c context.Context, tenantID uint64, fn func(redis.Pipeliner) error) ([]redis.Cmder, error) {
