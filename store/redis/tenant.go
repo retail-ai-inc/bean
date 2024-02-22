@@ -233,6 +233,10 @@ func (t *tenantCache) MGet(c context.Context, tenantID uint64, keys ...string) (
 	return t.clients[tenantID].MGet(c, pks...)
 }
 
+// HSet accepts args in following formats:
+// "key1", "value1", "key2", "value2" (as comma separated values)
+// []string{"key1", "value1", "key2", "value2"}
+// map[string]interface{}{"key1": "value1", "key2": "value2"}
 func (t *tenantCache) HSet(c context.Context, tenantID uint64, key string, args ...interface{}) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()

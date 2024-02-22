@@ -139,6 +139,10 @@ func (m *masterCache) MGet(c context.Context, keys ...string) ([]interface{}, er
 	return m.cache.MGet(c, masterID, keys...)
 }
 
+// HSet accepts args in following formats:
+// "key1", "value1", "key2", "value2" (as comma separated values)
+// []string{"key1", "value1", "key2", "value2"}
+// map[string]interface{}{"key1": "value1", "key2": "value2"}
 func (m *masterCache) HSet(c context.Context, key string, args ...interface{}) error {
 	return m.cache.HSet(c, masterID, key, args...)
 }
