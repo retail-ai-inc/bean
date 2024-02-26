@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"runtime"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -94,11 +95,16 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 			if helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
 				path := ec.Request().URL.Path
 
-				span := sentry.StartSpan(ctx, "http",
+				span := sentry.StartSpan(ctx, "async",
 					sentry.TransactionName(fmt.Sprintf("%s %s ASYNC", ec.Request().Method, path)),
 					sentry.ContinueFromRequest(ec.Request()),
 				)
-				span.Description = helpers.CurrFuncName()
+
+				functionName := "unknown function"
+				if pc, _, _, ok := runtime.Caller(1); ok {
+					functionName = runtime.FuncForPC(pc).Name()
+				}
+				span.Description = functionName
 
 				// If `skipTracesEndpoints` has some path(s) then let's skip performance sample for those URI.
 				skipTracesEndpoints := bean.BeanConfig.Sentry.SkipTracesEndpoints
@@ -149,9 +155,14 @@ func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutT
 
 		// can pull the right hub and send the exception message to sentry.
 		if bean.BeanConfig.Sentry.On && helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
-			span := sentry.StartSpan(c, "http",
+			span := sentry.StartSpan(c, "async",
 				sentry.TransactionName(fmt.Sprintf("%s ASYNC", hub.Scope().Transaction())))
-			span.Description = helpers.CurrFuncName()
+
+			functionName := "unknown function"
+			if pc, _, _, ok := runtime.Caller(1); ok {
+				functionName = runtime.FuncForPC(pc).Name()
+			}
+			span.Description = functionName
 
 			defer span.Finish()
 			c = span.Context()
