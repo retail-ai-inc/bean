@@ -45,7 +45,7 @@ func Tracer() echo.MiddlewareFunc {
 			path := c.Request().URL.Path
 			// Start a sentry span for tracing.
 			span := sentry.StartSpan(ctx, "http",
-				sentry.TransactionName(fmt.Sprintf("%s %s", c.Request().Method, path)),
+				sentry.WithTransactionName(fmt.Sprintf("%s %s", c.Request().Method, path)),
 				sentry.ContinueFromRequest(c.Request()),
 			)
 			span.Description = helpers.CurrFuncName()

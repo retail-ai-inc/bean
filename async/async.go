@@ -26,6 +26,7 @@ package async
 import (
 	"context"
 	"fmt"
+	"path"
 	"regexp"
 	"runtime"
 	"time"
@@ -33,7 +34,6 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/v2"
-	"github.com/retail-ai-inc/bean/v2/helpers"
 	"github.com/retail-ai-inc/bean/v2/internal/gopool"
 )
 
@@ -42,7 +42,7 @@ type (
 	TimeoutTask func(c context.Context) error
 )
 
-// `Execute` provides a safe way to execute a function asynchronously without any context, recovering if they panic
+// Execute provides a safe way to execute a function asynchronously without any context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
 func Execute(fn func(), poolName ...string) {
 	var asyncFunc = func(task func()) {
@@ -70,9 +70,16 @@ func Execute(fn func(), poolName ...string) {
 	asyncFunc(fn)
 }
 
-// `ExecuteWithContext` provides a safe way to execute a function asynchronously with a context, recovering if they panic
+// ExecuteWithContext provides a safe way to execute a function asynchronously with a context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
 func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
+	functionName := "unknown function"
+	if bean.BeanConfig.Sentry.On && bean.BeanConfig.Sentry.TracesSampleRate > 0.0 {
+		if pc, file, line, ok := runtime.Caller(1); ok {
+			functionName = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
+		}
+	}
+
 	// Acquire a context from echo.
 	ec := c.Echo().AcquireContext()
 
@@ -92,25 +99,21 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 			hub.Scope().SetRequest(ec.Request())
 			ctx = sentry.SetHubOnContext(ctx, hub)
 
-			if helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
-				path := ec.Request().URL.Path
+			if bean.BeanConfig.Sentry.TracesSampleRate > 0.0 {
+				urlPath := ec.Request().URL.Path
 
 				span := sentry.StartSpan(ctx, "async",
-					sentry.TransactionName(fmt.Sprintf("%s %s ASYNC", ec.Request().Method, path)),
+					sentry.WithTransactionName(fmt.Sprintf("%s %s ASYNC", ec.Request().Method, urlPath)),
 					sentry.ContinueFromRequest(ec.Request()),
 				)
 
-				functionName := "unknown function"
-				if pc, _, _, ok := runtime.Caller(1); ok {
-					functionName = runtime.FuncForPC(pc).Name()
-				}
 				span.Description = functionName
 
 				// If `skipTracesEndpoints` has some path(s) then let's skip performance sample for those URI.
 				skipTracesEndpoints := bean.BeanConfig.Sentry.SkipTracesEndpoints
 
 				for _, endpoint := range skipTracesEndpoints {
-					if regexp.MustCompile(endpoint).MatchString(path) {
+					if regexp.MustCompile(endpoint).MatchString(urlPath) {
 						span.Sampled = sentry.SampledFalse
 						break
 					}
@@ -132,7 +135,15 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 }
 
 func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutTask, poolName ...string) {
+	functionName := "unknown function"
+	if bean.BeanConfig.Sentry.On && bean.BeanConfig.Sentry.TracesSampleRate > 0.0 {
+		if pc, file, line, ok := runtime.Caller(1); ok {
+			functionName = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
+		}
+	}
+
 	hub := sentry.GetHubFromContext(ctx)
+	parentSpan := sentry.SpanFromContext(ctx)
 
 	Execute(func() {
 		var (
@@ -154,14 +165,15 @@ func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutT
 		}
 
 		// can pull the right hub and send the exception message to sentry.
-		if bean.BeanConfig.Sentry.On && helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
-			span := sentry.StartSpan(c, "async",
-				sentry.TransactionName(fmt.Sprintf("%s ASYNC", hub.Scope().Transaction())))
-
-			functionName := "unknown function"
-			if pc, _, _, ok := runtime.Caller(1); ok {
-				functionName = runtime.FuncForPC(pc).Name()
+		if bean.BeanConfig.Sentry.On && bean.BeanConfig.Sentry.TracesSampleRate > 0.0 {
+			var transactionName string
+			if parentSpan != nil {
+				transactionName = parentSpan.Name
 			}
+
+			span := sentry.StartSpan(c, "async",
+				sentry.WithTransactionName(fmt.Sprintf("%s ASYNC", transactionName)))
+
 			span.Description = functionName
 
 			defer span.Finish()

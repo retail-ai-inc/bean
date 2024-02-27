@@ -40,6 +40,7 @@ func ServerHeader(name, version string) echo.MiddlewareFunc {
 				span := sentry.StartSpan(c.Request().Context(), "http.middleware")
 				span.Description = helpers.CurrFuncName()
 				defer span.Finish()
+				c.SetRequest(c.Request().WithContext(span.Context()))
 			}
 
 			c.Response().Header().Set(echo.HeaderServer, path.Join(name, version))

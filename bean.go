@@ -91,6 +91,7 @@ type SentryConfig struct {
 	Dsn                 string
 	Timeout             time.Duration
 	TracesSampleRate    float64
+	ProfilesSampleRate  float64
 	SkipTracesEndpoints []string
 	ClientOptions       *sentry.ClientOptions
 	ConfigureScope      func(scope *sentry.Scope)
@@ -416,7 +417,11 @@ func NewEcho() *echo.Echo {
 			e.Logger.Fatal("Sentry initialization failed: client options is empty")
 		}
 
-		if err := sentry.Init(*BeanConfig.Sentry.ClientOptions); err != nil {
+		clientOption := BeanConfig.Sentry.ClientOptions
+		if clientOption.TracesSampleRate > 0 {
+			clientOption.EnableTracing = true
+		}
+		if err := sentry.Init(*clientOption); err != nil {
 			e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
 		}
 
