@@ -61,6 +61,7 @@ type TenantCache interface {
 	IncrementValue(c context.Context, tenantID uint64, key string) error
 	DelKey(c context.Context, tenantID uint64, keys ...string) error
 	Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error
+	Pipeline(tenantID uint64) redis.Pipeliner
 	Pipelined(c context.Context, tenantID uint64, fn func(redis.Pipeliner) error) ([]redis.Cmder, error)
 }
 
@@ -233,6 +234,10 @@ func (t *tenantCache) MGet(c context.Context, tenantID uint64, keys ...string) (
 	return t.clients[tenantID].MGet(c, pks...)
 }
 
+// HSet accepts args in following formats:
+// "key1", "value1", "key2", "value2" (as comma separated values)
+// []string{"key1", "value1", "key2", "value2"}
+// map[string]interface{}{"key1": "value1", "key2": "value2"}
 func (t *tenantCache) HSet(c context.Context, tenantID uint64, key string, args ...interface{}) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
@@ -360,6 +365,10 @@ func (t *tenantCache) Expire(c context.Context, tenantID uint64, key string, ttl
 
 	pk := t.prefix + "_" + key
 	return t.clients[tenantID].ExpireKey(c, pk, ttl)
+}
+
+func (t *tenantCache) Pipeline(tenantID uint64) redis.Pipeliner {
+	return t.clients[tenantID].Pipeline()
 }
 
 func (t *tenantCache) Pipelined(c context.Context, tenantID uint64, fn func(redis.Pipeliner) error) ([]redis.Cmder, error) {
