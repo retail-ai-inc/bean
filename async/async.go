@@ -34,7 +34,6 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/v2"
-	"github.com/retail-ai-inc/bean/v2/helpers"
 	"github.com/retail-ai-inc/bean/v2/internal/gopool"
 )
 
@@ -43,7 +42,7 @@ type (
 	TimeoutTask func(c context.Context) error
 )
 
-// `Execute` provides a safe way to execute a function asynchronously without any context, recovering if they panic
+// Execute provides a safe way to execute a function asynchronously without any context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
 func Execute(fn func(), poolName ...string) {
 	var asyncFunc = func(task func()) {
@@ -71,11 +70,11 @@ func Execute(fn func(), poolName ...string) {
 	asyncFunc(fn)
 }
 
-// `ExecuteWithContext` provides a safe way to execute a function asynchronously with a context, recovering if they panic
+// ExecuteWithContext provides a safe way to execute a function asynchronously with a context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
 func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 	functionName := "unknown function"
-	if helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
+	if bean.BeanConfig.Sentry.On && bean.BeanConfig.Sentry.TracesSampleRate > 0.0 {
 		if pc, file, line, ok := runtime.Caller(1); ok {
 			functionName = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
 		}
@@ -100,7 +99,7 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 			hub.Scope().SetRequest(ec.Request())
 			ctx = sentry.SetHubOnContext(ctx, hub)
 
-			if helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
+			if bean.BeanConfig.Sentry.TracesSampleRate > 0.0 {
 				urlPath := ec.Request().URL.Path
 
 				span := sentry.StartSpan(ctx, "async",
@@ -137,7 +136,7 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 
 func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutTask, poolName ...string) {
 	functionName := "unknown function"
-	if helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
+	if bean.BeanConfig.Sentry.On && bean.BeanConfig.Sentry.TracesSampleRate > 0.0 {
 		if pc, file, line, ok := runtime.Caller(1); ok {
 			functionName = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
 		}
@@ -166,7 +165,7 @@ func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutT
 		}
 
 		// can pull the right hub and send the exception message to sentry.
-		if bean.BeanConfig.Sentry.On && helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
+		if bean.BeanConfig.Sentry.On && bean.BeanConfig.Sentry.TracesSampleRate > 0.0 {
 			var transactionName string
 			if parentSpan != nil {
 				transactionName = parentSpan.Name
