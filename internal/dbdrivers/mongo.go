@@ -25,9 +25,11 @@ package dbdrivers
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"time"
 
 	"github.com/retail-ai-inc/bean/v2/aes"
+	"go.mongodb.org/mongo-driver/event"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/gorm"
@@ -44,6 +46,7 @@ type MongoConfig struct {
 	ConnectTimeout        time.Duration
 	MaxConnectionPoolSize uint64
 	MaxConnectionLifeTime time.Duration
+	Debug                 bool
 }
 
 // Init the mongo database connection map.
@@ -59,7 +62,7 @@ func InitMongoMasterConn(config MongoConfig) (*mongo.Client, string) {
 	masterCfg := config.Master
 	if masterCfg != nil && masterCfg.Database != "" {
 		return connectMongoDB(masterCfg.Username, masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
-			config.MaxConnectionPoolSize, config.ConnectTimeout, config.MaxConnectionLifeTime)
+			config.MaxConnectionPoolSize, config.ConnectTimeout, config.MaxConnectionLifeTime, config.Debug)
 	}
 
 	return nil, ""
@@ -107,7 +110,7 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 
 			mongoConns[t.TenantID], mongoDBNames[t.TenantID] = connectMongoDB(
 				userName, password, host, port, dbName, config.MaxConnectionPoolSize,
-				config.ConnectTimeout, config.MaxConnectionLifeTime)
+				config.ConnectTimeout, config.MaxConnectionLifeTime, config.Debug)
 
 		} else {
 			mongoConns[t.TenantID], mongoDBNames[t.TenantID] = nil, ""
@@ -118,7 +121,7 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 }
 
 func connectMongoDB(userName, password, host, port, dbName string, maxConnectionPoolSize uint64,
-	connectTimeout, maxConnectionLifeTime time.Duration) (*mongo.Client, string) {
+	connectTimeout, maxConnectionLifeTime time.Duration, debug bool) (*mongo.Client, string) {
 
 	connStr := "mongodb://" + host + ":" + port
 
@@ -134,6 +137,26 @@ func connectMongoDB(userName, password, host, port, dbName string, maxConnection
 	if userName != "" && password != "" {
 		credential := options.Credential{Username: userName, Password: password, AuthSource: dbName}
 		opts.SetAuth(credential)
+	}
+
+	// log monitor
+	var logMonitor = event.CommandMonitor{
+		Started: func(ctx context.Context, startedEvent *event.CommandStartedEvent) {
+			log.Printf("mongo reqId:%d start on db:%s cmd:%s sql:%+v", startedEvent.RequestID, startedEvent.DatabaseName,
+				startedEvent.CommandName, startedEvent.Command)
+		},
+		Succeeded: func(ctx context.Context, succeededEvent *event.CommandSucceededEvent) {
+			log.Printf("mongo reqId:%d exec cmd:%s success duration %d ns", succeededEvent.RequestID,
+				succeededEvent.CommandName, succeededEvent.DurationNanos)
+		},
+		Failed: func(ctx context.Context, failedEvent *event.CommandFailedEvent) {
+			log.Printf("mongo reqId:%d exec cmd:%s failed duration %d ns", failedEvent.RequestID,
+				failedEvent.CommandName, failedEvent.DurationNanos)
+		},
+	}
+	if debug {
+		// cmd monitor set
+		opts.SetMonitor(&logMonitor)
 	}
 
 	mdb, err := mongo.Connect(ctx, opts)
