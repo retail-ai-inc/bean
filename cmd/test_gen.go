@@ -63,8 +63,6 @@ var (
 func init() {
 	genTestCmd.Flags().StringP("source", "s", "", "(source mode) Input Go source file; enables source mode.")
 	genTestCmd.Flags().StringP("destination", "d", "", "Output file; defaults to stdout.")
-	genTestCmd.Flags().StringP("mode", "m", "http", "The type of service that needs to be generated.")
-	genTestCmd.Flags().StringP("package", "p", "spec", "The package name.")
 	TestCmd.AddCommand(genTestCmd)
 }
 
@@ -128,11 +126,6 @@ func genTest(cmd *cobra.Command, args []string) error {
 		return errors.WithStack(err)
 	}
 
-	packageName, err := cmd.Flags().GetString("package")
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
 	if destination == "" {
 		destination = path.Join(SPEC_DEFAULT_PATH, SPEC_NAME, SPEC_NAME+".go")
 	}
@@ -157,10 +150,7 @@ func genTest(cmd *cobra.Command, args []string) error {
 	g.destination = destination
 	g.specMap = specMap
 
-	outputPackageName := packageName
-	if outputPackageName == "" {
-		outputPackageName = sanitize(pkg.Name)
-	}
+	outputPackageName := sanitize(pkg.Name)
 
 	var outputPackagePath string
 	dstPath, err := filepath.Abs(filepath.Dir(destination))
