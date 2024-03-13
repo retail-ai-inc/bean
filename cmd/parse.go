@@ -22,8 +22,8 @@
 
 package cmd
 
+// Reference: https://github.com/golang/mock/blob/v1.6.0/mockgen/parse.go
 // This file contains the model construction by parsing source files.
-
 import (
 	"bytes"
 	"encoding/json"

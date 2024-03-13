@@ -61,7 +61,7 @@ var (
 )
 
 func init() {
-	genTestCmd.Flags().StringP("source", "s", "", "(source mode) Input Go source file; enables source mode.")
+	genTestCmd.Flags().StringP("source", "s", "", "Input test spec source file; enables json mode.")
 	genTestCmd.Flags().StringP("destination", "d", "", "Output file; defaults to stdout.")
 	TestCmd.AddCommand(genTestCmd)
 }
