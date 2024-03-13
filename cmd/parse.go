@@ -36,7 +36,6 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -600,7 +599,10 @@ func createPackageMap(importPaths []string) map[string]string {
 	args = append(args, importPaths...)
 	cmd := exec.Command("go", args...)
 	cmd.Stdout = b
-	cmd.Run()
+	err := cmd.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
 	dec := json.NewDecoder(b)
 	for dec.More() {
 		err := dec.Decode(&pkg)
@@ -661,7 +663,7 @@ func parsePackageImport(srcDir string) (string, error) {
 	if moduleMode != "off" {
 		currentDir := srcDir
 		for {
-			dat, err := ioutil.ReadFile(filepath.Join(currentDir, "go.mod"))
+			dat, err := os.ReadFile(filepath.Join(currentDir, "go.mod"))
 			if os.IsNotExist(err) {
 				if currentDir == filepath.Dir(currentDir) {
 					// at the root

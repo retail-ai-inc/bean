@@ -212,12 +212,10 @@ func genSpecInterface(specs map[string]map[string]spec, filename string) (*gener
 }
 
 type generator struct {
-	buf             bytes.Buffer
-	indent          string
-	mockNames       map[string]string // may be empty
-	filename        string            // may be empty
-	destination     string            // may be empty
-	copyrightHeader string
+	buf         bytes.Buffer
+	indent      string
+	filename    string // may be empty
+	destination string // may be empty
 
 	packageMap map[string]string // map from import path to package name
 
