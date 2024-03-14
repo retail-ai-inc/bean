@@ -14,7 +14,6 @@ import (
 	"unicode"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/pkg/errors"
 	"github.com/retail-ai-inc/bean/v2"
 	"github.com/spf13/cobra"
 	"manju/routers"
@@ -32,12 +31,12 @@ var (
 		Short: "generate spec json file",
 		Long:  ``,
 		Args:  cobra.NoArgs,
-		RunE:  genTest,
+		Run:   genTest,
 	}
 )
 
 func init() {
-	genTestCmd.Flags().StringP("destination", "d", "", "Output file; defaults to stdout.")
+	genTestCmd.Flags().StringP("destination", "d", "", "Output file; defaults to `./tests/spec.json`.")
 	genCmd.AddCommand(genTestCmd)
 }
 
@@ -56,7 +55,7 @@ type spec struct {
 	Body   *map[string]interface{} `json:"body,omitempty"`
 }
 
-func genTest(cmd *cobra.Command, args []string) error {
+func genTest(cmd *cobra.Command, args []string) {
 	// Just initialize a plain sentry client option structure if sentry is on.
 	if bean.BeanConfig.Sentry.On {
 		bean.BeanConfig.Sentry.ClientOptions = &sentry.ClientOptions{
@@ -95,7 +94,7 @@ func genTest(cmd *cobra.Command, args []string) error {
 
 	destination, err := cmd.Flags().GetString("destination")
 	if err != nil {
-		return errors.WithStack(err)
+		log.Fatalf("Failed to get destination arguments: %v", err)
 	}
 
 	var specMap = make(map[string]map[string]spec)
@@ -145,13 +144,12 @@ func genTest(cmd *cobra.Command, args []string) error {
 
 	bs, err := json.MarshalIndent(specMap, "", "\t")
 	if err != nil {
-		return errors.WithStack(err)
+		log.Fatalf("Failed to marshal specMap: %v", err)
 	}
 
 	_, err = io.CopyBuffer(specJSONFile, bytes.NewReader(bs), nil)
 	if err != nil {
-		return errors.WithStack(err)
+		log.Fatalf("Failed to write specJSONFile: %v", err)
 	}
 	log.Printf("Generate %q completed.\n", destination)
-	return nil
 }
