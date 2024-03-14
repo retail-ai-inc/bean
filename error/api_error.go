@@ -70,3 +70,8 @@ func (e *APIError) Error() string {
 	}
 	return "No error detail available"
 }
+
+// Unwrap returns the wrapped error. It is used by errors.Is and errors.As.
+func (e *APIError) Unwrap() error {
+	return e.Err
+}
