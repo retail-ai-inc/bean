@@ -107,7 +107,7 @@ func genTest(cmd *cobra.Command, _ []string) {
 		log.Fatalf("Failed generating interface: %v", err)
 	}
 
-	log.Printf("Generate %q interface.\n", path.Join(path.Dir(destination), "interface.go"))
+	log.Printf("Generate %q completed.\n", path.Join(path.Dir(destination), "interface.go"))
 
 	if err := g.Generate(); err != nil {
 		log.Fatalf("Failed generating client: %v", err)
@@ -204,6 +204,7 @@ func (g *generator) Generate() error {
 					CartUUID     string
 					ClientID     string
                     ClientSecret string
+					AccessToken  string
                 }`,
 	)
 
@@ -299,7 +300,7 @@ func (g *generator) GenerateInterface(name string, intf map[string]spec) error {
 	g.p("Params:      params,")
 	g.p("http:        test.NewHTTPClientWithoutRetry(),")
 	g.p("endPoint:    \"http://\"+viper.GetString(\"%v.http.host\")+\":\"+viper.GetString(\"%v.http.port\"),", "manju", "manju")
-	g.p("accessToken: \"\",")
+	g.p("accessToken: params.AccessToken,")
 	g.out()
 	g.p("}")
 	g.p("")
