@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -17,11 +16,6 @@ import (
 	"github.com/retail-ai-inc/bean/v2"
 	"github.com/spf13/cobra"
 	"manju/routers"
-)
-
-const (
-	SPEC_DEFAULT_PATH = "./tests"
-	SPEC_NAME         = "spec"
 )
 
 var (
@@ -36,7 +30,7 @@ var (
 )
 
 func init() {
-	genTestCmd.Flags().StringP("destination", "d", "", "Output file; defaults to `./tests/spec.json`.")
+	genTestCmd.Flags().StringP("destination", "d", "./tests/spec.json", "Output file; defaults to `./tests/spec.json`.")
 	genCmd.AddCommand(genTestCmd)
 }
 
@@ -98,19 +92,18 @@ func genTest(cmd *cobra.Command, args []string) {
 	}
 
 	var specMap = make(map[string]map[string]spec)
-	if destination == "" {
-		destination = path.Join(SPEC_DEFAULT_PATH, SPEC_NAME+".json")
+	var writer = os.Stdout
+	if destination != "" {
+		if err := os.MkdirAll(filepath.Dir(destination), os.ModePerm); err != nil {
+			log.Fatalf("Unable to create directory: %v", err)
+		}
+		specJSONFile, err := os.Create(destination)
+		if err != nil {
+			log.Fatalf("Failed opening destination file: %v", err)
+		}
+		defer specJSONFile.Close()
+		writer = specJSONFile
 	}
-
-	if err := os.MkdirAll(filepath.Dir(destination), os.ModePerm); err != nil {
-		log.Fatalf("Unable to create directory: %v", err)
-	}
-	specJSONFile, err := os.Create(destination)
-	if err != nil {
-		log.Fatalf("Failed opening destination file: %v", err)
-	}
-	defer specJSONFile.Close()
-
 	for _name, info := range routeMap {
 		names := strings.Split(_name, ".")
 		if len(names) != 2 {
@@ -147,7 +140,7 @@ func genTest(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed to marshal specMap: %v", err)
 	}
 
-	_, err = io.CopyBuffer(specJSONFile, bytes.NewReader(bs), nil)
+	_, err = io.CopyBuffer(writer, bytes.NewReader(bs), nil)
 	if err != nil {
 		log.Fatalf("Failed to write specJSONFile: %v", err)
 	}
