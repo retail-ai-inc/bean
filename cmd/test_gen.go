@@ -48,12 +48,14 @@ var (
 		Args:  cobra.NoArgs,
 		Run:   genTest,
 	}
+	host string
 )
 
 func init() {
 	genTestCmd.Flags().StringP("source", "s", "./tests/spec.json", "Input test spec source file; enables json mode.")
 	genTestCmd.Flags().StringP("destination", "d", "./tests/client/client.go", "Output file; defaults to `./tests/client/client.go`.")
 	genTestCmd.Flags().StringP("package", "p", "client", "Package name,defaults to `client`")
+	genTestCmd.Flags().StringP("host", "", "127.0.0.1:8888", "Host address,defaults to `127.0.0.1:8888`")
 	TestCmd.AddCommand(genTestCmd)
 }
 
@@ -85,6 +87,11 @@ func genTest(cmd *cobra.Command, _ []string) {
 
 	if pkgName == "" {
 		pkgName = "client"
+	}
+
+	host, err = cmd.Flags().GetString("host")
+	if err != nil {
+		log.Fatalf("Failed to get host: %v", err)
 	}
 
 	if _, err := os.Stat(source); os.IsNotExist(err) {
@@ -163,7 +170,8 @@ func NewGenerator(pkgName string, source string, destination string, specMap map
 		pkgName:     pkgName,
 		source:      source,
 		destination: destination,
-		specMap:     specMap}
+		specMap:     specMap,
+	}
 }
 
 func (g *generator) p(format string, args ...interface{}) {
@@ -193,7 +201,6 @@ func (g *generator) Generate() error {
 	g.p("%q", "testing")
 	g.p("%q", "github.com/go-resty/resty/v2")
 	g.p("%q", "github.com/stretchr/testify/assert")
-	g.p("%q", "github.com/spf13/viper")
 	g.p("%q", "github.com/retail-ai-inc/bean/v2/test")
 
 	g.out()
@@ -299,7 +306,7 @@ func (g *generator) GenerateInterface(name string, intf map[string]spec) error {
 	g.p("t:           t,")
 	g.p("Params:      params,")
 	g.p("http:        test.NewHTTPClientWithoutRetry(),")
-	g.p("endPoint:    \"http://\"+viper.GetString(\"%v.http.host\")+\":\"+viper.GetString(\"%v.http.port\"),", "manju", "manju")
+	g.p("endPoint:    \"http://%v\",", host)
 	g.p("accessToken: params.AccessToken,")
 	g.out()
 	g.p("}")
