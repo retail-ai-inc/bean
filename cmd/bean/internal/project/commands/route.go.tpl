@@ -33,8 +33,11 @@ var (
 	}
 )
 
+var isJsonOutput bool
+
 func init() {
 	routeCmd.AddCommand(listCmd)
+	listCmd.Flags().BoolVarP(&isJsonOutput, "json", "j", false, "will ouput the result in json")
 	rootCmd.AddCommand(routeCmd)
 }
 
@@ -60,13 +63,16 @@ func routeList(cmd *cobra.Command, args []string) {
 	// Consider the allowed methods to display only URI path that's support it.
 	allowedMethod := bean.BeanConfig.HTTP.AllowedMethod
 
+	jsonOutput := make([]map[string]interface{}, 0)
+
 	table := tablewriter.NewWriter(os.Stdout)
 	header := []string{"Path", "Method", "Handler"}
 	table.SetHeader(header)
 
 	for _, r := range b.Echo.Routes() {
 
-		if strings.Contains(r.Name, "glob..func1") {
+		// Do not output internal library-related handler info
+		if strings.Contains(r.Name, "glob..func1") || strings.Contains(r.Name, ".init.func1") {
 			continue
 		}
 
@@ -78,8 +84,19 @@ func routeList(cmd *cobra.Command, args []string) {
 		}
 
 		row := []string{r.Path, r.Method, strings.TrimRight(r.Name, "-fm")}
+		jsonOutput = append(jsonOutput, map[string]interface{}{
+			"path":   r.Path,
+			"method": r.Method,
+			"name":   strings.TrimRight(r.Name, "-fm"),
+		})
+
 		table.Append(row)
 	}
 
-	table.Render()
+	if isJsonOutput {
+		jsonInByte, _ := json.Marshal(jsonOutput)
+		fmt.Println(string(jsonInByte))
+	} else {
+		table.Render()
+	}
 }
