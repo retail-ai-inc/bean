@@ -71,10 +71,10 @@ func genTest(cmd *cobra.Command, args []string) {
 		}
 
 		names := strings.SplitN(r.Name, ".", 2)
+		names = strings.Split(names[1], ".")
 		if len(names) != 2 {
 			continue
 		}
-		names = strings.Split(names[1], ".")
 
 		if unicode.IsLower([]rune(names[1])[0]) {
 			continue
