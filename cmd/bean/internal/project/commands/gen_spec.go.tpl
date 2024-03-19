@@ -12,10 +12,11 @@ import (
 	"strings"
 	"unicode"
 
+	"{{ .PkgPath }}/routers"
+
 	"github.com/getsentry/sentry-go"
 	"github.com/retail-ai-inc/bean/v2"
 	"github.com/spf13/cobra"
-	"manju/routers"
 )
 
 var (
@@ -32,11 +33,6 @@ var (
 func init() {
 	genTestCmd.Flags().StringP("destination", "d", "./tests/spec.json", "Output file; defaults to `./tests/spec.json`.")
 	genCmd.AddCommand(genTestCmd)
-}
-
-type routeInfo struct {
-	Path   string
-	Method string
 }
 
 type spec struct {
@@ -68,7 +64,7 @@ func genTest(cmd *cobra.Command, args []string) {
 	// Init different routes.
 	routers.Init(b)
 
-	var routeMap = make(map[string]routeInfo)
+	var specMap = make(map[string]map[string]spec)
 	for _, r := range b.Echo.Routes() {
 		if strings.Contains(r.Name, "glob..func1") {
 			continue
@@ -78,44 +74,18 @@ func genTest(cmd *cobra.Command, args []string) {
 		if len(names) != 2 {
 			continue
 		}
-		name := strings.TrimSuffix(names[1], "-fm")
+		names = strings.Split(names[1], ".")
 
-		routeMap[name] = routeInfo{
-			Path:   r.Path,
-			Method: r.Method,
-		}
-	}
-
-	destination, err := cmd.Flags().GetString("destination")
-	if err != nil {
-		log.Fatalf("Failed to get destination arguments: %v", err)
-	}
-
-	var specMap = make(map[string]map[string]spec)
-	var writer = os.Stdout
-	if destination != "" {
-		if err := os.MkdirAll(filepath.Dir(destination), os.ModePerm); err != nil {
-			log.Fatalf("Unable to create directory: %v", err)
-		}
-		specJSONFile, err := os.Create(destination)
-		if err != nil {
-			log.Fatalf("Failed opening destination file: %v", err)
-		}
-		defer specJSONFile.Close()
-		writer = specJSONFile
-	}
-	for _name, info := range routeMap {
-		names := strings.Split(_name, ".")
-		if len(names) != 2 {
-			continue
-		}
 		if unicode.IsLower([]rune(names[1])[0]) {
 			continue
 		}
+
+		name := strings.TrimSuffix(names[1], "-fm")
+
 		var s = spec{
-			Name:   names[1],
-			Path:   info.Path,
-			Method: info.Method,
+			Name:   name,
+			Path:   r.Path,
+			Method: r.Method,
 			Header: &map[string]interface{}{},
 			Params: &map[string]interface{}{},
 			Query:  &map[string]interface{}{},
@@ -133,6 +103,24 @@ func genTest(cmd *cobra.Command, args []string) {
 				s.Name: s,
 			}
 		}
+	}
+
+	destination, err := cmd.Flags().GetString("destination")
+	if err != nil {
+		log.Fatalf("Failed to get destination arguments: %v", err)
+	}
+
+	var writer = os.Stdout
+	if destination != "" {
+		if err := os.MkdirAll(filepath.Dir(destination), os.ModePerm); err != nil {
+			log.Fatalf("Unable to create directory: %v", err)
+		}
+		specJSONFile, err := os.Create(destination)
+		if err != nil {
+			log.Fatalf("Failed opening destination file: %v", err)
+		}
+		defer specJSONFile.Close()
+		writer = specJSONFile
 	}
 
 	bs, err := json.MarshalIndent(specMap, "", "\t")
