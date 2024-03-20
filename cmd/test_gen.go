@@ -59,16 +59,6 @@ func init() {
 	TestCmd.AddCommand(genTestCmd)
 }
 
-type spec struct {
-	Name   string                  `json:"name"`
-	Path   string                  `json:"path"`
-	Method string                  `json:"method"`
-	Header *map[string]interface{} `json:"header,omitempty"`
-	Params *map[string]interface{} `json:"params,omitempty"`
-	Query  *map[string]interface{} `json:"query,omitempty"`
-	Body   *map[string]interface{} `json:"body,omitempty"`
-}
-
 func genTest(cmd *cobra.Command, _ []string) {
 	source, err := cmd.Flags().GetString("source")
 	if err != nil {
