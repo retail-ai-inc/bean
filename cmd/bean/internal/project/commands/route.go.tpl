@@ -83,11 +83,11 @@ func routeList(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		row := []string{r.Path, r.Method, strings.TrimRight(r.Name, "-fm")}
+		row := []string{r.Path, r.Method, strings.TrimSuffix(r.Name, "-fm")}
 		jsonOutput = append(jsonOutput, map[string]interface{}{
 			"path":   r.Path,
 			"method": r.Method,
-			"name":   strings.TrimRight(r.Name, "-fm"),
+			"name":   strings.TrimSuffix(r.Name, "-fm"),
 		})
 
 		table.Append(row)
