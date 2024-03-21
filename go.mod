@@ -7,6 +7,7 @@ require (
 	github.com/go-playground/validator/v10 v10.11.1
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
 	github.com/labstack/echo-contrib v0.11.0
 	github.com/labstack/echo/v4 v4.10.2
@@ -19,7 +20,9 @@ require (
 	github.com/stretchr/testify v1.8.2
 	github.com/valyala/fasttemplate v1.2.2
 	go.mongodb.org/mongo-driver v1.8.2
+	golang.org/x/mod v0.8.0
 	golang.org/x/sync v0.1.0
+	golang.org/x/tools v0.6.0
 	gorm.io/datatypes v1.0.5
 	gorm.io/driver/mysql v1.2.3
 	gorm.io/gorm v1.22.5
