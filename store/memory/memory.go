@@ -31,7 +31,7 @@ import (
 )
 
 type Cache interface {
-	GetMemory(k string) (interface{}, bool)
+	GetMemory(key string) (interface{}, bool)
 	SetMemory(key string, value any, duration time.Duration)
 	DelMemory(key string)
 	CloseMemory()
@@ -39,12 +39,12 @@ type Cache interface {
 
 // memoryCache stores arbitrary data with ttl.
 type memoryCache struct {
-	keys *haxmap.Map[string, Key]
+	keys *haxmap.Map[string, data]
 	done chan struct{}
 }
 
-// A Key represents arbitrary data with ttl.
-type Key struct {
+// data represents an arbitrary value with ttl.
+type data struct {
 	value any
 	ttl   int64 // unix nano
 }
@@ -60,7 +60,7 @@ func NewMemoryCache() Cache {
 		// XXX: IMPORTANT - Run the ttl cleaning process in every 60 seconds.
 		ttlCleaningInterval := 60 * time.Second
 
-		h := haxmap.New[string, Key]()
+		h := haxmap.New[string, data]()
 		if h == nil {
 			panic("failed to initialize the memory!")
 		}
@@ -79,8 +79,8 @@ func NewMemoryCache() Cache {
 				case <-ticker.C:
 					now := time.Now().UnixNano()
 					// O(N) iteration. It is linear time complexity.
-					memoryDBConn.keys.ForEach(func(k string, item Key) bool {
-						if item.ttl > 0 && now > item.ttl {
+					memoryDBConn.keys.ForEach(func(k string, d data) bool {
+						if d.ttl > 0 && now > d.ttl {
 							memoryDBConn.keys.Del(k)
 						}
 
@@ -98,17 +98,17 @@ func NewMemoryCache() Cache {
 }
 
 // GetMemory Get gets the value for the given key.
-func (mem *memoryCache) GetMemory(k string) (interface{}, bool) {
-	key, exists := mem.keys.Get(k)
+func (mem *memoryCache) GetMemory(key string) (interface{}, bool) {
+	d, exists := mem.keys.Get(key)
 	if !exists {
 		return nil, false
 	}
 
-	if key.ttl > 0 && time.Now().UnixNano() > key.ttl {
+	if d.ttl > 0 && time.Now().UnixNano() > d.ttl {
 		return nil, false
 	}
 
-	return key.value, true
+	return d.value, true
 }
 
 // SetMemory Set sets a value for the given key with an expiration duration.
@@ -120,7 +120,7 @@ func (mem *memoryCache) SetMemory(key string, value any, duration time.Duration)
 		expires = time.Now().Add(duration).UnixNano()
 	}
 
-	mem.keys.Set(key, Key{
+	mem.keys.Set(key, data{
 		value: value,
 		ttl:   expires,
 	})
@@ -134,7 +134,7 @@ func (mem *memoryCache) DelMemory(key string) {
 		mem.keys.Del(key)
 	} else {
 		prefix := strings.TrimSuffix(key, "*")
-		mem.keys.ForEach(func(k string, item Key) bool {
+		mem.keys.ForEach(func(k string, _ data) bool {
 			if strings.HasPrefix(k, prefix) {
 				mem.keys.Del(k)
 			}
