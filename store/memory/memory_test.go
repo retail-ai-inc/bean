@@ -24,6 +24,7 @@
 package memory
 
 import (
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -83,6 +84,44 @@ func TestDelete(t *testing.T) {
 
 	if found {
 		t.FailNow()
+	}
+}
+
+func TestDeleteWithWildCard(t *testing.T) {
+	type keyVal struct {
+		key   string
+		value interface{}
+		ttl   time.Duration
+	}
+
+	tests := []struct {
+		name     string
+		kvs      []keyVal
+		wildcard string
+	}{
+		{name: "delete multi keys by wildcard key", kvs: []keyVal{
+			{key: "hello_1", value: "world_1", ttl: time.Hour},
+			{key: "hello_2", value: "world_2", ttl: time.Hour},
+			{key: "hello_3", value: "world_3", ttl: time.Hour},
+		}, wildcard: "hello_*"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewMemoryCache()
+
+			for _, kv := range tt.kvs {
+				m.SetMemory(kv.key, kv.value, kv.ttl)
+			}
+
+			m.DelMemory(tt.wildcard)
+
+			for _, kv := range tt.kvs {
+				_, found := m.GetMemory(kv.key)
+				if found {
+					t.Fatalf("key (%s) should be deleted", kv.key)
+				}
+			}
+		})
 	}
 }
 
@@ -164,4 +203,31 @@ func BenchmarkDel(b *testing.B) {
 			m.DelMemory("Hello")
 		}
 	})
+}
+
+// WARN: It takes about 20s to complete this benchmark even with `benchtime` 300ms.
+func BenchmarkDeleteWithWildCard(b *testing.B) {
+
+	setupKeys := func(m Cache, size int) {
+		for i := 0; i < size; i++ {
+			key := fmt.Sprintf("hello_%d", i)
+			m.SetMemory(key, fmt.Sprintf("world_%d", i), time.Hour)
+		}
+	}
+
+	sizes := []int{100, 1000, 10000}
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("delete %d keys", size), func(b *testing.B) {
+			m := NewMemoryCache()
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				setupKeys(m, size)
+				b.StartTimer()
+
+				m.DelMemory("hello_*")
+			}
+		})
+	}
 }

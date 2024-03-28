@@ -23,6 +23,7 @@
 package memory
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -126,8 +127,20 @@ func (mem *memoryCache) SetMemory(key string, value any, duration time.Duration)
 }
 
 // DelMemory Del deletes the key and its value from the memory cache.
+// If the key has a single wildcard suffix (`*`), it will delete all keys that have the same prefix.
 func (mem *memoryCache) DelMemory(key string) {
-	mem.keys.Del(key)
+
+	if !strings.HasSuffix(key, "*") {
+		mem.keys.Del(key)
+	} else {
+		prefix := strings.TrimSuffix(key, "*")
+		mem.keys.ForEach(func(k string, item Key) bool {
+			if strings.HasPrefix(k, prefix) {
+				mem.keys.Del(k)
+			}
+			return true
+		})
+	}
 }
 
 // CloseMemory Close closes the memory cache and frees up resources.
