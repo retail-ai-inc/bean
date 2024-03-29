@@ -127,20 +127,46 @@ func (mem *memoryCache) SetMemory(key string, value any, duration time.Duration)
 }
 
 // DelMemory Del deletes the key and its value from the memory cache.
-// If the key has a single wildcard suffix (`*`), it will delete all keys that have the same prefix.
+// If the key has a wildcard (`*`), it will delete all keys that match the wildcard.
 func (mem *memoryCache) DelMemory(key string) {
 
-	if !strings.HasSuffix(key, "*") {
+	if !strings.Contains(key, "*") {
+		// Delete by a normal key.
 		mem.keys.Del(key)
-	} else {
-		prefix := strings.TrimSuffix(key, "*")
-		mem.keys.ForEach(func(k string, _ data) bool {
-			if strings.HasPrefix(k, prefix) {
-				mem.keys.Del(k)
-			}
-			return true
-		})
+		return
 	}
+
+	// Delete by wildcard key.
+	var keys []string
+	mem.keys.ForEach(func(k string, _ data) bool {
+		if matchWildCard([]rune(k), []rune(key)) {
+			keys = append(keys, k)
+		}
+		return true
+	})
+	if len(keys) > 0 {
+		mem.keys.Del(keys...)
+	}
+}
+
+func matchWildCard(str, pattern []rune) bool {
+
+	if len(pattern) == 0 {
+		return len(str) == 0 // Return true finally if both are empty after the rescursive matching.
+	}
+
+	if pattern[0] == '*' {
+		// Match with no wildcard pattern, if it doesn't match, move to the next character.
+		return matchWildCard(str, pattern[1:]) ||
+			(len(str) > 0 && matchWildCard(str[1:], pattern))
+	}
+
+	if len(str) == 0 || str[0] != pattern[0] {
+		return false
+	}
+
+	// Recurse with the rest of the string and the pattern.
+	return matchWildCard(str[1:], pattern[1:])
 }
 
 // CloseMemory Close closes the memory cache and frees up resources.

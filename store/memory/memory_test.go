@@ -93,17 +93,52 @@ func TestDeleteWithWildCard(t *testing.T) {
 		value interface{}
 		ttl   time.Duration
 	}
+	type kvs struct {
+		keyVal
+		found bool
+	}
+	features := []keyVal{
+		{key: "hello_world_1", value: "world_0", ttl: time.Hour},
+		{key: "hello_world_2", value: "world_1", ttl: time.Hour},
+		{key: "hello_world_3", value: "world_2", ttl: time.Hour},
+		{key: "hello_1_world", value: "world_3", ttl: time.Hour},
+		{key: "hello_2_world", value: "world_4", ttl: time.Hour},
+		{key: "hello_3_world", value: "world_5", ttl: time.Hour},
+		{key: "1_hello_world", value: "world_6", ttl: time.Hour},
+		{key: "2_hello_world", value: "world_7", ttl: time.Hour},
+		{key: "3_hello_world", value: "world_8", ttl: time.Hour},
+	}
 
 	tests := []struct {
 		name     string
-		kvs      []keyVal
+		kvs      []kvs
 		wildcard string
 	}{
-		{name: "delete multi keys by wildcard key", kvs: []keyVal{
-			{key: "hello_1", value: "world_1", ttl: time.Hour},
-			{key: "hello_2", value: "world_2", ttl: time.Hour},
-			{key: "hello_3", value: "world_3", ttl: time.Hour},
-		}, wildcard: "hello_*"},
+		{name: "delete multi keys by tail wildcard", kvs: []kvs{
+			{features[0], false}, {features[1], false}, {features[2], false},
+			{features[3], true}, {features[4], true}, {features[5], true},
+			{features[6], true}, {features[7], true}, {features[8], true},
+		}, wildcard: "hello_world_*"},
+		{name: "delete multi keys by middle wildcard", kvs: []kvs{
+			{features[0], true}, {features[1], true}, {features[2], true},
+			{features[3], false}, {features[4], false}, {features[5], false},
+			{features[6], true}, {features[7], true}, {features[8], true},
+		}, wildcard: "hello_*_world"},
+		{name: "delete multi keys by head wildcard", kvs: []kvs{
+			{features[0], true}, {features[1], true}, {features[2], true},
+			{features[3], true}, {features[4], true}, {features[5], true},
+			{features[6], false}, {features[7], false}, {features[8], false},
+		}, wildcard: "*_hello_world"},
+		{name: "delete multi keys by exact wildcard", kvs: []kvs{
+			{features[0], false}, {features[1], false}, {features[2], false},
+			{features[3], false}, {features[4], false}, {features[5], false},
+			{features[6], false}, {features[7], false}, {features[8], false},
+		}, wildcard: "*"},
+		{name: "delete multi keys by two intermittent wildcards", kvs: []kvs{
+			{features[0], false}, {features[1], false}, {features[2], false},
+			{features[3], false}, {features[4], false}, {features[5], false},
+			{features[6], false}, {features[7], false}, {features[8], false},
+		}, wildcard: "*_*"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -117,8 +152,8 @@ func TestDeleteWithWildCard(t *testing.T) {
 
 			for _, kv := range tt.kvs {
 				_, found := m.GetMemory(kv.key)
-				if found {
-					t.Fatalf("key (%s) should be deleted", kv.key)
+				if found != kv.found {
+					t.Errorf("key %s, expected found %v, got %v", kv.key, kv.found, found)
 				}
 			}
 		})
@@ -205,7 +240,7 @@ func BenchmarkDel(b *testing.B) {
 	})
 }
 
-// WARN: It takes about 20s to complete this benchmark even with `benchtime` 300ms.
+// WARN: It takes about 30s to complete this benchmark with 1s `benchtime`.
 func BenchmarkDeleteWithWildCard(b *testing.B) {
 
 	setupKeys := func(m Cache, size int) {
