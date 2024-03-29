@@ -137,16 +137,12 @@ func (mem *memoryCache) DelMemory(key string) {
 	}
 
 	// Delete by wildcard key.
-	var keys []string
 	mem.keys.ForEach(func(k string, _ data) bool {
 		if matchWildCard([]rune(k), []rune(key)) {
-			keys = append(keys, k)
+			mem.keys.Del(k)
 		}
 		return true
 	})
-	if len(keys) > 0 {
-		mem.keys.Del(keys...)
-	}
 }
 
 func matchWildCard(str, pattern []rune) bool {
