@@ -23,6 +23,7 @@
 package memory
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -30,7 +31,7 @@ import (
 )
 
 type Cache interface {
-	GetMemory(k string) (interface{}, bool)
+	GetMemory(key string) (interface{}, bool)
 	SetMemory(key string, value any, duration time.Duration)
 	DelMemory(key string)
 	CloseMemory()
@@ -38,12 +39,12 @@ type Cache interface {
 
 // memoryCache stores arbitrary data with ttl.
 type memoryCache struct {
-	keys *haxmap.Map[string, Key]
+	keys *haxmap.Map[string, data]
 	done chan struct{}
 }
 
-// A Key represents arbitrary data with ttl.
-type Key struct {
+// data represents an arbitrary value with ttl.
+type data struct {
 	value any
 	ttl   int64 // unix nano
 }
@@ -59,7 +60,7 @@ func NewMemoryCache() Cache {
 		// XXX: IMPORTANT - Run the ttl cleaning process in every 60 seconds.
 		ttlCleaningInterval := 60 * time.Second
 
-		h := haxmap.New[string, Key]()
+		h := haxmap.New[string, data]()
 		if h == nil {
 			panic("failed to initialize the memory!")
 		}
@@ -78,8 +79,8 @@ func NewMemoryCache() Cache {
 				case <-ticker.C:
 					now := time.Now().UnixNano()
 					// O(N) iteration. It is linear time complexity.
-					memoryDBConn.keys.ForEach(func(k string, item Key) bool {
-						if item.ttl > 0 && now > item.ttl {
+					memoryDBConn.keys.ForEach(func(k string, d data) bool {
+						if d.ttl > 0 && now > d.ttl {
 							memoryDBConn.keys.Del(k)
 						}
 
@@ -97,17 +98,17 @@ func NewMemoryCache() Cache {
 }
 
 // GetMemory Get gets the value for the given key.
-func (mem *memoryCache) GetMemory(k string) (interface{}, bool) {
-	key, exists := mem.keys.Get(k)
+func (mem *memoryCache) GetMemory(key string) (interface{}, bool) {
+	d, exists := mem.keys.Get(key)
 	if !exists {
 		return nil, false
 	}
 
-	if key.ttl > 0 && time.Now().UnixNano() > key.ttl {
+	if d.ttl > 0 && time.Now().UnixNano() > d.ttl {
 		return nil, false
 	}
 
-	return key.value, true
+	return d.value, true
 }
 
 // SetMemory Set sets a value for the given key with an expiration duration.
@@ -119,15 +120,53 @@ func (mem *memoryCache) SetMemory(key string, value any, duration time.Duration)
 		expires = time.Now().Add(duration).UnixNano()
 	}
 
-	mem.keys.Set(key, Key{
+	mem.keys.Set(key, data{
 		value: value,
 		ttl:   expires,
 	})
 }
 
 // DelMemory Del deletes the key and its value from the memory cache.
+// If the key has a wildcard (`*`), it will delete all keys that match the wildcard.
 func (mem *memoryCache) DelMemory(key string) {
-	mem.keys.Del(key)
+
+	if !strings.Contains(key, "*") {
+		// Delete by a normal key.
+		mem.keys.Del(key)
+		return
+	}
+
+	// Delete by wildcard key.
+	var keys []string
+	mem.keys.ForEach(func(k string, _ data) bool {
+		if matchWildCard([]rune(k), []rune(key)) {
+			keys = append(keys, k)
+		}
+		return true
+	})
+	if len(keys) > 0 {
+		mem.keys.Del(keys...)
+	}
+}
+
+func matchWildCard(str, pattern []rune) bool {
+
+	if len(pattern) == 0 {
+		return len(str) == 0 // Return true finally if both are empty after the rescursive matching.
+	}
+
+	if pattern[0] == '*' {
+		// Match with no wildcard pattern, if it doesn't match, move to the next character.
+		return matchWildCard(str, pattern[1:]) ||
+			(len(str) > 0 && matchWildCard(str[1:], pattern))
+	}
+
+	if len(str) == 0 || str[0] != pattern[0] {
+		return false
+	}
+
+	// Recurse with the rest of the string and the pattern.
+	return matchWildCard(str[1:], pattern[1:])
 }
 
 // CloseMemory Close closes the memory cache and frees up resources.
