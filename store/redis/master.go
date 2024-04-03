@@ -78,6 +78,7 @@ func NewMasterCache(master *dbdrivers.RedisDBConn, prefix string, opts ...Master
 			},
 			prefix:    prefix,
 			operation: "master-cache", // by default
+			sep:       "_",            // by default
 		},
 	}
 
@@ -97,6 +98,13 @@ func OptTraceMCOperation(operation string) MasterCacheOption {
 		if operation != "" {
 			m.cache.operation = operation
 		}
+	}
+}
+
+// OptSepMC ...
+func OptSepMC(sep string) MasterCacheOption {
+	return func(m *masterCache) {
+		m.cache.sep = sep
 	}
 }
 

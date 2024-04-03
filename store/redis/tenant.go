@@ -69,16 +69,17 @@ type tenantCache struct {
 	clients   map[uint64]*dbdrivers.RedisDBConn // map[tenantID]*redis.Client
 	prefix    string                            // prefix for all keys cocatenated with underscore "_"
 	operation string                            // operation name for tracing
+	sep       string                            // sep connector between the prefix and the key.
 }
 
 // NewTenantCache creates a new TenantCache if you enable tenant mode (`detabase.tenant.on` in config).
 // This assumes it is called after the (*Bean).InitDB() func and takes (bean.DBDeps).TenantRedisDBs as input.
 func NewTenantCache(tenants map[uint64]*dbdrivers.RedisDBConn, prefix string, opts ...TenantCacheOption) TenantCache {
-
 	t := &tenantCache{
 		clients:   tenants,
 		prefix:    prefix,
 		operation: "tenant-cache", // by default
+		sep:       "_",            // by default
 	}
 
 	for _, opt := range opts {
@@ -90,7 +91,7 @@ func NewTenantCache(tenants map[uint64]*dbdrivers.RedisDBConn, prefix string, op
 
 type TenantCacheOption func(*tenantCache)
 
-// OptTraceOperation is an option to set an operation name for tracing in TenantCache.
+// OptTraceTCOperation is an option to set an operation name for tracing in TenantCache.
 // It overrides a default value as long as the given operation name is not empty.
 func OptTraceTCOperation(operation string) func(*tenantCache) {
 	return func(t *tenantCache) {
@@ -100,60 +101,88 @@ func OptTraceTCOperation(operation string) func(*tenantCache) {
 	}
 }
 
+// OptSepTC ...
+func OptSepTC(sep string) func(*tenantCache) {
+	return func(t *tenantCache) {
+		t.sep = sep
+	}
+}
+
 func (t *tenantCache) KeyExists(c context.Context, tenantID uint64, key string) (bool, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].KeyExists(c, pk)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].KeyExists(c, key)
 }
 
 func (t *tenantCache) Keys(c context.Context, tenantID uint64, pattern string) ([]string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + pattern
-	return t.clients[tenantID].Keys(c, pk)
+	if t.prefix != "" {
+		pattern = t.prefix + t.sep + pattern
+	}
+
+	return t.clients[tenantID].Keys(c, pattern)
 }
 
 func (t *tenantCache) TTL(c context.Context, tenantID uint64, key string) (time.Duration, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].TTL(c, pk)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].TTL(c, key)
 }
 
 func (t *tenantCache) SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].Set(c, pk, data, ttl)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].Set(c, key, data, ttl)
 }
 
 func (t *tenantCache) GetString(c context.Context, tenantID uint64, key string) (string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].GetString(c, pk)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].GetString(c, key)
 }
 
 func (t *tenantCache) SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].SetJSON(c, pk, data, ttl)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].SetJSON(c, key, data, ttl)
 }
 
 func (t *tenantCache) GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	jsonStr, err := t.clients[tenantID].GetString(c, pk)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	jsonStr, err := t.clients[tenantID].GetString(c, key)
 	if err != nil {
 		return false, err // This `err` is actually returning stack trace.
 	} else if jsonStr == "" {
@@ -176,9 +205,12 @@ func (t *tenantCache) MSetJSON(c context.Context, tenantID uint64, keys []string
 		return errors.New("key and data length mismatch")
 	}
 	values := make([]interface{}, 0, ln*2)
-	for i := range keys {
-		pk := t.prefix + "_" + keys[i]
-		values = append(values, pk, data[i])
+
+	for i, key := range keys {
+		if t.prefix != "" {
+			key = t.prefix + t.sep + key
+		}
+		values = append(values, key, data[i])
 	}
 
 	err := t.clients[tenantID].MSetWithTTL(c, ttl, values)
@@ -194,9 +226,13 @@ func (t *tenantCache) MGetJSON(c context.Context, tenantID uint64, dst interface
 	defer finish()
 
 	pks := make([]string, 0, len(keys))
-	for _, key := range keys {
-		pk := t.prefix + "_" + key
-		pks = append(pks, pk)
+	if t.prefix != "" {
+		for _, key := range keys {
+			key = t.prefix + t.sep + key
+			pks = append(pks, key)
+		}
+	} else {
+		pks = keys
 	}
 
 	values, err := t.clients[tenantID].MGet(c, pks...)
@@ -227,10 +263,16 @@ func (t *tenantCache) MGet(c context.Context, tenantID uint64, keys ...string) (
 	defer finish()
 
 	pks := make([]string, 0, len(keys))
-	for _, key := range keys {
-		pk := t.prefix + "_" + key
-		pks = append(pks, pk)
+
+	if t.prefix != "" {
+		for _, key := range keys {
+			key = t.prefix + t.sep + key
+			pks = append(pks, key)
+		}
+	} else {
+		pks = keys
 	}
+
 	return t.clients[tenantID].MGet(c, pks...)
 }
 
@@ -242,32 +284,44 @@ func (t *tenantCache) HSet(c context.Context, tenantID uint64, key string, args 
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].HSet(c, pk, args...)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].HSet(c, key, args...)
 }
 
 func (t *tenantCache) HGet(c context.Context, tenantID uint64, key, field string) (string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].HGet(c, pk, field)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].HGet(c, key, field)
 }
 
 func (t *tenantCache) HMGet(c context.Context, tenantID uint64, key string, fields ...string) ([]interface{}, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].HMGet(c, pk, fields...)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].HMGet(c, key, fields...)
 }
 
 func (t *tenantCache) HGetAll(c context.Context, tenantID uint64, key string) (map[string]string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].HGetAll(c, pk)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].HGetAll(c, key)
 }
 
 func (t *tenantCache) HGets(c context.Context, tenantID uint64, keysWithFields map[string]string) (map[string]string, error) {
@@ -275,9 +329,13 @@ func (t *tenantCache) HGets(c context.Context, tenantID uint64, keysWithFields m
 	defer finish()
 
 	var pksWithFields = make(map[string]string, len(keysWithFields))
-	for key, field := range keysWithFields {
-		pk := t.prefix + "_" + key
-		pksWithFields[pk] = field
+	if t.prefix != "" {
+		for key, field := range keysWithFields {
+			key = t.prefix + t.sep + key
+			pksWithFields[key] = field
+		}
+	} else {
+		pksWithFields = keysWithFields
 	}
 
 	return t.clients[tenantID].HGets(c, pksWithFields)
@@ -287,64 +345,88 @@ func (t *tenantCache) RPush(c context.Context, tenantID uint64, key string, valu
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].RPush(c, pk, valueList)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].RPush(c, key, valueList)
 }
 
 func (t *tenantCache) LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].GetLRange(c, pk, start, stop)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].GetLRange(c, key, start, stop)
 }
 
 func (t *tenantCache) SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].SAdd(c, pk, elements)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].SAdd(c, key, elements)
 }
 
 func (t *tenantCache) SRem(c context.Context, tenantID uint64, key string, elements interface{}) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].SRem(c, pk, elements)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].SRem(c, key, elements)
 }
 
 func (t *tenantCache) SMembers(c context.Context, tenantID uint64, key string) ([]string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].SMembers(c, pk)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].SMembers(c, key)
 }
 
 func (t *tenantCache) SRandMemberN(c context.Context, tenantID uint64, key string, count int64) ([]string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].SRandMemberN(c, pk, count)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].SRandMemberN(c, key, count)
 }
 
 func (t *tenantCache) SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].SIsMember(c, pk, element)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].SIsMember(c, key, element)
 }
 
 func (t *tenantCache) IncrementValue(c context.Context, tenantID uint64, key string) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].IncrementValue(c, pk)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].IncrementValue(c, key)
 }
 
 func (t *tenantCache) DelKey(c context.Context, tenantID uint64, keys ...string) error {
@@ -352,8 +434,13 @@ func (t *tenantCache) DelKey(c context.Context, tenantID uint64, keys ...string)
 	defer finish()
 
 	pks := make([]string, len(keys))
-	for i, key := range keys {
-		pks[i] = t.prefix + "_" + key
+
+	if t.prefix != "" {
+		for i, key := range keys {
+			pks[i] = t.prefix + t.sep + key
+		}
+	} else {
+		pks = keys
 	}
 
 	return t.clients[tenantID].DelKey(c, pks...)
@@ -363,8 +450,11 @@ func (t *tenantCache) Expire(c context.Context, tenantID uint64, key string, ttl
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	pk := t.prefix + "_" + key
-	return t.clients[tenantID].ExpireKey(c, pk, ttl)
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return t.clients[tenantID].ExpireKey(c, key, ttl)
 }
 
 func (t *tenantCache) Pipeline(tenantID uint64) redis.Pipeliner {
