@@ -30,12 +30,11 @@ type {{.HandlerNameLower}}Handler struct {
 }{{else}}func New{{.HandlerNameUpper}}Handler() *{{.HandlerNameLower}}Handler {
 	return &{{.HandlerNameLower}}Handler{{"{}\n}"}}{{end}}
 
-func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c echo.Context) error {
-	
-	// IMPORTANT: If you wanna trace the performance of your handler function then uncomment following 3 lines
-	// tctx := trace.NewTraceableContext(c.Request().Context())
-	// finish := trace.Start(tctx, "http.handler")
+func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c echo.Context) error {	
+	// IMPORTANT: If you wanna trace the performance of your handler function then uncomment following 2 lines
+	// tctx, finish := trace.StartSpan(c.Request().Context(), "http.handler")
 	// defer finish()
+
 
 	{{if .ServiceExists}}output, err := handler.{{.HandlerNameLower}}Service.{{.HandlerNameUpper}}ServiceExampleFunc(c.Request().Context())
 	if err != nil {
@@ -50,8 +49,7 @@ func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c
 	// prevent this from happening and not crash the app.
 	async.ExecuteWithContext(func(asyncC context.Context) {
 		c.Logger().Debug(output)
-		traceableContext := trace.NewTraceableContext(asyncC)
-		asyncFinish := trace.Start(traceableContext, "http.async")
+		traceableContext, asyncFinish := trace.StartSpan(asyncC, "http.async")
 		defer asyncFinish()
 
 		// example function that you want to execute asynchronously.

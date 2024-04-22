@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -29,8 +30,7 @@ func NewExampleHandler(exampleSvc services.ExampleService) *exampleHandler {
 }
 
 func (handler *exampleHandler) JSONIndex(c echo.Context) error {
-	tctx := trace.NewTraceableContext(c.Request().Context())
-	finish := trace.Start(tctx, "http.handler")
+	tctx, finish := trace.StartSpan(c.Request().Context(), "http.handler")
 	defer finish()
 
 	dbName, err := handler.exampleService.GetMasterSQLTableList(tctx)

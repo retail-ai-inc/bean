@@ -21,8 +21,8 @@ type {{.ServiceNameUpper}}Service interface {
 	return &{{.ServiceNameLower}}Service{{"{}\n}"}}{{end}}
 
 func (service *{{.ServiceNameLower}}Service) {{.ServiceNameUpper}}ServiceExampleFunc(ctx context.Context) (string, error) {
-	// IMPORTANT: If you wanna trace the performance of your handler function then uncomment following 3 lines
-	// finish := trace.Start(ctx, "http.service")
+	// IMPORTANT: If you wanna trace the performance of your handler function then uncomment following 2 lines
+	// _, finish := trace.StartSpan(ctx, "http.service")
 	// defer finish()
 	return "{{.ServiceNameUpper}}Service", nil
 }
