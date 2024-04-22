@@ -538,8 +538,7 @@ data, err := helpers.SingleDoChan(c, "key", func() (string, error) {
 - `fn` is a callback method for executing tasks. This is its defining type: `func(c context.Context) error`
 ```
 	async.ExecuteWithTimeout(c, time.Second*3, func(ctx context.Context) error {
-		asyncCtx := trace.NewTraceableContext(ctx)
-		asyncFinish := trace.Start(asyncCtx, "http.async")
+    asyncCtx, asyncFinish := trace.StartSpan(ctx, "http.async")
 		defer asyncFinish()
 
 		select {

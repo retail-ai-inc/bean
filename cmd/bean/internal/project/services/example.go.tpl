@@ -22,7 +22,7 @@ func NewExampleService(exampleRepo repositories.ExampleRepository) *exampleServi
 }
 
 func (service *exampleService) GetMasterSQLTableList(ctx context.Context) (string, error) {
-	finish := trace.Start(ctx, "http.service")
+	_, finish := trace.StartSpan(ctx, "http.service")
 	defer finish()
 	return service.exampleRepository.GetMasterSQLTableName(ctx)
 }

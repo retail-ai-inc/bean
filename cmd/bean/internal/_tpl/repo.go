@@ -16,8 +16,8 @@ func New{{.RepoNameUpper}}Repository(dbDeps *bean.DBDeps) *DbInfra {
 }
 
 func (db *DbInfra) {{.RepoNameUpper}}ExampleFunc(ctx context.Context) (string, error) {
-	// IMPORTANT: If you wanna trace the performance of your handler function then uncomment following 3 lines
-	// finish := trace.Start(ctx, "db")
+	// IMPORTANT: If you wanna trace the performance of your handler function then uncomment following 2 lines
+	// _, finish := trace.StartSpan(ctx, "db")
 	// defer finish()
 	return "{{.RepoNameUpper}}", nil
 }
