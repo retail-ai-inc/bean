@@ -36,6 +36,7 @@ import (
 type errorResp struct {
 	ErrorCode ErrorCode   `json:"errorCode"`
 	ErrorMsg  interface{} `json:"errorMsg"`
+	Errors    interface{} `json:"errors"`
 }
 
 type ErrorHandlerFunc func(err error, c echo.Context) (bool, error)
@@ -47,7 +48,7 @@ func ValidationErrorHanderFunc(e error, c echo.Context) (bool, error) {
 	}
 	err := c.JSON(http.StatusBadRequest, errorResp{
 		ErrorCode: API_DATA_VALIDATION_FAILED,
-		ErrorMsg:  he.ErrCollection(),
+		Errors:    he.ErrCollection(),
 	})
 
 	return ok, err
