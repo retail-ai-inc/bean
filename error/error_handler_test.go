@@ -56,12 +56,12 @@ func TestValidationErrorHanderFunc(t *testing.T) {
 	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e))
 
 	fakeErr := &fakeError{"fake"}
-	got, err := ValidationErrorHanderFunc(fakeErr, c)
+	got, err := ValidationErrorHandlerFunc(fakeErr, c)
 	assert.NoError(t, err)
 	assert.Equal(t, false, got)
 
 	validateErr := &validator.ValidationError{Err: validatorV10.ValidationErrors{}}
-	got, err = ValidationErrorHanderFunc(validateErr, c)
+	got, err = ValidationErrorHandlerFunc(validateErr, c)
 	assert.NoError(t, err)
 	assert.Equal(t, true, got)
 
@@ -75,12 +75,12 @@ func TestAPIErrorHanderFunc(t *testing.T) {
 	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e))
 
 	fakeErr := &fakeError{"fake"}
-	got, err := APIErrorHanderFunc(fakeErr, c)
+	got, err := APIErrorHandlerFunc(fakeErr, c)
 	assert.NoError(t, err)
 	assert.Equal(t, false, got)
 
 	apiErr := NewAPIError(http.StatusInternalServerError, INTERNAL_SERVER_ERROR, errors.New("internal"))
-	got, err = APIErrorHanderFunc(apiErr, c)
+	got, err = APIErrorHandlerFunc(apiErr, c)
 	assert.NoError(t, err)
 	assert.Equal(t, true, got)
 
@@ -103,12 +103,12 @@ func TestHTTPErrorHanderFunc(t *testing.T) {
 	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e))
 
 	fakeErr := &fakeError{"fake"}
-	got, err := HTTPErrorHanderFunc(fakeErr, c)
+	got, err := HTTPErrorHandlerFunc(fakeErr, c)
 	assert.NoError(t, err)
 	assert.Equal(t, false, got)
 
 	echoHTTPErr := echo.NewHTTPError(http.StatusInternalServerError, "internal")
-	got, err = HTTPErrorHanderFunc(echoHTTPErr, c)
+	got, err = HTTPErrorHandlerFunc(echoHTTPErr, c)
 	assert.NoError(t, err)
 	assert.Equal(t, true, got)
 
@@ -131,12 +131,12 @@ func TestDefaultErrorHanderFunc(t *testing.T) {
 	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e))
 
 	fakeErr := &fakeError{"fake"}
-	got, err := DefaultErrorHanderFunc(fakeErr, c)
+	got, err := DefaultErrorHandlerFunc(fakeErr, c)
 	assert.NoError(t, err)
 	assert.Equal(t, true, got)
 
 	anyErr := echo.NewHTTPError(http.StatusInternalServerError, "internal")
-	got, err = DefaultErrorHanderFunc(anyErr, c)
+	got, err = DefaultErrorHandlerFunc(anyErr, c)
 	assert.NoError(t, err)
 	assert.Equal(t, true, got)
 

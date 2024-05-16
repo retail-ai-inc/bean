@@ -493,7 +493,7 @@ func NewEcho() *echo.Echo {
 func (b *Bean) ServeAt(host, port string) {
 	b.Echo.Logger.Info("Starting " + b.Config.Environment + " " + b.Config.ProjectName + " at " + host + ":" + port + "...🚀")
 
-	b.UseErrorHandlerFuncs(berror.DefaultErrorHanderFunc)
+	b.UseErrorHandlerFuncs(berror.DefaultErrorHandlerFunc)
 	b.Echo.HTTPErrorHandler = b.DefaultHTTPErrorHandler()
 
 	b.Echo.Validator = &validator.DefaultValidator{Validator: b.validate}

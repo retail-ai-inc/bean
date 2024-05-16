@@ -41,7 +41,7 @@ type errorResp struct {
 
 type ErrorHandlerFunc func(err error, c echo.Context) (bool, error)
 
-func ValidationErrorHanderFunc(e error, c echo.Context) (bool, error) {
+func ValidationErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 	he, ok := e.(*validator.ValidationError)
 	if !ok {
 		return false, nil
@@ -56,7 +56,7 @@ func ValidationErrorHanderFunc(e error, c echo.Context) (bool, error) {
 
 // Default JSON API error handler. The response pattern is like below:
 // `{"errorCode": "1000001", "errorMsg": "some message"}`. You can override this error handler from `start.go`
-func APIErrorHanderFunc(e error, c echo.Context) (bool, error) {
+func APIErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 	he, ok := e.(*APIError)
 	if !ok {
 		return false, nil
@@ -83,7 +83,7 @@ func APIErrorHanderFunc(e error, c echo.Context) (bool, error) {
 	return ok, err
 }
 
-func HTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
+func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 	he, ok := e.(*echo.HTTPError)
 	if !ok {
 		return false, nil
@@ -207,9 +207,9 @@ func HTTPErrorHanderFunc(e error, c echo.Context) (bool, error) {
 	return ok, err
 }
 
-// If any other error handler doesn't catch the error then finally `DefaultErrorHanderFunc` will
+// If any other error handler doesn't catch the error then finally `DefaultErrorHandlerFunc` will
 // cactch the error and treat all those errors as `http.StatusInternalServerError`.
-func DefaultErrorHanderFunc(err error, c echo.Context) (bool, error) {
+func DefaultErrorHandlerFunc(err error, c echo.Context) (bool, error) {
 	// Send error event to sentry if configured.
 	if viper.GetBool("sentry.on") {
 		if hub := sentryecho.GetHubFromContext(c); hub != nil {
