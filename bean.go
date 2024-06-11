@@ -53,6 +53,7 @@ import (
 	"github.com/retail-ai-inc/bean/v2/internal/dbdrivers"
 	"github.com/retail-ai-inc/bean/v2/internal/gopool"
 	"github.com/retail-ai-inc/bean/v2/internal/middleware"
+	"github.com/retail-ai-inc/bean/v2/internal/regex"
 	broute "github.com/retail-ai-inc/bean/v2/internal/route"
 	"github.com/retail-ai-inc/bean/v2/internal/validator"
 	"github.com/retail-ai-inc/bean/v2/store/memory"
@@ -382,8 +383,9 @@ func NewEcho() *echo.Echo {
 
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if BeanConfig.AccessLog.On {
+		regex.CompileAccessLogSkipPaths(BeanConfig.AccessLog.SkipEndpoints)
 		accessLogConfig := middleware.LoggerConfig{
-			Skipper:       endPointsSkipper(BeanConfig.AccessLog.SkipEndpoints),
+			Skipper:       pathSkipper(regex.AccessLogSkipPaths),
 			BodyDump:      BeanConfig.AccessLog.BodyDump,
 			RequestHeader: BeanConfig.AccessLog.ReqHeaderParam,
 		}
@@ -435,6 +437,7 @@ func NewEcho() *echo.Echo {
 			Timeout: BeanConfig.Sentry.Timeout,
 		}))
 
+		regex.CompileTraceSkipPaths(BeanConfig.Sentry.SkipTracesEndpoints)
 		if helpers.FloatInRange(BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
 			e.Pre(middleware.Tracer())
 		}
@@ -456,7 +459,8 @@ func NewEcho() *echo.Echo {
 	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
 	// This will help us to integrate `bean's` health into `k8s`.
 	if BeanConfig.Prometheus.On {
-		p := prometheus.NewPrometheus("echo", endPointsSkipper(BeanConfig.Prometheus.SkipEndpoints))
+		regex.CompilePrometheusSkipPaths(BeanConfig.Prometheus.SkipEndpoints)
+		p := prometheus.NewPrometheus("echo", pathSkipper(regex.PrometheusSkipPaths))
 		p.Use(e)
 	}
 
@@ -710,13 +714,20 @@ func DefaultBeforeBreadcrumb(breadcrumb *sentry.Breadcrumb, hint *sentry.Breadcr
 	return breadcrumb
 }
 
-// endPointsSkipper ignores endpoints which are listed in skipEndpoints for logging or
-// metrics data collection.
-func endPointsSkipper(skipEndpoints []string) func(c echo.Context) bool {
+// pathSkipper ignores a path based on the provided regular expressions
+// for logging or metrics data collection.
+func pathSkipper(skipPathRegexes []*regexp.Regexp) func(c echo.Context) bool {
+
+	if len(skipPathRegexes) == 0 {
+		return func(c echo.Context) bool {
+			return false
+		}
+	}
+
 	return func(c echo.Context) bool {
 		path := c.Request().URL.Path
-		for _, endpoint := range skipEndpoints {
-			if regexp.MustCompile(endpoint).MatchString(path) {
+		for _, r := range skipPathRegexes {
+			if r.MatchString(path) {
 				return true
 			}
 		}
