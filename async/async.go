@@ -27,7 +27,6 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"regexp"
 	"runtime"
 	"time"
 
@@ -35,6 +34,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/v2"
 	"github.com/retail-ai-inc/bean/v2/internal/gopool"
+	"github.com/retail-ai-inc/bean/v2/internal/regex"
 )
 
 type (
@@ -109,14 +109,8 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 
 				span.Description = functionName
 
-				// If `skipTracesEndpoints` has some path(s) then let's skip performance sample for those URI.
-				skipTracesEndpoints := bean.BeanConfig.Sentry.SkipTracesEndpoints
-
-				for _, endpoint := range skipTracesEndpoints {
-					if regexp.MustCompile(endpoint).MatchString(urlPath) {
-						span.Sampled = sentry.SampledFalse
-						break
-					}
+				if regex.MatchAnyTraceSkipPath(urlPath) {
+					span.Sampled = sentry.SampledFalse
 				}
 
 				defer span.Finish()
