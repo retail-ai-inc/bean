@@ -40,7 +40,7 @@ import (
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	validatorV10 "github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/labstack/echo-contrib/prometheus"
+	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
@@ -460,8 +460,12 @@ func NewEcho() *echo.Echo {
 	// This will help us to integrate `bean's` health into `k8s`.
 	if BeanConfig.Prometheus.On {
 		regex.CompilePrometheusSkipPaths(BeanConfig.Prometheus.SkipEndpoints)
-		p := prometheus.NewPrometheus("echo", pathSkipper(regex.PrometheusSkipPaths))
-		p.Use(e)
+		conf := echoprometheus.MiddlewareConfig{
+			Skipper:   pathSkipper(regex.PrometheusSkipPaths),
+			Subsystem: BeanConfig.ProjectName, // "echo" is set by default if provided empty.
+		}
+		e.Use(echoprometheus.NewMiddlewareWithConfig(conf))
+		e.GET("/metrics", echoprometheus.NewHandler())
 	}
 
 	// Register goroutine pool
@@ -719,9 +723,7 @@ func DefaultBeforeBreadcrumb(breadcrumb *sentry.Breadcrumb, hint *sentry.Breadcr
 func pathSkipper(skipPathRegexes []*regexp.Regexp) func(c echo.Context) bool {
 
 	if len(skipPathRegexes) == 0 {
-		return func(c echo.Context) bool {
-			return false
-		}
+		return echomiddleware.DefaultSkipper
 	}
 
 	return func(c echo.Context) bool {

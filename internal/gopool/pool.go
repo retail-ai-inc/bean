@@ -31,6 +31,7 @@ import (
 	"github.com/panjf2000/ants/v2"
 )
 
+// TODO: Consider utilizing the ants.MultiPool to provide a better performance improvement.
 var (
 	poolsMu sync.RWMutex
 	pools   = make(map[string]*ants.Pool)

@@ -44,17 +44,17 @@ func Tracer() echo.MiddlewareFunc {
 			}
 			path := c.Request().URL.Path
 			// Start a sentry span for tracing.
-			span := sentry.StartSpan(ctx, "http",
-				sentry.WithTransactionName(fmt.Sprintf("%s %s", c.Request().Method, path)),
+			span := sentry.StartTransaction(ctx, fmt.Sprintf("%s %s", c.Request().Method, path),
+				sentry.WithOpName("http"),
+				sentry.WithDescription(helpers.CurrFuncName()),
 				sentry.ContinueFromRequest(c.Request()),
 			)
-			span.Description = helpers.CurrFuncName()
+			defer span.Finish()
 
 			if regex.MatchAnyTraceSkipPath(path) {
 				span.Sampled = sentry.SampledFalse
 			}
 
-			defer span.Finish()
 			r := c.Request().WithContext(span.Context())
 			c.SetRequest(r)
 			return next(c)
