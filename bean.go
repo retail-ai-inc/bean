@@ -416,30 +416,30 @@ func NewEcho() *echo.Echo {
 	if BeanConfig.Sentry.On {
 		// Check the sentry client options is not nil
 		if BeanConfig.Sentry.ClientOptions == nil {
-			e.Logger.Fatal("Sentry initialization failed: client options is empty")
-		}
+			e.Logger.Error("Sentry initialization failed: client options is empty")
+		} else {
+			clientOption := BeanConfig.Sentry.ClientOptions
+			if clientOption.TracesSampleRate > 0 {
+				clientOption.EnableTracing = true
+			}
+			if err := sentry.Init(*clientOption); err != nil {
+				e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
+			}
 
-		clientOption := BeanConfig.Sentry.ClientOptions
-		if clientOption.TracesSampleRate > 0 {
-			clientOption.EnableTracing = true
-		}
-		if err := sentry.Init(*clientOption); err != nil {
-			e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
-		}
+			// Configure custom scope
+			if BeanConfig.Sentry.ConfigureScope != nil {
+				sentry.ConfigureScope(BeanConfig.Sentry.ConfigureScope)
+			}
 
-		// Configure custom scope
-		if BeanConfig.Sentry.ConfigureScope != nil {
-			sentry.ConfigureScope(BeanConfig.Sentry.ConfigureScope)
-		}
+			e.Use(sentryecho.New(sentryecho.Options{
+				Repanic: true,
+				Timeout: BeanConfig.Sentry.Timeout,
+			}))
 
-		e.Use(sentryecho.New(sentryecho.Options{
-			Repanic: true,
-			Timeout: BeanConfig.Sentry.Timeout,
-		}))
-
-		regex.CompileTraceSkipPaths(BeanConfig.Sentry.SkipTracesEndpoints)
-		if helpers.FloatInRange(BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
-			e.Pre(middleware.Tracer())
+			regex.CompileTraceSkipPaths(BeanConfig.Sentry.SkipTracesEndpoints)
+			if helpers.FloatInRange(BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
+				e.Pre(middleware.Tracer())
+			}
 		}
 	}
 
