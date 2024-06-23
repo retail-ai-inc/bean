@@ -3,8 +3,6 @@ package test
 import (
 	"encoding/json"
 	"net/http"
-	"os/exec"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -104,20 +102,8 @@ func isTestInSkipList(t *testing.T, testName string) bool {
 	t.Helper()
 
 	if TestCfg.Skip == nil {
-		// setup config if it is not setup yet, assuemd that the config file is located at the root of the git repo.
-		if err := SetupConfig(getGitRootPath()); err != nil {
-			t.Errorf("Unable to setup config: %v\n", err)
-			return false
-		}
+		t.Log("skip list is empty")
+		return false
 	}
 	return helpers.HasTargetInSlice(TestCfg.Skip, testName)
-}
-
-func getGitRootPath() string {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	output, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(output))
 }
