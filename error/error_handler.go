@@ -65,8 +65,6 @@ func APIErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 		return false, nil
 	}
 
-	c.Logger().Error(ae)
-
 	if ae.HTTPStatusCode >= 404 {
 		c.Logger().Error(ae.Error())
 
@@ -78,6 +76,8 @@ func APIErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 				}
 			}
 		}
+	} else {
+		c.Logger().Error(ae)
 	}
 
 	err := c.JSON(ae.HTTPStatusCode, errorResp{
