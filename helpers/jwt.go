@@ -24,7 +24,6 @@ package helpers
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
@@ -63,14 +62,14 @@ func DecodeJWT(c echo.Context, claims jwt.Claims, secret string, opts ...jwt.Par
 	if err != nil {
 
 		if errors.Is(err, jwt.ErrTokenMalformed) {
-			return fmt.Errorf("%w: %w", ErrJWTokenInvalid, err)
+			return errors.Join(ErrJWTokenInvalid, err)
 		}
 
 		if errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet) {
-			return fmt.Errorf("%w: %w", ErrJWTokenExpired, err)
+			return errors.Join(ErrJWTokenExpired, err)
 		}
 
-		return fmt.Errorf("%w: %w", ErrJWTokenInvalid, err)
+		return errors.Join(ErrJWTokenInvalid, err)
 	}
 
 	return nil
