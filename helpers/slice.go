@@ -35,8 +35,8 @@ import (
 // 		return s
 // 	}
 
-// 	if !slice.HasStringInSlice(src, "ee", modifier) {
-// 	}
+// if !slice.HasStringInSlice(src, "ee", modifier) {
+// }
 func HasStringInSlice(slice []string, str string, modifier func(str string) string) bool {
 
 	for _, i := range slice {
