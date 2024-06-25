@@ -38,12 +38,22 @@ func StartSpan(c context.Context, operation string, spanOpts ...sentry.SpanOptio
 		return c, func() {}
 	}
 
-	functionName := "unknown function"
-	if pc, _, _, ok := runtime.Caller(1); ok {
-		functionName = runtime.FuncForPC(pc).Name()
+	if len(spanOpts) == 0 {
+		// Add defalut options if none provided.
+		functionName := "unknown function"
+		if pc, _, _, ok := runtime.Caller(1); ok {
+			functionName = runtime.FuncForPC(pc).Name()
+		}
+		spanOpts = append(spanOpts, sentry.WithDescription(functionName))
 	}
-	span := sentry.StartSpan(c, operation, spanOpts...)
-	span.Description = functionName
+
+	parent := sentry.SpanFromContext(c)
+	var span *sentry.Span
+	if parent != nil {
+		span = parent.StartChild(operation, spanOpts...)
+	} else {
+		span = sentry.StartSpan(c, operation, spanOpts...)
+	}
 	newCtx := span.Context()
 
 	return newCtx, func() {

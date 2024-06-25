@@ -25,51 +25,51 @@ package helpers
 import (
 	"errors"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 )
 
 var (
-	errorMessageInvalidToken = "token is invalid"
-	errorMessageExpiredToken = "token is expired"
+	ErrJWTokenInvalid = errors.New("jwt token is invalid")
+	ErrJWTokenExpired = errors.New("jwt token is expired")
 )
 
 // EncodeJWT will encode JWT `claims` using a secret string and return a signed token as string.
 func EncodeJWT(claims jwt.Claims, secret string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims) // Use HS256 algorithm.
 
 	// Generate encoded token and send it as response.
 	return token.SignedString([]byte(secret))
 }
 
 // DecodeJWT will decode JWT string into `claims` structure using a secret string.
-func DecodeJWT(c echo.Context, claims jwt.Claims, secret string) error {
+func DecodeJWT(c echo.Context, claims jwt.Claims, secret string, opts ...jwt.ParserOption) error {
+
+	if len(opts) == 0 {
+		// Add default options if not provided.
+		opts = append(opts,
+			jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+			jwt.WithExpirationRequired(),
+			jwt.WithStrictDecoding(),
+		)
+	}
 
 	tokenString := ExtractJWTFromHeader(c)
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+	_, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(secret), nil
-	})
+	}, opts...)
 
 	if err != nil {
 
-		if ve, ok := err.(*jwt.ValidationError); ok {
-
-			if ve.Errors&jwt.ValidationErrorMalformed != 0 {
-				return errors.New(errorMessageInvalidToken)
-
-			} else if ve.Errors&(jwt.ValidationErrorExpired|jwt.ValidationErrorNotValidYet) != 0 {
-				return errors.New(errorMessageExpiredToken)
-
-			} else {
-				return errors.New(errorMessageInvalidToken)
-			}
+		if errors.Is(err, jwt.ErrTokenMalformed) {
+			return errors.Join(ErrJWTokenInvalid, err)
 		}
 
-		return errors.New(errorMessageInvalidToken)
-	}
+		if errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet) {
+			return errors.Join(ErrJWTokenExpired, err)
+		}
 
-	if !token.Valid {
-		return errors.New(errorMessageInvalidToken)
+		return errors.Join(ErrJWTokenInvalid, err)
 	}
 
 	return nil

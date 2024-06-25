@@ -23,23 +23,37 @@
 package helpers
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 )
 
-type jwtData struct {
+type customClaims struct {
 	Name    string
 	Age     uint
 	Hobbies []string
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 }
+
+var _ jwt.Claims = &customClaims{}
+
+// Validate validates the custom claims based on application-specific logic.
+// OPTIONAL: Implement jwt.ClaimsValidator interface if you want to validate the claims.
+func (c *customClaims) Validate() error {
+	if c.Age < 18 {
+		return errors.New("age is less than 18")
+	}
+	return nil
+}
+
+var _ jwt.ClaimsValidator = &customClaims{}
 
 func Test_DecodeJWTWithJsonUnmarshalStyle(t *testing.T) {
 	e := echo.New()
@@ -48,12 +62,12 @@ func Test_DecodeJWTWithJsonUnmarshalStyle(t *testing.T) {
 
 	jwtSecret := "123456"
 
-	data := &jwtData{
+	data := &customClaims{
 		Name:    "raicart",
 		Age:     uint(18),
 		Hobbies: []string{"football", "basketball"},
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(6000 * time.Second).Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(6000 * time.Second)),
 		},
 	}
 	// Create token with claims
@@ -63,7 +77,7 @@ func Test_DecodeJWTWithJsonUnmarshalStyle(t *testing.T) {
 	tokenString, err := token.SignedString([]byte(jwtSecret))
 	assert.NoError(t, err)
 
-	extractedData := new(jwtData)
+	extractedData := new(customClaims)
 	token, err = jwt.ParseWithClaims(tokenString, extractedData, func(token *jwt.Token) (interface{}, error) {
 		return []byte(jwtSecret), nil
 	})
@@ -80,9 +94,9 @@ func Test_DecodeJWTWhenInvalidToken(t *testing.T) {
 	c := e.NewContext(req, rec)
 	c.Request().Header.Set("Authorization", "Bearer "+"token")
 
-	extractedData := new(jwtData)
+	extractedData := new(customClaims)
 	err := DecodeJWT(c, extractedData, "testSecret")
-	assert.Equal(t, "token is invalid", err.Error())
+	assert.True(t, errors.Is(err, ErrJWTokenInvalid))
 }
 
 func Test_DecodeJWTWhenExpiredToken(t *testing.T) {
@@ -91,12 +105,12 @@ func Test_DecodeJWTWhenExpiredToken(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	data := &jwtData{
+	data := &customClaims{
 		Name:    "raicart",
 		Age:     uint(18),
 		Hobbies: []string{"football", "basketball"},
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(1 * time.Second).Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(1 * time.Second)),
 		},
 	}
 	token, err := EncodeJWT(data, "testSecret")
@@ -105,7 +119,7 @@ func Test_DecodeJWTWhenExpiredToken(t *testing.T) {
 	c.Request().Header.Set("Authorization", "Bearer "+token)
 
 	time.Sleep(2 * time.Second)
-	extractedData := new(jwtData)
+	extractedData := new(customClaims)
 	err = DecodeJWT(c, extractedData, "testSecret")
-	assert.Equal(t, "token is expired", err.Error())
+	assert.True(t, errors.Is(err, ErrJWTokenExpired))
 }

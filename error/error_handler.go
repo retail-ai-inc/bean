@@ -42,13 +42,16 @@ type errorResp struct {
 type ErrorHandlerFunc func(err error, c echo.Context) (bool, error)
 
 func ValidationErrorHandlerFunc(e error, c echo.Context) (bool, error) {
-	he, ok := e.(*validator.ValidationError)
+	ve, ok := e.(*validator.ValidationError)
 	if !ok {
 		return false, nil
 	}
+
+	c.Logger().Error(ve)
+
 	err := c.JSON(http.StatusBadRequest, errorResp{
 		ErrorCode: API_DATA_VALIDATION_FAILED,
-		Errors:    he.ErrCollection(),
+		Errors:    ve.ErrCollection(),
 	})
 
 	return ok, err
@@ -57,27 +60,29 @@ func ValidationErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 // Default JSON API error handler. The response pattern is like below:
 // `{"errorCode": "1000001", "errorMsg": "some message"}`. You can override this error handler from `start.go`
 func APIErrorHandlerFunc(e error, c echo.Context) (bool, error) {
-	he, ok := e.(*APIError)
+	ae, ok := e.(*APIError)
 	if !ok {
 		return false, nil
 	}
 
-	if he.HTTPStatusCode >= 404 {
-		c.Logger().Error(he.Error())
+	if ae.HTTPStatusCode >= 404 {
+		c.Logger().Error(ae.Error())
 
-		if he.HTTPStatusCode > 404 {
+		if ae.HTTPStatusCode > 404 {
 			// Send error event to sentry if configured.
 			if viper.GetBool("sentry.on") {
 				if hub := sentryecho.GetHubFromContext(c); hub != nil {
-					hub.CaptureException(he)
+					hub.CaptureException(ae)
 				}
 			}
 		}
+	} else {
+		c.Logger().Error(ae)
 	}
 
-	err := c.JSON(he.HTTPStatusCode, errorResp{
-		ErrorCode: he.GlobalErrCode,
-		ErrorMsg:  he.Error(),
+	err := c.JSON(ae.HTTPStatusCode, errorResp{
+		ErrorCode: ae.GlobalErrCode,
+		ErrorMsg:  ae.Error(),
 	})
 
 	return ok, err

@@ -33,7 +33,7 @@ var createCmd = &cobra.Command{
 	Use:       "create",
 	Short:     "Enable user to create new handler, service, repository, command and docker file",
 	Long:      `This command requires a sub command parameter to create a new command, repository, service, handler and docker template.`,
-	Args:      cobra.ExactValidArgs(1),
+	Args:      cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 	ValidArgs: []string{"repo", "service", "handler", "command", "docker"},
 }
 
