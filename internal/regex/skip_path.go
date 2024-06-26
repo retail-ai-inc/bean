@@ -1,13 +1,21 @@
 package regex
 
 import (
+	"fmt"
 	"regexp"
 )
 
 var traceSkipPaths []*regexp.Regexp
 
-func CompileTraceSkipPaths(skipPaths []string) {
+func CompileTraceSkipPaths(skipPaths []string, addPaths ...string) {
+	uniquePaths := make(map[string]struct{})
 	for _, path := range skipPaths {
+		uniquePaths[path] = struct{}{}
+	}
+	for _, path := range addPaths {
+		uniquePaths[path] = struct{}{}
+	}
+	for path := range uniquePaths {
 		traceSkipPaths = append(traceSkipPaths, regexp.MustCompile(path))
 	}
 }
@@ -30,16 +38,34 @@ func MatchAnyTraceSkipPath(path string) bool {
 
 var AccessLogSkipPaths []*regexp.Regexp
 
-func CompileAccessLogSkipPaths(skipPaths []string) {
+func CompileAccessLogSkipPaths(skipPaths []string, addPaths ...string) {
+	uniquePaths := make(map[string]struct{})
 	for _, path := range skipPaths {
+		uniquePaths[path] = struct{}{}
+	}
+	for _, path := range addPaths {
+		uniquePaths[path] = struct{}{}
+	}
+	for path := range uniquePaths {
 		AccessLogSkipPaths = append(AccessLogSkipPaths, regexp.MustCompile(path))
 	}
 }
 
 var PrometheusSkipPaths []*regexp.Regexp
 
-func CompilePrometheusSkipPaths(skipPaths []string) {
+func CompilePrometheusSkipPaths(skipPaths []string, metricsPath string) error {
+
+	if metricsPath == "" {
+		return fmt.Errorf("metrics path is empty")
+	}
+
+	uniquePaths := make(map[string]struct{})
 	for _, path := range skipPaths {
+		uniquePaths[path] = struct{}{}
+	}
+	uniquePaths[metricsPath] = struct{}{}
+	for path := range uniquePaths {
 		PrometheusSkipPaths = append(PrometheusSkipPaths, regexp.MustCompile(path))
 	}
+	return nil
 }
