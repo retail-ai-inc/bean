@@ -381,10 +381,9 @@ func NewEcho() *echo.Echo {
 	// Return `404 Not Found` if a wrong API route been called.
 	e.Use(middleware.MethodNotAllowedAndRouteNotFound())
 
-	const metricsPath = "/metrics" // fixed path for prometheus metrics
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if BeanConfig.AccessLog.On {
-		regex.CompileAccessLogSkipPaths(BeanConfig.AccessLog.SkipEndpoints, metricsPath)
+		regex.CompileAccessLogSkipPaths(BeanConfig.AccessLog.SkipEndpoints)
 		accessLogConfig := middleware.LoggerConfig{
 			Skipper:       pathSkipper(regex.AccessLogSkipPaths),
 			BodyDump:      BeanConfig.AccessLog.BodyDump,
@@ -437,7 +436,7 @@ func NewEcho() *echo.Echo {
 				Timeout: BeanConfig.Sentry.Timeout,
 			}))
 
-			regex.CompileTraceSkipPaths(BeanConfig.Sentry.SkipTracesEndpoints, metricsPath)
+			regex.CompileTraceSkipPaths(BeanConfig.Sentry.SkipTracesEndpoints)
 			if helpers.FloatInRange(BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
 				e.Pre(middleware.Tracer())
 			}
@@ -460,6 +459,7 @@ func NewEcho() *echo.Echo {
 	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
 	// This will help us to integrate `bean's` health into `k8s`.
 	if BeanConfig.Prometheus.On {
+		const metricsPath = "/metrics" // fixed path
 		if err := regex.CompilePrometheusSkipPaths(BeanConfig.Prometheus.SkipEndpoints, metricsPath); err != nil {
 			e.Logger.Fatalf("Prometheus initialization failed: %v. Server 🚀  crash landed. Exiting...\n", err)
 		}
@@ -468,7 +468,7 @@ func NewEcho() *echo.Echo {
 			Subsystem: BeanConfig.ProjectName, // "echo" is set by default if provided empty.
 		}
 		e.Use(echoprometheus.NewMiddlewareWithConfig(conf))
-		e.GET("/metrics", echoprometheus.NewHandler())
+		e.GET(metricsPath, echoprometheus.NewHandler())
 	}
 
 	// Register goroutine pool
