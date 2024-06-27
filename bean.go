@@ -459,13 +459,16 @@ func NewEcho() *echo.Echo {
 	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
 	// This will help us to integrate `bean's` health into `k8s`.
 	if BeanConfig.Prometheus.On {
-		regex.CompilePrometheusSkipPaths(BeanConfig.Prometheus.SkipEndpoints)
+		const metricsPath = "/metrics" // fixed path
+		if err := regex.CompilePrometheusSkipPaths(BeanConfig.Prometheus.SkipEndpoints, metricsPath); err != nil {
+			e.Logger.Fatalf("Prometheus initialization failed: %v. Server 🚀  crash landed. Exiting...\n", err)
+		}
 		conf := echoprometheus.MiddlewareConfig{
 			Skipper:   pathSkipper(regex.PrometheusSkipPaths),
 			Subsystem: BeanConfig.ProjectName, // "echo" is set by default if provided empty.
 		}
 		e.Use(echoprometheus.NewMiddlewareWithConfig(conf))
-		e.GET("/metrics", echoprometheus.NewHandler())
+		e.GET(metricsPath, echoprometheus.NewHandler())
 	}
 
 	// Register goroutine pool
