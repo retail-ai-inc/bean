@@ -1,7 +1,7 @@
 package regex
 
 import (
-	"fmt"
+	"errors"
 	"regexp"
 )
 
@@ -52,7 +52,7 @@ var PrometheusSkipPaths []*regexp.Regexp
 func CompilePrometheusSkipPaths(skipPaths []string, metricsPath string) error {
 
 	if metricsPath == "" {
-		return fmt.Errorf("metrics path is empty")
+		return errors.New("metrics path is empty")
 	}
 
 	uniquePaths := make(map[string]struct{})
