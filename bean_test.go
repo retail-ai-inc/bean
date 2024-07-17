@@ -3,9 +3,15 @@
 package bean
 
 import (
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strconv"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -83,5 +89,197 @@ func (f *fakeError) Error() string {
 func newFakeError(msg string) error {
 	return &fakeError{
 		Message: msg,
+	}
+}
+
+func TestBean_ServeAt(t *testing.T) {
+	type fields struct {
+		sdTimeout time.Duration
+	}
+	tests := []struct {
+		name        string
+		fields      fields
+		wantErr     bool
+		wantLongSdn bool
+		wantConnErr bool
+		wantSuccess bool
+		_           struct{}
+	}{
+		{
+			name: "graceful shutdown success",
+			fields: fields{
+				sdTimeout: 0, // timeout will be 30s by default
+			},
+			wantErr:     false,
+			wantLongSdn: true,
+			wantConnErr: false,
+			wantSuccess: true,
+		},
+		{
+			name: "graceful shutdown timeout",
+			fields: fields{
+				sdTimeout: 1 * time.Second, // Ensure timeout is less than sleep duration
+			},
+			wantErr:     true,
+			wantLongSdn: false,
+			wantConnErr: false,
+			wantSuccess: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := &Bean{
+				Echo:   echo.New(),
+				Config: Config{},
+			}
+			b.Config.HTTP.ShutdownTimeout = tt.fields.sdTimeout
+
+			sleepDur := 3 * time.Second
+			b.Echo.GET("/fake", func(c echo.Context) error {
+				ctx := c.Request().Context()
+				t.Logf("Sleeping for %v\n", sleepDur)
+				select {
+				case <-time.After(sleepDur):
+					t.Logf("Completed sleeping for %v\n", sleepDur)
+					return c.String(http.StatusOK, "OK")
+
+				case <-ctx.Done():
+					t.Logf("Request canceled: %v\n", ctx.Err())
+					return ctx.Err()
+				}
+			})
+
+			// for ping
+			b.Echo.GET("/", func(c echo.Context) error {
+				return c.String(http.StatusOK, "Pong")
+			})
+
+			host := "localhost"
+			port := strconv.Itoa(getFreePort(t))
+			srvErr := make(chan error, 1)
+			go func() {
+				srvErr <- b.ServeAt(host, port)
+				close(srvErr)
+			}()
+
+			ping := func() bool {
+				resp, err := http.Get("http://" + host + ":" + port)
+				if err != nil {
+					return false
+				}
+				defer resp.Body.Close()
+				return resp.StatusCode == http.StatusOK
+			}
+
+			// wait for server to start
+			timeout := 5 * time.Second
+			timer := time.NewTimer(timeout)
+			defer timer.Stop()
+			ticker := time.NewTicker(100 * time.Millisecond)
+			defer ticker.Stop()
+		waitSrv:
+			for {
+				select {
+				case <-timer.C:
+					t.Fatal("timeout waiting for server to start")
+				case <-ticker.C:
+					if ping() {
+						break waitSrv
+					}
+				}
+			}
+
+			// send sleep request
+			type result struct {
+				err     error
+				success bool
+			}
+			readyToSleep := make(chan struct{}, 1)
+			sleepRlt := make(chan result, 1)
+			go func() {
+				readyToSleep <- struct{}{}
+				close(readyToSleep)
+				resp, err := http.Get("http://" + host + ":" + port + "/fake")
+				if err != nil {
+					sleepRlt <- result{err, false}
+					close(sleepRlt)
+					return
+				}
+				defer resp.Body.Close()
+				_, _ = io.ReadAll(resp.Body)
+				sleepRlt <- result{nil, resp.StatusCode == http.StatusOK}
+				close(sleepRlt)
+			}()
+
+			// wait for server to receive request
+			<-readyToSleep
+			time.Sleep(100 * time.Millisecond)
+
+			// measure the time taken for shutdown
+			start := time.Now()
+			// send SIGTERM to server
+			signalTERM(t)
+
+			// check if shutdown is successful
+			err := <-srvErr
+			gotDur := time.Since(start)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Bean.ServeAt() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if (gotDur >= sleepDur) != tt.wantLongSdn {
+				t.Errorf("shutdown took %v, wantLongSdn %v", gotDur, tt.wantLongSdn)
+			}
+			// check if server is down
+			if ping() {
+				t.Fatalf("server is still running after shutdown")
+			}
+
+			timer.Reset(timeout)
+		waitRlt:
+			for {
+				select {
+				case <-timer.C:
+					t.Fatal("timeout waiting for server to start")
+				case gotRlt := <-sleepRlt:
+					if (gotRlt.err != nil) != tt.wantConnErr {
+						t.Errorf("response error = %v, wantErr %v", gotRlt.err, tt.wantConnErr)
+					}
+					if gotRlt.success != tt.wantSuccess {
+						t.Errorf("response success = %v, wantSuccess %v", gotRlt.success, tt.wantSuccess)
+					}
+					break waitRlt
+				}
+			}
+		})
+	}
+}
+
+func getFreePort(t *testing.T) int {
+	t.Helper()
+
+	if addr, rErr := net.ResolveTCPAddr("tcp", "localhost:0"); rErr != nil {
+		t.Fatalf("failed to resolve tcp address: %v", rErr)
+	} else {
+		if ln, lnErr := net.ListenTCP("tcp", addr); lnErr != nil {
+			t.Fatalf("failed to listen on tcp address: %v", lnErr)
+		} else {
+			defer ln.Close()
+			return ln.Addr().(*net.TCPAddr).Port
+		}
+	}
+
+	t.Fatal("failed to get free port")
+	return 0
+}
+
+func signalTERM(t *testing.T) {
+	t.Helper()
+
+	p, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("failed to find process: %v", err)
+	}
+	if err := p.Signal(syscall.SIGTERM); err != nil {
+		t.Fatalf("failed to send signal to process: %v", err)
 	}
 }

@@ -31,9 +31,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -45,6 +47,7 @@ import (
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
 	"github.com/panjf2000/ants/v2"
+	pkgerrors "github.com/pkg/errors"
 	"github.com/retail-ai-inc/bean/v2/echoview"
 	berror "github.com/retail-ai-inc/bean/v2/error"
 	"github.com/retail-ai-inc/bean/v2/goview"
@@ -176,6 +179,7 @@ type Config struct {
 			PrivFile      string
 			MinTLSVersion uint16
 		}
+		ShutdownTimeout time.Duration
 	}
 	NetHttpFastTransporter struct {
 		On                  bool
@@ -501,7 +505,7 @@ func NewEcho() *echo.Echo {
 	return e
 }
 
-func (b *Bean) ServeAt(host, port string) {
+func (b *Bean) ServeAt(host, port string) error {
 	b.Echo.Logger.Info("Starting " + b.Config.Environment + " " + b.Config.ProjectName + " at " + host + ":" + port + "...🚀")
 
 	b.UseErrorHandlerFuncs(berror.DefaultErrorHandlerFunc)
@@ -527,20 +531,67 @@ func (b *Bean) ServeAt(host, port string) {
 	broute.Init(b.Echo)
 
 	// Start the server
-	if b.Config.HTTP.SSL.On {
-		s.TLSConfig = &tls.Config{
-			MinVersion: b.Config.HTTP.SSL.MinTLSVersion,
-		}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-		if err := s.ListenAndServeTLS(b.Config.HTTP.SSL.CertFile, b.Config.HTTP.SSL.PrivFile); err != nil && err != http.ErrServerClosed {
-			b.Echo.Logger.Fatal(err)
+	errCh := make(chan error, 1)
+	go func() {
+		var err error
+		if b.Config.HTTP.SSL.On {
+			s.TLSConfig = &tls.Config{
+				MinVersion: b.Config.HTTP.SSL.MinTLSVersion,
+			}
+			err = s.ListenAndServeTLS(b.Config.HTTP.SSL.CertFile, b.Config.HTTP.SSL.PrivFile)
+		} else {
+			err = s.ListenAndServe()
 		}
+		// If shutdown is called, the server will return `http.ErrServerClosed` immediately.
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+		close(errCh)
+	}()
 
-	} else {
-		if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			b.Echo.Logger.Fatal(err)
+	var err error
+	select {
+	case srvErr := <-errCh:
+		if srvErr != nil {
+			return pkgerrors.Wrapf(srvErr, "error during server startup")
+		}
+	case <-ctx.Done(): // Wait for the interrupt signal or termination signal.
+		var timeout time.Duration
+		if b.Config.HTTP.ShutdownTimeout > 0 {
+			timeout = b.Config.HTTP.ShutdownTimeout
+		} else {
+			timeout = 30 * time.Second
+		}
+		sdnCtx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		b.Echo.Logger.Info("Shutting down server...🛬")
+		err = s.Shutdown(sdnCtx)
+		if err != nil {
+			// Even after timeout, shutdown keeps handling ongoing requests in the background
+			// while returning timeout error until main goroutine exits.
+			err = pkgerrors.Wrapf(err, "failed to gracefully shutdown")
+		} else {
+			b.Echo.Logger.Info("Server has been shutdown gracefully.")
 		}
 	}
+
+	// Check if there might be any other error than `http.ErrServerClosed`
+	// occurred during the server startup or shutdown.
+	if srvErr := <-errCh; srvErr != nil {
+		if err != nil {
+			return errors.Join(err, srvErr)
+		}
+		return pkgerrors.Wrapf(srvErr, "error during server shutdown")
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (b *Bean) UseMiddlewares(middlewares ...echo.MiddlewareFunc) {
