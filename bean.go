@@ -28,6 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -45,7 +46,7 @@ import (
 	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
-	"github.com/labstack/gommon/log"
+	elog "github.com/labstack/gommon/log"
 	"github.com/panjf2000/ants/v2"
 	pkgerrors "github.com/pkg/errors"
 	"github.com/retail-ai-inc/bean/v2/echoview"
@@ -61,6 +62,7 @@ import (
 	"github.com/retail-ai-inc/bean/v2/internal/validator"
 	"github.com/retail-ai-inc/bean/v2/store/memory"
 	"github.com/rs/dnscache"
+	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
 )
@@ -229,12 +231,16 @@ var BeanLogger echo.Logger
 var TenantAlterDbHostParam string
 
 // Hold the useful configuration settings of bean so that we can use it quickly from anywhere.
-var BeanConfig Config
+var BeanConfig *Config
 
 // Support a DNS cache version of the net/http Transport.
 var NetHttpFastTransporter *http.Transport
 
 func New() (b *Bean) {
+
+	if BeanConfig == nil {
+		log.Fatal("config is not loaded")
+	}
 
 	// Create a new echo instance
 	e := NewEcho()
@@ -242,7 +248,7 @@ func New() (b *Bean) {
 	b = &Bean{
 		Echo:     e,
 		validate: validatorV10.New(),
-		Config:   BeanConfig,
+		Config:   *BeanConfig,
 	}
 
 	// If `NetHttpFastTransporter` is on from env.json then initialize it.
@@ -327,6 +333,10 @@ func New() (b *Bean) {
 
 func NewEcho() *echo.Echo {
 
+	if BeanConfig == nil {
+		log.Fatal("config is not loaded")
+	}
+
 	e := echo.New()
 
 	// Hide default `Echo` banner during startup.
@@ -355,7 +365,7 @@ func NewEcho() *echo.Echo {
 			e.Logger.SetOutput(file)
 		}
 	}
-	e.Logger.SetLevel(log.DEBUG)
+	e.Logger.SetLevel(elog.DEBUG)
 
 	// Initialize `BeanLogger` global variable using `e.Logger`.
 	BeanLogger = e.Logger
@@ -826,4 +836,36 @@ func ContextTimeout(timeout time.Duration) echo.MiddlewareFunc {
 		Timeout:      timeout,
 		ErrorHandler: timeoutErrorHandler,
 	})
+}
+
+// LoadConfig parses a given config file into global `BeanConfig` instance.
+func LoadConfig(filename string) (*Config, error) {
+
+	ext := filepath.Ext(filename)
+	if ext == "" {
+		return nil, fmt.Errorf("file extension is missing in the filename")
+	}
+
+	absPath, err := filepath.Abs(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path: %v", err)
+	}
+	path := filepath.Dir(absPath)
+	name := filepath.Base(filename[:len(filename)-len(ext)])
+
+	viper.AddConfigPath(path)
+	viper.SetConfigType(ext[1:])
+	viper.SetConfigName(name)
+
+	if err := viper.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("error reading config file, %s", err)
+	}
+
+	BeanConfig = &Config{}
+	if err := viper.Unmarshal(BeanConfig); err != nil {
+		BeanConfig = nil
+		return nil, fmt.Errorf("unable to decode into struct, %v", err)
+	}
+
+	return BeanConfig, nil
 }
