@@ -3,6 +3,7 @@ package test
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/retail-ai-inc/bean/v2"
 	"github.com/spf13/viper"
@@ -40,14 +41,27 @@ type CfgOption func(*TestConfig)
 
 // SetupConfig initializes the configuration and accepts optional configuration functions.
 // please ensure that config file contains `test` section.
-func SetupConfig(configPath string, opts ...CfgOption) error {
+func SetupConfig(filename string, opts ...CfgOption) error {
 	for _, opt := range opts {
 		opt(&TestCfg)
 	}
 
-	viper.AddConfigPath(configPath)
-	viper.SetConfigType("json")
-	viper.SetConfigName("env")
+	ext := filepath.Ext(filename)
+	if ext == "" {
+		return fmt.Errorf("file extension is missing in the filename")
+	}
+
+	absPath, err := filepath.Abs(filename)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path: %v", err)
+	}
+	path := filepath.Dir(absPath)
+	name := filepath.Base(filename[:len(filename)-len(ext)])
+
+	viper.AddConfigPath(path)
+	viper.SetConfigType(ext[1:])
+	viper.SetConfigName(name)
+
 	if err := viper.ReadInConfig(); err != nil {
 		return err
 	}
