@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var timeoutCtx, _ = context.WithTimeout(context.Background(), time.Second)
+var ctxTimeout1s, _ = context.WithTimeoutCause(context.Background(), time.Second, errors.New("single flight timeout"))
 
 func TestSingleDo(t *testing.T) {
 	type args[T any] struct {
@@ -74,7 +74,7 @@ func TestSingleDo(t *testing.T) {
 		{
 			name: "error timeout",
 			args: args[string]{
-				ctx: timeoutCtx,
+				ctx: ctxTimeout1s,
 				key: "test4",
 				call: func() (string, error) {
 					time.Sleep(time.Millisecond * 500)
@@ -89,7 +89,7 @@ func TestSingleDo(t *testing.T) {
 		{
 			name: "context deadline exceeded",
 			args: args[string]{
-				ctx: timeoutCtx,
+				ctx: ctxTimeout1s,
 				key: "test5",
 				call: func() (string, error) {
 					time.Sleep(time.Millisecond * 500)
@@ -104,7 +104,7 @@ func TestSingleDo(t *testing.T) {
 		{
 			name: "type error",
 			args: args[string]{
-				ctx: timeoutCtx,
+				ctx: ctxTimeout1s,
 				key: "test6",
 				call: func() (string, error) {
 					return "123", nil
@@ -113,7 +113,7 @@ func TestSingleDo(t *testing.T) {
 				ttl:   nil,
 			},
 			previous: &args[int]{
-				ctx: timeoutCtx,
+				ctx: ctxTimeout1s,
 				key: "test6",
 				call: func() (int, error) {
 					time.Sleep(time.Millisecond * 500)
@@ -224,7 +224,7 @@ func TestSingleDoChan(t *testing.T) {
 		{
 			name: "timeout failed",
 			args: args[string]{
-				ctx: timeoutCtx,
+				ctx: ctxTimeout1s,
 				key: "test5",
 				call: func() (string, error) {
 					time.Sleep(time.Second * 2)
@@ -239,7 +239,7 @@ func TestSingleDoChan(t *testing.T) {
 		{
 			name: "error timeout",
 			args: args[string]{
-				ctx: timeoutCtx,
+				ctx: ctxTimeout1s,
 				key: "test6",
 				call: func() (string, error) {
 					time.Sleep(time.Millisecond * 500)
@@ -254,7 +254,7 @@ func TestSingleDoChan(t *testing.T) {
 		{
 			name: "context deadline exceeded",
 			args: args[string]{
-				ctx: timeoutCtx,
+				ctx: ctxTimeout1s,
 				key: "test7",
 				call: func() (string, error) {
 					time.Sleep(time.Millisecond * 500)
@@ -269,7 +269,7 @@ func TestSingleDoChan(t *testing.T) {
 		{
 			name: "type error",
 			args: args[string]{
-				ctx: timeoutCtx,
+				ctx: ctxTimeout1s,
 				key: "test8",
 				call: func() (string, error) {
 					return "123", nil
@@ -278,7 +278,7 @@ func TestSingleDoChan(t *testing.T) {
 				ttl:   nil,
 			},
 			previous: &args[int]{
-				ctx: timeoutCtx,
+				ctx: ctxTimeout1s,
 				key: "test8",
 				call: func() (int, error) {
 					time.Sleep(time.Millisecond * 500)
@@ -309,6 +309,8 @@ func TestSingleDoChan(t *testing.T) {
 			if !reflect.DeepEqual(gotData, tt.wantData) {
 				t.Errorf("SingleDoChan() gotData = %v, want %v", gotData, tt.wantData)
 			}
+			fmt.Printf("[%s] gotData: %+v\n", tt.name, gotData)
+			fmt.Printf("[%s] error: %+v\n", tt.name, err)
 			if tt.args.retry > 0 && err != nil {
 				// waiting for goroutine finish
 				time.Sleep(2 * time.Second)
