@@ -1,7 +1,7 @@
 GOPATH=$(shell go env GOPATH)
-# v1.55.2 is the latest version of golangci-lint project based on Go 1.20
-# change it according to the Go version this project is using
-GOLANGCI_LINT_VERSION=v1.55.2
+# GOLANGCI_LINT_VERSION is the latest version of golangci-lint
+# adjusted to match the Go version used in this project
+GOLANGCI_LINT_VERSION=v1.59.1
 
 all: lint test build
 

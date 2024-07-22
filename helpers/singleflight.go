@@ -2,10 +2,11 @@ package helpers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
+	pkgerrors "github.com/pkg/errors"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -24,6 +25,9 @@ func SingleDo[T any](ctx context.Context, key string, call func() (T, error), re
 			defer forgetTimer.Stop()
 		}
 
+		timer := time.NewTimer(waitTime)
+		defer timer.Stop()
+
 		for i := 0; i <= int(retry); i++ {
 			result, err = call()
 			if err == nil {
@@ -33,11 +37,11 @@ func SingleDo[T any](ctx context.Context, key string, call func() (T, error), re
 				return nil, err
 			}
 
-			waitTime := JitterBackoff(waitTime, maxWaitTime, i)
+			timer.Reset(JitterBackoff(waitTime, maxWaitTime, i))
 			select {
-			case <-time.After(waitTime):
+			case <-timer.C:
 			case <-ctx.Done():
-				return nil, err
+				return nil, errors.Join(ctx.Err(), context.Cause(ctx), err)
 			}
 		}
 		return nil, err
@@ -50,7 +54,7 @@ func SingleDo[T any](ctx context.Context, key string, call func() (T, error), re
 
 	val, ok := result.(T)
 	if !ok {
-		err = errors.WithStack(fmt.Errorf("expected type %T but got type %T", data, result))
+		err = pkgerrors.WithStack(fmt.Errorf("expected type %T but got type %T", data, result))
 		return
 	}
 	return val, nil
@@ -60,7 +64,7 @@ func SingleDoChan[T any](ctx context.Context, key string, call func() (T, error)
 	result := singleFlightGroup.DoChan(key, func() (result interface{}, err error) {
 		defer func() {
 			if e := recover(); e != nil {
-				err = errors.WithStack(fmt.Errorf("%v", e))
+				err = pkgerrors.WithStack(fmt.Errorf("%v", e))
 			}
 		}()
 
@@ -71,6 +75,9 @@ func SingleDoChan[T any](ctx context.Context, key string, call func() (T, error)
 			defer forgetTimer.Stop()
 		}
 
+		timer := time.NewTimer(waitTime)
+		defer timer.Stop()
+
 		for i := 0; i <= int(retry); i++ {
 			result, err = call()
 			if err == nil {
@@ -80,9 +87,9 @@ func SingleDoChan[T any](ctx context.Context, key string, call func() (T, error)
 				return nil, err
 			}
 
-			waitTime := JitterBackoff(waitTime, maxWaitTime, i)
+			timer.Reset(JitterBackoff(waitTime, maxWaitTime, i))
 			select {
-			case <-time.After(waitTime):
+			case <-timer.C:
 			case <-ctx.Done():
 				return nil, err
 			}
@@ -98,12 +105,12 @@ func SingleDoChan[T any](ctx context.Context, key string, call func() (T, error)
 		}
 		val, ok := r.Val.(T)
 		if !ok {
-			err = errors.WithStack(fmt.Errorf("expected type %T but got type %T", data, r.Val))
+			err = pkgerrors.WithStack(fmt.Errorf("expected type %T but got type %T", data, r.Val))
 			return
 		}
 		return val, nil
 	case <-ctx.Done():
-		err = errors.WithStack(ctx.Err())
+		err = pkgerrors.WithStack(errors.Join(ctx.Err(), context.Cause(ctx)))
 		return
 	}
 }
