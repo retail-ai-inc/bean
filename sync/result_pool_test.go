@@ -29,6 +29,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -37,8 +39,7 @@ import (
 	"github.com/retail-ai-inc/bean/v2/trace"
 )
 
-func Test_Pool(t *testing.T) {
-
+func Test_ResultPool(t *testing.T) {
 	bean.BeanConfig = &bean.Config{
 		Sentry: bean.SentryConfig{
 			On:               true,
@@ -60,73 +61,103 @@ func Test_Pool(t *testing.T) {
 
 	type args struct {
 		ctx   context.Context
-		opts  []sync.PoolOption
-		tasks []func(context.Context) error
+		opts  []sync.ResultPoolOption
+		tasks []func(context.Context) (result, error)
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
+		name        string
+		args        args
+		wantCertain bool
+		want        []result
+		wantErr     bool
 	}{
 		{
 			name: "go tasks with request",
 			args: args{
 				ctx: context.Background(),
-				opts: []sync.PoolOption{
-					sync.WithRequest(req),
+				opts: []sync.ResultPoolOption{
+					sync.WithRltRequest(req),
 				},
-				tasks: genTasks(t, taskDur, n, n, n, n, n),
+				tasks: genRltTasks(t, taskDur, n, n, n, n, n),
 			},
-			wantErr: false,
+			wantCertain: true,
+			want:        []result{{v: 0}, {v: 1}, {v: 2}, {v: 3}, {v: 4}},
+			wantErr:     false,
 		},
 		{
 			name: "go tasks with max less than tasks",
 			args: args{
 				ctx: context.Background(),
-				opts: []sync.PoolOption{
-					sync.WithMaxGoroutines(2),
+				opts: []sync.ResultPoolOption{
+					sync.WithRltMaxGoroutines(2),
 				},
-				tasks: genTasks(t, taskDur, n, n, n, n, n),
+				tasks: genRltTasks(t, taskDur, n, n, n, n, n),
 			},
-			wantErr: false,
+			wantCertain: true,
+			want:        []result{{v: 0}, {v: 1}, {v: 2}, {v: 3}, {v: 4}},
+			wantErr:     false,
 		},
 		{
 			name: "go tasks with errors",
 			args: args{
 				ctx:   context.Background(),
 				opts:  nil,
-				tasks: genTasks(t, taskDur, n, e, n, n, e),
+				tasks: genRltTasks(t, taskDur, n, e, n, n, e),
 			},
-			wantErr: true,
+			wantCertain: true,
+			want:        []result{{v: 0}, {v: 2}, {v: 3}},
+			wantErr:     true,
 		},
 		{
 			name: "go tasks with panic",
 			args: args{
 				ctx:   context.Background(),
 				opts:  nil,
-				tasks: genTasks(t, taskDur, n, n, p, n, n),
+				tasks: genRltTasks(t, taskDur, n, n, p, n, n),
 			},
-			wantErr: true,
+			wantCertain: true,
+			want:        []result{{v: 0}, {v: 1}, {v: 3}, {v: 4}},
+			wantErr:     true,
 		},
 		{
 			name: "go tasks with timeout",
 			args: args{
 				ctx:   ctxTimeout,
 				opts:  nil,
-				tasks: genTasks(t, taskDur, n, n, n, n, n),
+				tasks: genRltTasks(t, taskDur, n, n, n, n, n),
 			},
-			wantErr: true,
+			wantCertain: true,
+			want:        nil,
+			wantErr:     true,
 		},
 		{
 			name: "go tasks with cancel on first error",
 			args: args{
 				ctx: context.Background(),
-				opts: []sync.PoolOption{
-					sync.WithCancelOnFirstErr(),
+				opts: []sync.ResultPoolOption{
+					sync.WithRltCancelOnFirstErr(),
 				},
-				tasks: genTasks(t, taskDur, n, n, e, n, e),
+				tasks: genRltTasks(t, taskDur, n, n, e, n, n),
 			},
+			// Due to the cancel on first error option, the results are uncertain.
+			// We have no idea which tasks will be done before the first error is returned by a task with error.
+			wantCertain: false,
+			// Skip assertion for uncertain results
+			want:    []result{},
 			wantErr: true,
+		},
+		{
+			name: "go tasks with errored results",
+			args: args{
+				ctx: context.Background(),
+				opts: []sync.ResultPoolOption{
+					sync.WithCollectErroredRlts(),
+				},
+				tasks: genRltTasks(t, taskDur, n, e, n, n, e),
+			},
+			wantCertain: true,
+			want:        []result{{v: 0}, {v: 1}, {v: 2}, {v: 3}, {v: 4}},
+			wantErr:     true,
 		},
 	}
 	for _, tt := range tests {
@@ -134,7 +165,7 @@ func Test_Pool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			pool := sync.NewPool(tt.args.ctx, tt.args.opts...)
+			pool := sync.NewResultPool[result](tt.args.ctx, tt.args.opts...)
 
 			for _, task := range tt.args.tasks {
 				pool.Go(task)
@@ -153,74 +184,81 @@ func Test_Pool(t *testing.T) {
 			}
 			_ = something(tt.args.ctx)
 
-			err := pool.Wait()
+			results, err := pool.Wait()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GoPools() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if tt.wantCertain {
+				// Sort results by the `v` field
+				sort.Slice(results, func(i, j int) bool {
+					return results[i].v < results[j].v
+				})
+
+				if !reflect.DeepEqual(results, tt.want) {
+					t.Errorf("GoPools() results = %v, want %v", results, tt.want)
+				}
 			}
 		})
 	}
 }
 
-type taskType string
+type result struct {
+	v int
+}
 
-const (
-	n taskType = "normal"
-	e taskType = "error"
-	p taskType = "panic"
-)
-
-func genTasks(t *testing.T, dur time.Duration, types ...taskType) []func(context.Context) error {
+func genRltTasks(t *testing.T, dur time.Duration, types ...taskType) []func(context.Context) (result, error) {
 	t.Helper()
 
 	if dur < 0 {
 		t.Fatalf("task dur is less than 0")
 	}
 
-	tasks := make([]func(context.Context) error, 0, len(types))
+	tasks := make([]func(context.Context) (result, error), 0, len(types))
 
 	for i, typ := range types {
 		i := i
 		switch typ {
 		case n:
-			tasks = append(tasks, func(c context.Context) error {
+			tasks = append(tasks, func(c context.Context) (result, error) {
 				ctx, finish := trace.StartSpan(c, fmt.Sprintf("task %d", i))
 				defer finish()
 
 				select {
 				case <-ctx.Done():
-					return context.Cause(ctx)
+					return result{v: i}, context.Cause(ctx)
 				default:
 				}
 				fmt.Printf("task %d started for %v\n", i, dur)
 				time.Sleep(dur)
 				fmt.Printf("task %d executed\n", i)
 
-				return nil
+				return result{v: i}, nil
 			})
 
 		case e:
-			tasks = append(tasks, func(c context.Context) error {
+			tasks = append(tasks, func(c context.Context) (result, error) {
 				ctx, finish := trace.StartSpan(c, fmt.Sprintf("task error %d", i))
 				defer finish()
 
 				select {
 				case <-ctx.Done():
-					return context.Cause(ctx)
+					return result{v: i}, context.Cause(ctx)
 				default:
 				}
 				fmt.Printf("task error %d started\n", i)
 
-				return errors.New("simulated task error")
+				return result{v: i}, errors.New("simulated task error")
 			})
 
 		case p:
-			tasks = append(tasks, func(c context.Context) error {
+			tasks = append(tasks, func(c context.Context) (result, error) {
 				ctx, finish := trace.StartSpan(c, fmt.Sprintf("task panic %d", i))
 				defer finish()
 
 				select {
 				case <-ctx.Done():
-					return context.Cause(ctx)
+					return result{v: i}, context.Cause(ctx)
 				default:
 				}
 				fmt.Printf("task panic %d started\n", i)
