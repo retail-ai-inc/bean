@@ -28,7 +28,7 @@ type Pool struct {
 func NewPool(ctx context.Context, opts ...PoolOption) *Pool {
 
 	// set default options
-	pl := &poolOptions{
+	plOpts := &poolOptions{
 		req: &http.Request{
 			Method: "",
 			URL:    &url.URL{},
@@ -37,7 +37,7 @@ func NewPool(ctx context.Context, opts ...PoolOption) *Pool {
 	}
 
 	for _, opt := range opts {
-		opt(pl)
+		opt(plOpts)
 	}
 
 	// set setry transaction or span
@@ -48,11 +48,11 @@ func NewPool(ctx context.Context, opts ...PoolOption) *Pool {
 			hub = sentry.CurrentHub().Clone()
 		}
 
-		hub.Scope().SetRequest(pl.req)
+		hub.Scope().SetRequest(plOpts.req)
 		ctx = sentry.SetHubOnContext(ctx, hub)
 
 		if bean.BeanConfig.Sentry.TracesSampleRate > 0.0 {
-			urlPath := pl.req.URL.Path
+			urlPath := plOpts.req.URL.Path
 
 			functionName := "unknown function"
 			if bean.BeanConfig.Sentry.On && bean.BeanConfig.Sentry.TracesSampleRate > 0.0 {
@@ -61,8 +61,8 @@ func NewPool(ctx context.Context, opts ...PoolOption) *Pool {
 				}
 			}
 			span = sentry.StartSpan(ctx, "sync",
-				sentry.WithTransactionName(fmt.Sprintf("%s %s SYNC", pl.req.Method, urlPath)),
-				sentry.ContinueFromRequest(pl.req),
+				sentry.WithTransactionName(fmt.Sprintf("%s %s SYNC", plOpts.req.Method, urlPath)),
+				sentry.ContinueFromRequest(plOpts.req),
 				sentry.WithDescription(functionName),
 			)
 
@@ -76,15 +76,18 @@ func NewPool(ctx context.Context, opts ...PoolOption) *Pool {
 		ctx = span.Context()
 	}
 
-	var poolCtx *pool.ContextPool
-	if pl.max > 0 {
-		poolCtx = pool.New().WithErrors().WithContext(ctx).WithMaxGoroutines(pl.max)
+	var pl *pool.ContextPool
+	if plOpts.cancelOnFirstErr {
+		pl = pool.New().WithContext(ctx).WithFirstError().WithCancelOnError()
 	} else {
-		poolCtx = pool.New().WithErrors().WithContext(ctx)
+		pl = pool.New().WithErrors().WithContext(ctx)
+	}
+	if plOpts.max > 0 {
+		pl.WithMaxGoroutines(plOpts.max)
 	}
 
 	return &Pool{
-		pool: poolCtx,
+		pool: pl,
 		span: span,
 	}
 }
@@ -93,8 +96,9 @@ func NewPool(ctx context.Context, opts ...PoolOption) *Pool {
 type PoolOption func(*poolOptions)
 
 type poolOptions struct {
-	max int
-	req *http.Request
+	max              int
+	req              *http.Request
+	cancelOnFirstErr bool
 }
 
 // WithRequest sets a http request for sentry tracing.
@@ -108,6 +112,13 @@ func WithRequest(req *http.Request) PoolOption {
 func WithMaxGoroutines(max int) PoolOption {
 	return func(opts *poolOptions) {
 		opts.max = max
+	}
+}
+
+// WithCancelOnFirstErr cancels all tasks when the first error occurs.
+func WithCancelOnFirstErr() PoolOption {
+	return func(opts *poolOptions) {
+		opts.cancelOnFirstErr = true
 	}
 }
 
@@ -150,7 +161,7 @@ func (p *Pool) Go(f func(ctx context.Context) error) {
 	})
 }
 
-// Wait waits for all tasks to finish and get multiple joined errors if any.
+// Wait waits for all tasks to finish and get an error (or multi joined errors) if any.
 func (p *Pool) Wait() error {
 	defer func() {
 		if p.span != nil {

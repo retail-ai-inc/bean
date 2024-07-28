@@ -48,6 +48,10 @@ func Test_Pool(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/hoge", nil)
 
+	taskDur := time.Duration(100) * time.Millisecond
+	if taskDur < 0 {
+		t.Fatalf("task dur is less than 0")
+	}
 	task := func(c context.Context) error {
 		ctx, finish := trace.StartSpan(c, "task")
 		defer finish()
@@ -57,9 +61,8 @@ func Test_Pool(t *testing.T) {
 			return context.Cause(ctx)
 		default:
 		}
-		dur := time.Duration(100) * time.Millisecond
-		fmt.Printf("task started for %v\n", dur)
-		time.Sleep(dur)
+		fmt.Printf("task started for %v\n", taskDur)
+		time.Sleep(taskDur)
 		fmt.Println("task executed")
 
 		return nil
@@ -74,6 +77,7 @@ func Test_Pool(t *testing.T) {
 			return context.Cause(ctx)
 		default:
 		}
+		fmt.Println("task error started")
 
 		return errors.New("simulated task error")
 	}
@@ -87,15 +91,22 @@ func Test_Pool(t *testing.T) {
 			return context.Cause(ctx)
 		default:
 		}
+		fmt.Println("task panic started")
 
 		panic("simulated task panic")
 	}
 
-	ctxTimeout, _ := context.WithTimeoutCause(
+	shorterDurThanTask := taskDur / 10
+	if shorterDurThanTask < 0 {
+		t.Fatalf("shorter dur than task is less than 0")
+	}
+
+	ctxTimeout, cancel := context.WithTimeoutCause(
 		context.Background(),
 		time.Duration(50)*time.Millisecond,
 		errors.New("simulated context timeout"),
 	)
+	defer cancel()
 
 	type args struct {
 		ctx   context.Context
@@ -166,9 +177,25 @@ func Test_Pool(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "go tasks with cancel on first error",
+			args: args{
+				ctx: context.Background(),
+				opts: []sync.PoolOption{
+					sync.WithCancelOnFirstErr(),
+				},
+				tasks: []func(context.Context) error{
+					task, taskErr, task, task, taskErr,
+				},
+			},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			pool := sync.NewPool(tt.args.ctx, tt.args.opts...)
 
 			for _, task := range tt.args.tasks {
