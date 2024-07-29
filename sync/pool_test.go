@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,12 +49,12 @@ func Test_Pool(t *testing.T) {
 
 	var (
 		req                = httptest.NewRequest(http.MethodGet, "/hoge", nil)
-		taskDur            = time.Duration(100) * time.Millisecond
+		taskDur            = time.Duration(50) * time.Millisecond
 		shorterDur         = taskDur / 10
 		ctxTimeout, cancel = context.WithTimeoutCause(
 			context.Background(),
 			shorterDur,
-			errors.New("simulated context timeout"),
+			ErrTimeout,
 		)
 	)
 	defer cancel()
@@ -64,9 +65,9 @@ func Test_Pool(t *testing.T) {
 		tasks []func(context.Context) error
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
+		name     string
+		args     args
+		errCount map[resultType]int
 	}{
 		{
 			name: "go tasks with request",
@@ -77,7 +78,7 @@ func Test_Pool(t *testing.T) {
 				},
 				tasks: genTasks(t, taskDur, n, n, n, n, n),
 			},
-			wantErr: false,
+			errCount: nil,
 		},
 		{
 			name: "go tasks with max less than tasks",
@@ -88,7 +89,7 @@ func Test_Pool(t *testing.T) {
 				},
 				tasks: genTasks(t, taskDur, n, n, n, n, n),
 			},
-			wantErr: false,
+			errCount: nil,
 		},
 		{
 			name: "go tasks with errors",
@@ -97,7 +98,9 @@ func Test_Pool(t *testing.T) {
 				opts:  nil,
 				tasks: genTasks(t, taskDur, n, e, n, n, e),
 			},
-			wantErr: true,
+			errCount: map[resultType]int{
+				e: 2,
+			},
 		},
 		{
 			name: "go tasks with panic",
@@ -106,7 +109,9 @@ func Test_Pool(t *testing.T) {
 				opts:  nil,
 				tasks: genTasks(t, taskDur, n, n, p, n, n),
 			},
-			wantErr: true,
+			errCount: map[resultType]int{
+				p: 1,
+			},
 		},
 		{
 			name: "go tasks with timeout",
@@ -115,7 +120,9 @@ func Test_Pool(t *testing.T) {
 				opts:  nil,
 				tasks: genTasks(t, taskDur, n, n, n, n, n),
 			},
-			wantErr: true,
+			errCount: map[resultType]int{
+				pto: 5,
+			},
 		},
 		{
 			name: "go tasks with cancel on first error",
@@ -126,13 +133,16 @@ func Test_Pool(t *testing.T) {
 				},
 				tasks: genTasks(t, taskDur, n, n, e, n, e),
 			},
-			wantErr: true,
+			errCount: map[resultType]int{
+				e: 1,
+			},
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
+		// tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
+			// TODO: Investigate why timeout case returns context.Canceled instead of ErrTimeout when running in parallel.
 
 			pool := sync.NewPool(tt.args.ctx, tt.args.opts...)
 
@@ -140,36 +150,28 @@ func Test_Pool(t *testing.T) {
 				pool.Go(task)
 			}
 
-			something := func(ctx context.Context) error {
-				_, finish := trace.StartSpan(ctx, "something")
-				defer finish()
-
-				dur := time.Duration(120) * time.Millisecond
-				fmt.Printf("something started for %v\n", dur)
-				time.Sleep(dur)
-				fmt.Println("something executed")
-
-				return nil
-			}
-			_ = something(tt.args.ctx)
-
 			err := pool.Wait()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GoPools() error = %v, wantErr %v", err, tt.wantErr)
-			}
+			checkErr(t, tt.errCount, err)
 		})
 	}
 }
 
-type taskType string
+type resultType string
 
 const (
-	n taskType = "normal"
-	e taskType = "error"
-	p taskType = "panic"
+	n   resultType = "normal"
+	e   resultType = "error"
+	p   resultType = "panic"
+	pto resultType = "parent timeout"
 )
 
-func genTasks(t *testing.T, dur time.Duration, types ...taskType) []func(context.Context) error {
+var (
+	ErrTask    = errors.New("simulated task error")
+	ErrTimeout = errors.New("simulated parent context timeout")
+	PanicMsg   = "simulated task panic"
+)
+
+func genTasks(t *testing.T, dur time.Duration, types ...resultType) []func(context.Context) error {
 	t.Helper()
 
 	if dur < 0 {
@@ -210,7 +212,7 @@ func genTasks(t *testing.T, dur time.Duration, types ...taskType) []func(context
 				}
 				fmt.Printf("task error %d started\n", i)
 
-				return errors.New("simulated task error")
+				return ErrTask
 			})
 
 		case p:
@@ -225,7 +227,7 @@ func genTasks(t *testing.T, dur time.Duration, types ...taskType) []func(context
 				}
 				fmt.Printf("task panic %d started\n", i)
 
-				panic("simulated task panic")
+				panic(PanicMsg)
 			})
 
 		default:
@@ -234,4 +236,47 @@ func genTasks(t *testing.T, dur time.Duration, types ...taskType) []func(context
 	}
 
 	return tasks
+}
+
+func checkErr(t *testing.T, errCount map[resultType]int, err error) {
+	t.Helper()
+
+	if err == nil && errCount != nil {
+		t.Errorf("expected error but got nil")
+		return
+	}
+
+	if err != nil && errCount == nil {
+		t.Errorf("expected nil error but got %v", err)
+		return
+	}
+
+	if err == nil && errCount == nil {
+		// No error expected.
+		return
+	}
+
+	// Split the error message by new line bacause it can be a multi-joined error.
+	eMsgs := strings.Split(err.Error(), "\n")
+
+	// Decrement the error count by the error result type.
+	for _, msg := range eMsgs {
+		switch {
+		case strings.Contains(msg, ErrTask.Error()):
+			errCount[e]--
+		case strings.Contains(msg, PanicMsg):
+			errCount[p]--
+		case strings.Contains(msg, ErrTimeout.Error()):
+			errCount[pto]--
+		default:
+			// Ignore other cases because there are many error messasages in a panic error.
+		}
+	}
+
+	// Check if the error count is zero.
+	for typ, count := range errCount {
+		if count != 0 {
+			t.Errorf("expected %d %s error but got %d", count, typ, count)
+		}
+	}
 }
