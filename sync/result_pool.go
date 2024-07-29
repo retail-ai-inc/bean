@@ -67,7 +67,7 @@ func NewResultPool[T any](ctx context.Context, opts ...ResultPoolOption) ResultP
 		opt(plOpts)
 	}
 
-	// set setry transaction or span
+	// set sentry transaction or span
 	span := setSpan(ctx, plOpts.pl.req)
 	if span != nil {
 		ctx = span.Context()
