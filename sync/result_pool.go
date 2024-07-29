@@ -88,7 +88,7 @@ func NewResultPool[T any](ctx context.Context, opts ...ResultPoolOption) ResultP
 
 	return ResultPool[T]{
 		pool: pl,
-		span: nil,
+		span: span,
 	}
 }
 
