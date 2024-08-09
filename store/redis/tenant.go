@@ -63,6 +63,7 @@ type TenantCache interface {
 	Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error
 	Pipeline(tenantID uint64) redis.Pipeliner
 	Pipelined(c context.Context, tenantID uint64, fn func(redis.Pipeliner) error) ([]redis.Cmder, error)
+	Eval(c context.Context, tenantID uint64, luaScript string, keyCount int, keysAndArgs ...interface{}) (interface{}, error)
 }
 
 type tenantCache struct {
@@ -466,4 +467,11 @@ func (t *tenantCache) Pipelined(c context.Context, tenantID uint64, fn func(redi
 	defer finish()
 
 	return t.clients[tenantID].Pipelined(c, fn)
+}
+
+func (t *tenantCache) Eval(c context.Context, tenantID uint64, luaScript string, keyCount int, keysAndArgs ...interface{}) (interface{}, error) {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	return t.clients[tenantID].Eval(c, dbdrivers.NewScript(keyCount, luaScript), keysAndArgs)
 }
