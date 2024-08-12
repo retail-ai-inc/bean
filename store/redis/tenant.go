@@ -482,7 +482,11 @@ func (t *tenantCache) Eval(c context.Context, tenantID uint64, script *Script, k
 
 	if script.KeyCount > 0 {
 		for i := 0; i < script.KeyCount; i++ {
-			keys[i] = keysAndArgs[i].(string)
+			if t.prefix != "" {
+				keys[i] = t.prefix + t.sep + keysAndArgs[i].(string)
+			} else {
+				keys[i] = keysAndArgs[i].(string)
+			}
 		}
 		args = keysAndArgs[script.KeyCount:]
 	}
