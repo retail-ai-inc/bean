@@ -24,7 +24,11 @@ package redis
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
+	"io"
+	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -63,7 +67,7 @@ type TenantCache interface {
 	Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error
 	Pipeline(tenantID uint64) redis.Pipeliner
 	Pipelined(c context.Context, tenantID uint64, fn func(redis.Pipeliner) error) ([]redis.Cmder, error)
-	Eval(c context.Context, tenantID uint64, luaScript string, keyCount int, keysAndArgs ...interface{}) (interface{}, error)
+	Eval(c context.Context, tenantID uint64, script *Script, keysAndArgs ...interface{}) (interface{}, error)
 }
 
 type tenantCache struct {
@@ -469,9 +473,42 @@ func (t *tenantCache) Pipelined(c context.Context, tenantID uint64, fn func(redi
 	return t.clients[tenantID].Pipelined(c, fn)
 }
 
-func (t *tenantCache) Eval(c context.Context, tenantID uint64, luaScript string, keyCount int, keysAndArgs ...interface{}) (interface{}, error) {
+func (t *tenantCache) Eval(c context.Context, tenantID uint64, script *Script, keysAndArgs ...interface{}) (interface{}, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	return t.clients[tenantID].Eval(c, dbdrivers.NewScript(keyCount, luaScript), keysAndArgs)
+	keys := make([]string, script.KeyCount)
+	args := keysAndArgs
+
+	if script.KeyCount > 0 {
+		for i := 0; i < script.KeyCount; i++ {
+			keys[i] = keysAndArgs[i].(string)
+		}
+		args = keysAndArgs[script.KeyCount:]
+	}
+
+	v, err := t.clients[tenantID].EvalSha(c, script.Hash, keys, args...)
+	if err != nil && strings.Contains(err.Error(), "NOSCRIPT ") {
+		v, err = t.clients[tenantID].Eval(c, script.Src, keys, args...)
+	}
+
+	return v, err
+}
+
+// Script encapsulates the source, hash and key count for a Lua script.
+type Script struct {
+	KeyCount int
+	Src      string
+	Hash     string
+}
+
+// NewScript returns a new script object. If keyCount is greater than or equal
+// to zero, then the count is automatically inserted in the EVAL command
+// argument list. If keyCount is less than zero, then the application supplies
+// the count as the first value in the keysAndArgs argument to the Do, Send and
+// SendHash methods.
+func NewScript(keyCount int, src string) *Script {
+	h := sha1.New()
+	_, _ = io.WriteString(h, src)
+	return &Script{keyCount, src, hex.EncodeToString(h.Sum(nil))}
 }

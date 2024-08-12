@@ -24,10 +24,7 @@ package dbdrivers
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
-	"io"
 	"math/rand"
 	"strings"
 	"time"
@@ -687,41 +684,25 @@ func (clients *RedisDBConn) MSetWithTTL(c context.Context, ttl time.Duration, va
 	return nil
 }
 
-// Script encapsulates the source, hash and key count for a Lua script.
-type Script struct {
-	KeyCount int
-	Src      string
-	Hash     string
-}
-
-// NewScript returns a new script object. If keyCount is greater than or equal
-// to zero, then the count is automatically inserted in the EVAL command
-// argument list. If keyCount is less than zero, then the application supplies
-// the count as the first value in the keysAndArgs argument to the Do, Send and
-// SendHash methods.
-func NewScript(keyCount int, src string) *Script {
-	h := sha1.New()
-	_, _ = io.WriteString(h, src)
-	return &Script{keyCount, src, hex.EncodeToString(h.Sum(nil))}
-}
-
-func (clients *RedisDBConn) Eval(ctx context.Context, script *Script, keysAndArgs ...interface{}) (interface{}, error) {
-	keys := make([]string, script.KeyCount)
-	args := keysAndArgs
-
-	if script.KeyCount > 0 {
-		for i := 0; i < script.KeyCount; i++ {
-			keys[i] = keysAndArgs[i].(string)
+// Eval We always execute Lua scripts on the primary, be careful the performance.
+func (clients *RedisDBConn) Eval(ctx context.Context, script string, keys []string, values ...interface{}) (interface{}, error) {
+	v, err := clients.Primary.Eval(ctx, script, keys, values...).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, nil
 		}
-		args = keysAndArgs[script.KeyCount:]
+		return nil, errors.WithStack(err)
 	}
+	return v, nil
+}
 
-	v, err := clients.Primary.EvalSha(ctx, script.Hash, keys, args...).Result()
-	if err != nil && strings.Contains(err.Error(), "NOSCRIPT ") {
-		v, err = clients.Primary.Eval(ctx, script.Src, keys, args...).Result()
-	}
-	if errors.Is(err, redis.Nil) {
-		return nil, nil
+func (clients *RedisDBConn) EvalSha(ctx context.Context, sha1 string, keys []string, values ...interface{}) (interface{}, error) {
+	v, err := clients.Primary.EvalSha(ctx, sha1, keys, values...).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, nil
+		}
+		return nil, errors.WithStack(err)
 	}
 	return v, nil
 }
