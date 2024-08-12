@@ -684,7 +684,7 @@ func (clients *RedisDBConn) MSetWithTTL(c context.Context, ttl time.Duration, va
 	return nil
 }
 
-// Eval We always execute Lua scripts on the primary, be careful the performance.
+// Eval will always be executed on the primary redis server.
 func (clients *RedisDBConn) Eval(ctx context.Context, script string, keys []string, values ...interface{}) (interface{}, error) {
 	v, err := clients.Primary.Eval(ctx, script, keys, values...).Result()
 	if err != nil {
