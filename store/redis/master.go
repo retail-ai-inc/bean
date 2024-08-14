@@ -61,7 +61,9 @@ type MasterCache interface {
 	Expire(c context.Context, key string, ttl time.Duration) error
 	Pipeline() redis.Pipeliner
 	Pipelined(c context.Context, fn func(redis.Pipeliner) error) ([]redis.Cmder, error)
-	Eval(c context.Context, script *Script, keysAndArgs ...interface{}) (interface{}, error)
+	Eval(c context.Context, script string, keys []string, args ...interface{}) (interface{}, error)
+	EvalSha(c context.Context, sha1 string, keys []string, args ...interface{}) (interface{}, error)
+	Run(c context.Context, script *redis.Script, keys []string, args ...interface{}) (interface{}, error)
 }
 
 type masterCache struct {
@@ -221,6 +223,14 @@ func (m *masterCache) Pipelined(c context.Context, fn func(redis.Pipeliner) erro
 	return m.cache.Pipelined(c, masterID, fn)
 }
 
-func (m *masterCache) Eval(c context.Context, script *Script, keysAndArgs ...interface{}) (interface{}, error) {
-	return m.cache.Eval(c, masterID, script, keysAndArgs)
+func (m *masterCache) Eval(c context.Context, script string, keys []string, args ...interface{}) (interface{}, error) {
+	return m.cache.Eval(c, masterID, script, keys, args)
+}
+
+func (m *masterCache) EvalSha(c context.Context, sha1 string, keys []string, args ...interface{}) (interface{}, error) {
+	return m.cache.EvalSha(c, masterID, sha1, keys, args)
+}
+
+func (m *masterCache) Run(c context.Context, script *redis.Script, keys []string, args ...interface{}) (interface{}, error) {
+	return m.cache.Run(c, masterID, script, keys, args)
 }

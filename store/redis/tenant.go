@@ -24,11 +24,7 @@ package redis
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
-	"io"
-	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -67,7 +63,9 @@ type TenantCache interface {
 	Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error
 	Pipeline(tenantID uint64) redis.Pipeliner
 	Pipelined(c context.Context, tenantID uint64, fn func(redis.Pipeliner) error) ([]redis.Cmder, error)
-	Eval(c context.Context, tenantID uint64, script *Script, keysAndArgs ...interface{}) (interface{}, error)
+	Eval(c context.Context, tenantID uint64, script string, keys []string, args ...interface{}) (interface{}, error)
+	EvalSha(c context.Context, tenantID uint64, sha1 string, keys []string, args ...interface{}) (interface{}, error)
+	Run(c context.Context, tenantID uint64, script *redis.Script, keys []string, args ...interface{}) (interface{}, error)
 }
 
 type tenantCache struct {
@@ -473,46 +471,47 @@ func (t *tenantCache) Pipelined(c context.Context, tenantID uint64, fn func(redi
 	return t.clients[tenantID].Pipelined(c, fn)
 }
 
-func (t *tenantCache) Eval(c context.Context, tenantID uint64, script *Script, keysAndArgs ...interface{}) (interface{}, error) {
+func (t *tenantCache) Eval(c context.Context, tenantID uint64, script string, keys []string, args ...interface{}) (interface{}, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	keys := make([]string, script.KeyCount)
-	args := keysAndArgs
-
-	if script.KeyCount > 0 {
-		for i := 0; i < script.KeyCount; i++ {
-			if t.prefix != "" {
-				keys[i] = t.prefix + t.sep + keysAndArgs[i].(string)
-			} else {
-				keys[i] = keysAndArgs[i].(string)
-			}
+	if t.prefix != "" {
+		pks := make([]string, len(keys))
+		for i, key := range keys {
+			pks[i] = t.prefix + t.sep + key
 		}
-		args = keysAndArgs[script.KeyCount:]
+		return t.clients[tenantID].Eval(c, script, pks, args...)
 	}
 
-	v, err := t.clients[tenantID].EvalSha(c, script.Hash, keys, args...)
-	if err != nil && strings.Contains(err.Error(), "NOSCRIPT ") {
-		v, err = t.clients[tenantID].Eval(c, script.Src, keys, args...)
+	return t.clients[tenantID].Eval(c, script, keys, args...)
+}
+
+func (t *tenantCache) EvalSha(c context.Context, tenantID uint64, sha1 string, keys []string, args ...interface{}) (interface{}, error) {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	if t.prefix != "" {
+		pks := make([]string, len(keys))
+		for i, key := range keys {
+			pks[i] = t.prefix + t.sep + key
+		}
+		return t.clients[tenantID].EvalSha(c, sha1, pks, args...)
 	}
 
-	return v, err
+	return t.clients[tenantID].EvalSha(c, sha1, keys, args...)
 }
 
-// Script encapsulates the source, hash and key count for a Lua script.
-type Script struct {
-	KeyCount int
-	Src      string
-	Hash     string
-}
+func (t *tenantCache) Run(c context.Context, tenantID uint64, script *redis.Script, keys []string, args ...interface{}) (interface{}, error) {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
 
-// NewScript returns a new script object. If keyCount is greater than or equal
-// to zero, then the count is automatically inserted in the EVAL command
-// argument list. If keyCount is less than zero, then the application supplies
-// the count as the first value in the keysAndArgs argument to the Do, Send and
-// SendHash methods.
-func NewScript(keyCount int, src string) *Script {
-	h := sha1.New()
-	_, _ = io.WriteString(h, src)
-	return &Script{keyCount, src, hex.EncodeToString(h.Sum(nil))}
+	if t.prefix != "" {
+		pks := make([]string, len(keys))
+		for i, key := range keys {
+			pks[i] = t.prefix + t.sep + key
+		}
+		return t.clients[tenantID].Run(c, script, pks, args...)
+	}
+
+	return t.clients[tenantID].Run(c, script, keys, args...)
 }

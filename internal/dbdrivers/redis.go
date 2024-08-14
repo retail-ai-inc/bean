@@ -685,8 +685,8 @@ func (clients *RedisDBConn) MSetWithTTL(c context.Context, ttl time.Duration, va
 }
 
 // Eval will always be executed on the primary redis server.
-func (clients *RedisDBConn) Eval(ctx context.Context, script string, keys []string, values ...interface{}) (interface{}, error) {
-	v, err := clients.Primary.Eval(ctx, script, keys, values...).Result()
+func (clients *RedisDBConn) Eval(ctx context.Context, script string, keys []string, args ...interface{}) (interface{}, error) {
+	v, err := clients.Primary.Eval(ctx, script, keys, args...).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return nil, nil
@@ -696,8 +696,20 @@ func (clients *RedisDBConn) Eval(ctx context.Context, script string, keys []stri
 	return v, nil
 }
 
-func (clients *RedisDBConn) EvalSha(ctx context.Context, sha1 string, keys []string, values ...interface{}) (interface{}, error) {
-	v, err := clients.Primary.EvalSha(ctx, sha1, keys, values...).Result()
+func (clients *RedisDBConn) EvalSha(ctx context.Context, sha1 string, keys []string, args ...interface{}) (interface{}, error) {
+	v, err := clients.Primary.EvalSha(ctx, sha1, keys, args...).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, nil
+		}
+		return nil, errors.WithStack(err)
+	}
+	return v, nil
+}
+
+// Run wraps redis.Script.
+func (clients *RedisDBConn) Run(ctx context.Context, script *redis.Script, keys []string, args ...interface{}) (interface{}, error) {
+	v, err := script.Run(ctx, clients.Primary, keys, args).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return nil, nil
