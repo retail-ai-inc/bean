@@ -821,8 +821,8 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 
 			port := redisCfg["port"].(string)
 			var dbName int
-			if dbName, ok = redisCfg["database"].(int); !ok {
-				dbName = 0
+			if _dbName, ok := redisCfg["database"].(float64); ok {
+				dbName = int(_dbName)
 			}
 
 			tenantRedisDB[t.TenantID] = &RedisDBConn{}

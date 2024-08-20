@@ -633,11 +633,7 @@ func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
 		for _, handle := range b.errorHandlerFuncs {
 			handled, err := handle(err, c)
 			if err != nil {
-				if BeanConfig.Sentry.On {
-					SentryCaptureException(c, err)
-				} else {
-					c.Logger().Error(err)
-				}
+				SentryCaptureException(c, err)
 			}
 			if handled {
 				break
@@ -704,6 +700,7 @@ func SentryCaptureException(c echo.Context, err error) {
 	}
 
 	if !BeanConfig.Sentry.On {
+		Logger().Error(err)
 		return
 	}
 
