@@ -119,6 +119,7 @@ type Config struct {
 	Prometheus struct {
 		On            bool
 		SkipEndpoints []string
+		Subsystem     string
 	}
 	HTTP struct {
 		Port            string
@@ -479,6 +480,9 @@ func NewEcho() *echo.Echo {
 		}
 		conf := echoprometheus.MiddlewareConfig{
 			Skipper: pathSkipper(regex.PrometheusSkipPaths),
+		}
+		if BeanConfig.Prometheus.Subsystem != "" {
+			conf.Subsystem = BeanConfig.Prometheus.Subsystem
 		}
 		e.Use(echoprometheus.NewMiddlewareWithConfig(conf))
 		e.GET(metricsPath, echoprometheus.NewHandler())
