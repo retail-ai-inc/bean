@@ -478,8 +478,7 @@ func NewEcho() *echo.Echo {
 			e.Logger.Fatalf("Prometheus initialization failed: %v. Server 🚀  crash landed. Exiting...\n", err)
 		}
 		conf := echoprometheus.MiddlewareConfig{
-			Skipper:   pathSkipper(regex.PrometheusSkipPaths),
-			Subsystem: BeanConfig.ProjectName, // "echo" is set by default if provided empty.
+			Skipper: pathSkipper(regex.PrometheusSkipPaths),
 		}
 		e.Use(echoprometheus.NewMiddlewareWithConfig(conf))
 		e.GET(metricsPath, echoprometheus.NewHandler())
