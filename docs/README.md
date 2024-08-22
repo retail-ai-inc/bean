@@ -583,41 +583,41 @@ Bean configs default values are picked from the `env.json` file, but can be upda
 
   Some of the configurable parameters are:
 
-- Environment: represents the environment in which the project is running (e.g. development, production, etc.)
+- `Environment`: represents the environment in which the project is running (e.g. development, production, etc.)
 
-- DebugLogPath: represents the path of the debug log file.
+- `DebugLogPath`: represents the path of the debug log file.
 
-- Secret: represents a secret string key used for encryption and decryption in the project.
+- `Secret`: represents a secret string key used for encryption and decryption in the project.
  Example Usecase:- while encoding/decoding JWTs.
 
-- HTTP: represents a custom wrapper to deal with HTTP/HTTPS requests.
+- `HTTP`: represents a custom wrapper to deal with HTTP/HTTPS requests.
  The wrapper provides by default some common features but also some exclusive features like:-
-  - BodyLimit: Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
+  - `BodyLimit`: Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
 
-  - IsHttpsRedirect: A boolean that represents whether to redirect HTTP requests to HTTPS or not.
+  - `IsHttpsRedirect`: A boolean that represents whether to redirect HTTP requests to HTTPS or not.
 
-  - KeepAlive: A boolean that represents whether to keep the HTTP connection alive or not.
+  - `KeepAlive`: A boolean that represents whether to keep the HTTP connection alive or not.
 
-  - AllowedMethod: A slice of strings that represents the allowed HTTP methods.
+  - `AllowedMethod`: A slice of strings that represents the allowed HTTP methods.
     Example:- `["DELETE","GET","POST","PUT"]`
 
-  - SSL: used when web server uses HTTPS for communication.
+  - `SSL`: used when web server uses HTTPS for communication.
    The SSL struct contains the following parameters:-
-    - On: A boolean that represents whether SSL is enabled or not.
+    - `On`: A boolean that represents whether SSL is enabled or not.
 
-    - CertFile: represents the path of the certificate file.
+    - `CertFile`: represents the path of the certificate file.
 
-    - PrivFile: represents the path of the private key file.
+    - `PrivFile`: represents the path of the private key file.
 
-    - MinTLSVersion: represents the minimum TLS version required.
+    - `MinTLSVersion`: represents the minimum TLS version required.
 
-- Prometheus: represents the configuration for the Prometheus metrics.
+- `Prometheus`: represents the configuration for the Prometheus metrics.
  The Prometheus struct contains the following parameters:-
-  - On: A boolean that represents whether Prometheus is enabled or not.
+  - `On`: A boolean that represents whether Prometheus is enabled or not.
 
-  - SkipEndpoints: represents the endpoints/paths to skip from Prometheus metrics.
+  - `SkipEndpoints`: represents the endpoints/paths to skip from Prometheus metrics.
 
-  - Subsystem: represents the subsystem name for the Prometheus metrics. The default value is `echo` if empty.
+  - `Subsystem`: represents the subsystem name for the Prometheus metrics. The default value is `echo` if empty.
 
 </details>
 
