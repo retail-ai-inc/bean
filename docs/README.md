@@ -611,6 +611,14 @@ Bean configs default values are picked from the `env.json` file, but can be upda
 
     - MinTLSVersion: represents the minimum TLS version required.
 
+- Prometheus: represents the configuration for the Prometheus metrics.
+ The Prometheus struct contains the following parameters:-
+  - On: A boolean that represents whether Prometheus is enabled or not.
+
+  - SkipEndpoints: represents the endpoints/paths to skip from Prometheus metrics.
+
+  - Subsystem: represents the subsystem name for the Prometheus metrics. The default value is `echo` if empty.
+
 </details>
 
 ## TenantAlterDbHostParam
