@@ -21,13 +21,14 @@
 // SOFTWARE.
 
 // Run test: go test -run "(TestIsValidLuhnNumber|TestCalculateLuhnNumber|TestGenerateLuhnNumber|TestGenerateLuhnNumberWithPrefix)" -v -count 1
-
 package helpers
 
 import (
-	"log"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsValidLuhnNumber(t *testing.T) {
@@ -58,22 +59,17 @@ func TestIsValidLuhnNumber(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.number, func(t *testing.T) {
-			res := IsValidLuhnNumber(test.number)
-			if res != true {
-				if test.expectOK {
-					log.Printf("Expected success but luhn check unsuccessful for %s.", test.number)
-					t.Fail()
-				}
-			}
+			got := IsValidLuhnNumber(test.number)
+			assert.Equal(t, test.expectOK, got, "Luhn number validation failed for %s", test.number)
 		})
 	}
 }
 
 func TestCalculateLuhnNumber(t *testing.T) {
 	tests := []struct {
-		number    string
-		luhnDigit string
-		expected  string
+		number     string
+		checkDigit string
+		expected   string
 	}{
 		{"123456781234567", "0", "1234567812345670"},
 		{"111122223333444", "4", "1111222233334444"},
@@ -82,24 +78,11 @@ func TestCalculateLuhnNumber(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.expected, func(t *testing.T) {
-			l, n, err := CalculateLuhnNumber(test.number)
-			if err != nil {
-				log.Printf("Unexpected err %+v", err)
-				t.Fail()
-			}
-			if test.luhnDigit != l {
-				log.Printf("Expected luhn digit %s. Actual luhn digit %s", test.luhnDigit, l)
-				t.Fail()
-			}
-			if n != test.expected {
-				log.Printf("Expected %s to generate luhn number %s", test.number, test.expected)
-				t.Fail()
-			}
-			res := IsValidLuhnNumber(n)
-			if res != true {
-				log.Printf("Cannot validate derive luhn number %s.", n)
-				t.Fail()
-			}
+			cd, got, err := CalculateLuhnNumber(test.number)
+			require.NoError(t, err, "Unexpected error while calculating Luhn number for %s", test.number)
+			assert.Equal(t, test.checkDigit, cd, "Unexpected Luhn digit for input %s", test.number)
+			assert.Equal(t, test.expected, got, "Unexpected Luhn number for input %s", test.number)
+			assert.True(t, IsValidLuhnNumber(got), "Generated Luhn number is invalid for input %s", test.number)
 		})
 	}
 }
@@ -109,7 +92,7 @@ func TestGenerateLuhnNumber(t *testing.T) {
 		numberSize int
 		sampleSize int
 	}{
-		{1, 100},
+		{1 + 1, 100}, // minimum size is 2
 		{10, 1000},
 		{100, 1000},
 		{1000, 1000},
@@ -118,12 +101,9 @@ func TestGenerateLuhnNumber(t *testing.T) {
 	for _, test := range tests {
 		t.Run(strconv.Itoa(test.numberSize), func(t *testing.T) {
 			for i := 0; i < test.sampleSize; i++ {
-				ln := GenerateLuhnNumber(test.numberSize)
-				res := IsValidLuhnNumber(ln)
-				if res != true {
-					log.Printf("Cannot validate derive luhn number %s", ln)
-					t.Fail()
-				}
+				ln, err := GenerateLuhnNumber(test.numberSize)
+				require.NoError(t, err, "Failed to generate Luhn number")
+				assert.True(t, IsValidLuhnNumber(ln), "Generated Luhn number is invalid: %s", ln)
 			}
 		})
 	}
@@ -134,7 +114,7 @@ func TestGenerateLuhnNumberWithPrefix(t *testing.T) {
 		numberSize int
 		sampleSize int
 	}{
-		{1, 100},
+		{1 + len("123"), 100}, // minimum size is more than prefix length
 		{10, 1000},
 		{100, 1000},
 		{1000, 1000},
@@ -143,12 +123,9 @@ func TestGenerateLuhnNumberWithPrefix(t *testing.T) {
 	for _, test := range tests {
 		t.Run(strconv.Itoa(test.numberSize), func(t *testing.T) {
 			for i := 0; i < test.sampleSize; i++ {
-				ln := GenerateLuhnNumberWithPrefix("123", test.numberSize)
-				res := IsValidLuhnNumber(ln)
-				if res != true {
-					log.Printf("Cannot validate derive luhn number %s", ln)
-					t.Fail()
-				}
+				ln, err := GenerateLuhnNumberWithPrefix("123", test.numberSize)
+				require.NoError(t, err, "Failed to generate Luhn number with prefix")
+				assert.True(t, IsValidLuhnNumber(ln), "Generated Luhn number with prefix is invalid: %s", ln)
 			}
 		})
 	}

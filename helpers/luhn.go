@@ -23,17 +23,10 @@
 package helpers
 
 import (
-	"errors"
 	"fmt"
 	"math/rand"
 	"strconv"
 	"strings"
-	"time"
-)
-
-const (
-	asciiZero = 48
-	asciiTen  = 57
 )
 
 // IsValidLuhnNumber returns true if the provided string is a valid luhn number otherwise false.
@@ -43,70 +36,63 @@ func IsValidLuhnNumber(number string) bool {
 	if err != nil {
 		return false
 	}
-
 	// If the total modulo 10 is not equal to 0, then the number is invalid.
-	if sum%10 != 0 {
-		return false
-	}
 
-	return true
+	return sum%10 == 0
 }
 
 // CalculateLuhnNumber returns luhn check digit and the provided string number with its luhn check digit appended.
-func CalculateLuhnNumber(number string) (string, string, error) {
+func CalculateLuhnNumber(number string) (checkDigit string, luhnNumber string, err error) {
 	p := (len(number) + 1) % 2
 	sum, err := calculateLuhnSum(number, p)
 	if err != nil {
-		return "", "", nil
+		return "", "", err
 	}
 
-	luhn := sum % 10
-	if luhn != 0 {
-		luhn = 10 - luhn
-	}
+	checkDigitInt := (10 - (sum % 10)) % 10
+	checkDigit = strconv.Itoa(int(checkDigitInt))
 
-	// If the total modulo 10 is not equal to 0, then the number is invalid.
-	return strconv.FormatInt(luhn, 10), fmt.Sprintf("%s%d", number, luhn), nil
+	luhnNumber = number + checkDigit
+	return checkDigit, luhnNumber, nil
 }
 
 // GenerateLuhnNumber will generate a valid luhn number of the provided length
-func GenerateLuhnNumber(length int) string {
-	r := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
-
-	var s strings.Builder
-	for i := 0; i < length-1; i++ {
-		s.WriteString(strconv.Itoa(r.Intn(9)))
+func GenerateLuhnNumber(length int) (string, error) {
+	if length <= 1 {
+		return "", fmt.Errorf("length must be greater than 1")
 	}
 
-	_, res, _ := CalculateLuhnNumber(s.String()) // ignore error because this will always be valid
+	randNum := generateRandomNumber(length - 1)
 
-	return res
+	_, luhnNumber, _ := CalculateLuhnNumber(randNum)
+
+	return luhnNumber, nil
 }
 
 // GenerateLuhnNumberWithPrefix will generate a valid luhn number of the provided length with prefix
-func GenerateLuhnNumberWithPrefix(prefix string, length int) string {
-	r := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
-
-	var s strings.Builder
-	s.WriteString(prefix)
-	length -= len(prefix)
-
-	for i := 0; i < length-1; i++ {
-		s.WriteString(strconv.Itoa(r.Intn(9)))
+func GenerateLuhnNumberWithPrefix(prefix string, length int) (string, error) {
+	if len(prefix) >= length {
+		return "", fmt.Errorf("prefix length (%d) must be less than total length (%d)", len(prefix), length)
 	}
 
-	_, res, _ := CalculateLuhnNumber(s.String())
-	return res
+	randomPartLength := length - len(prefix) - 1
+	randNum := prefix + generateRandomNumber(randomPartLength)
+
+	_, luhnNumber, _ := CalculateLuhnNumber(randNum)
+
+	return luhnNumber, nil
 }
 
 func calculateLuhnSum(number string, parity int) (int64, error) {
 	var sum int64
-	for i, d := range number {
-		if d < asciiZero || d > asciiTen {
-			return 0, errors.New("invalid digit")
+	for i, r := range number {
+		if r < '0' || r > '9' {
+			return 0, fmt.Errorf("invalid digit: %v", r)
 		}
 
-		d = d - asciiZero
+		// Convert ASCII to digit (0-9)
+		d := int64(r - '0')
+
 		// Double the value of every second digit.
 		if i%2 == parity {
 			d *= 2
@@ -118,8 +104,19 @@ func calculateLuhnSum(number string, parity int) (int64, error) {
 		}
 
 		// Take the sum of all the digits.
-		sum += int64(d)
+		sum += d
 	}
 
 	return sum, nil
+}
+
+// generateRandomNumber generates a random numeric string of the given length.
+func generateRandomNumber(length int) string {
+
+	var s strings.Builder
+	s.Grow(length)
+	for i := 0; i < length; i++ {
+		s.WriteString(strconv.Itoa(rand.Intn(10))) // Random digit 0-9 in concurrent safe way
+	}
+	return s.String()
 }
