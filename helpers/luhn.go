@@ -36,8 +36,8 @@ func IsValidLuhnNumber(number string) bool {
 	if err != nil {
 		return false
 	}
-	// If the total modulo 10 is not equal to 0, then the number is invalid.
 
+	// If the total modulo 10 is not equal to 0, then the number is invalid.
 	return sum%10 == 0
 }
 
@@ -63,7 +63,6 @@ func GenerateLuhnNumber(length int) (string, error) {
 	}
 
 	randNum := generateRandomNumber(length - 1)
-
 	_, luhnNumber, _ := CalculateLuhnNumber(randNum)
 
 	return luhnNumber, nil
@@ -115,8 +114,10 @@ func generateRandomNumber(length int) string {
 
 	var s strings.Builder
 	s.Grow(length)
+
 	for i := 0; i < length; i++ {
 		s.WriteString(strconv.Itoa(rand.Intn(10))) // Random digit 0-9 in concurrent safe way
 	}
+
 	return s.String()
 }
