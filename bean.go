@@ -659,16 +659,14 @@ func (b *Bean) InitDB() {
 	var tenantRedisDBs map[uint64]*dbdrivers.RedisDBConn
 	var masterMemoryDB memory.Cache
 
+	masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
+	masterMongoDB, masterMongoDBName = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo, Logger())
+	masterRedisDB = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
+
 	if b.Config.Database.Tenant.On {
-		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
 		tenantMySQLDBs, tenantMySQLDBNames = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
 		tenantMongoDBs, tenantMongoDBNames = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, Logger())
-		masterRedisDB = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
 		tenantRedisDBs = dbdrivers.InitRedisTenantConns(b.Config.Database.Redis, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
-	} else {
-		masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
-		masterMongoDB, masterMongoDBName = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo, Logger())
-		masterRedisDB = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
 	}
 
 	if b.Config.Database.Memory.On {
