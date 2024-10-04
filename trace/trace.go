@@ -47,13 +47,7 @@ func StartSpan(c context.Context, operation string, spanOpts ...sentry.SpanOptio
 		spanOpts = append(spanOpts, sentry.WithDescription(functionName))
 	}
 
-	parent := sentry.SpanFromContext(c)
-	var span *sentry.Span
-	if parent != nil {
-		span = parent.StartChild(operation, spanOpts...)
-	} else {
-		span = sentry.StartSpan(c, operation, spanOpts...)
-	}
+	span := sentry.StartSpan(c, operation, spanOpts...)
 	newCtx := span.Context()
 
 	return newCtx, func() {
