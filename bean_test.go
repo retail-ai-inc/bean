@@ -323,6 +323,9 @@ func Test_NewEcho(t *testing.T) {
 			// Act
 			e := NewEcho()
 			e.GET("/", func(c echo.Context) error {
+				if err := c.Request().Context().Err(); err != nil {
+					return c.String(http.StatusInternalServerError, "unexpected error before sleep")
+				}
 				time.Sleep(tt.sleepTime)
 				if err := c.Request().Context().Err(); err != nil {
 					return err
