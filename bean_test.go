@@ -3,6 +3,7 @@
 package bean
 
 import (
+	"bytes"
 	"io"
 	"net"
 	"net/http"
@@ -14,6 +15,8 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/retail-ai-inc/bean/v2/internal/route"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -281,5 +284,86 @@ func signalTERM(t *testing.T) {
 	}
 	if err := p.Signal(syscall.SIGTERM); err != nil {
 		t.Fatalf("failed to send signal to process: %v", err)
+	}
+}
+
+func Test_NewEcho(t *testing.T) {
+	tests := []struct {
+		name       string
+		timeout    time.Duration
+		sleepTime  time.Duration
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "success",
+			timeout:    50 * time.Millisecond,
+			sleepTime:  10 * time.Millisecond,
+			wantStatus: http.StatusOK,
+			wantBody:   "success",
+		},
+		{
+			name:       "timeout exceeded",
+			timeout:    10 * time.Millisecond,
+			sleepTime:  50 * time.Millisecond,
+			wantStatus: http.StatusGatewayTimeout,
+			wantBody:   "gateway timeout",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			// Arrange
+			reset := setConf(t, tt.timeout)
+			defer reset()
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			rec := httptest.NewRecorder()
+
+			// Act
+			e := NewEcho()
+			e.GET("/", func(c echo.Context) error {
+				time.Sleep(tt.sleepTime)
+				if err := c.Request().Context().Err(); err != nil {
+					return err
+				}
+				return c.String(http.StatusOK, "success")
+			})
+			route.Init(e)
+			e.ServeHTTP(rec, req)
+
+			// Assert
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			assert.Contains(t, rec.Body.String(), tt.wantBody)
+		})
+	}
+}
+
+func setConf(t *testing.T, timeout time.Duration) func() {
+	t.Helper()
+
+	originalConf := BeanConfig
+	viper.SetConfigType("json")
+	err := viper.ReadConfig(bytes.NewBufferString(`
+	{
+		"http": {
+			"bodyLimit": "1M",
+			"timeout": "` + timeout.String() + `",
+      "allowedMethod": ["GET"]
+		}
+	}`))
+	if err != nil {
+		t.Fatalf("failed to read config: %v", err)
+	}
+
+	if BeanConfig == nil {
+		BeanConfig = &Config{}
+	}
+	if err := viper.Unmarshal(BeanConfig); err != nil {
+		t.Fatalf("failed to unmarshal config: %v", err)
+	}
+
+	return func() {
+		BeanConfig = originalConf
 	}
 }
