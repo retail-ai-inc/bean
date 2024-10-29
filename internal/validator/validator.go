@@ -157,3 +157,8 @@ func (ve *ValidationError) ErrCollection() []map[string]string {
 func (ve *ValidationError) Error() string {
 	return ve.Err.Error()
 }
+
+// Unwrap implements the builtin `error.Unwrap` function.
+func (ve *ValidationError) Unwrap() error {
+	return ve.Err
+}

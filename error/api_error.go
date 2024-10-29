@@ -38,7 +38,7 @@ type APIError struct {
 }
 
 // NewAPIError returns the proper error object from {{ .PkgPath }}. You must provide `error` interface as 3rd parameter.
-func NewAPIError(HTTPStatusCode int, globalErrCode ErrorCode, err error) *APIError {
+func NewAPIError(HTTPStatusCode int, globalErrCode ErrorCode, err error) error {
 	return &APIError{
 		HTTPStatusCode: HTTPStatusCode,
 		GlobalErrCode:  globalErrCode,
@@ -50,9 +50,9 @@ func NewAPIError(HTTPStatusCode int, globalErrCode ErrorCode, err error) *APIErr
 
 // NewIgnorableAPIError returns the proper error object from {{ .PkgPath }},
 // the error tracker like sentry will not push this type of error online. You must provide `error` interface as 3rd parameter.
-func NewIgnorableAPIError(HTTPStatusCode int, globalErrCode ErrorCode, err error) *APIError {
+func NewIgnorableAPIError(HTTPStatusCode int, globalErrCode ErrorCode, err error) error {
 	e := NewAPIError(HTTPStatusCode, globalErrCode, err)
-	e.Ignorable = true
+	e.(*APIError).Ignorable = true
 	return e
 }
 
