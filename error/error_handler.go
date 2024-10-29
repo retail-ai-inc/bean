@@ -23,6 +23,7 @@
 package error
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -33,7 +34,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-type errorResp struct {
+// ErrorCode represents the error code of the API.
+type ErrorResp struct {
 	ErrorCode ErrorCode   `json:"errorCode"`
 	ErrorMsg  interface{} `json:"errorMsg"`
 	Errors    interface{} `json:"errors"`
@@ -42,26 +44,26 @@ type errorResp struct {
 type ErrorHandlerFunc func(err error, c echo.Context) (bool, error)
 
 func ValidationErrorHandlerFunc(e error, c echo.Context) (bool, error) {
-	ve, ok := e.(*validator.ValidationError)
-	if !ok {
+	var ve *validator.ValidationError
+	if !errors.As(e, &ve) {
 		return false, nil
 	}
 
 	c.Logger().Error(ve)
 
-	err := c.JSON(http.StatusBadRequest, errorResp{
+	err := c.JSON(http.StatusBadRequest, ErrorResp{
 		ErrorCode: API_DATA_VALIDATION_FAILED,
 		Errors:    ve.ErrCollection(),
 	})
 
-	return ok, err
+	return true, err
 }
 
 // Default JSON API error handler. The response pattern is like below:
 // `{"errorCode": "1000001", "errorMsg": "some message"}`. You can override this error handler from `start.go`
 func APIErrorHandlerFunc(e error, c echo.Context) (bool, error) {
-	ae, ok := e.(*APIError)
-	if !ok {
+	var ae *APIError
+	if !errors.As(e, &ae) {
 		return false, nil
 	}
 
@@ -80,17 +82,17 @@ func APIErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 		c.Logger().Error(ae)
 	}
 
-	err := c.JSON(ae.HTTPStatusCode, errorResp{
+	err := c.JSON(ae.HTTPStatusCode, ErrorResp{
 		ErrorCode: ae.GlobalErrCode,
 		ErrorMsg:  ae.Error(),
 	})
 
-	return ok, err
+	return true, err
 }
 
 func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
-	he, ok := e.(*echo.HTTPError)
-	if !ok {
+	var he *echo.HTTPError
+	if !errors.As(e, &he) {
 		return false, nil
 	}
 
@@ -114,7 +116,7 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 			if val, ok := e404["json"]; ok {
 				err = c.JSON(he.Code, converter(val))
 			} else {
-				err = c.JSON(he.Code, errorResp{ErrorCode: RESOURCE_NOT_FOUND, ErrorMsg: he.Message})
+				err = c.JSON(he.Code, ErrorResp{ErrorCode: RESOURCE_NOT_FOUND, ErrorMsg: he.Message})
 			}
 		}
 
@@ -127,7 +129,7 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 			if val, ok := e405["json"]; ok {
 				err = c.JSON(he.Code, converter(val))
 			} else {
-				err = c.JSON(he.Code, errorResp{ErrorCode: METHOD_NOT_ALLOWED, ErrorMsg: he.Message})
+				err = c.JSON(he.Code, ErrorResp{ErrorCode: METHOD_NOT_ALLOWED, ErrorMsg: he.Message})
 			}
 		}
 
@@ -153,7 +155,7 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 			if val, ok := def["json"]; ok {
 				err = c.JSON(he.Code, converter(val))
 			} else {
-				err = c.JSON(he.Code, errorResp{ErrorCode: INTERNAL_SERVER_ERROR, ErrorMsg: he.Message})
+				err = c.JSON(he.Code, ErrorResp{ErrorCode: INTERNAL_SERVER_ERROR, ErrorMsg: he.Message})
 			}
 		}
 
@@ -178,7 +180,7 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 			if val, ok := e504["json"]; ok {
 				err = c.JSON(he.Code, converter(val))
 			} else {
-				err = c.JSON(he.Code, errorResp{ErrorCode: TIMEOUT, ErrorMsg: he.Message})
+				err = c.JSON(he.Code, ErrorResp{ErrorCode: TIMEOUT, ErrorMsg: he.Message})
 			}
 		}
 
@@ -204,12 +206,12 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 			if val, ok := def["json"]; ok {
 				err = c.JSON(he.Code, converter(val))
 			} else {
-				err = c.JSON(he.Code, errorResp{ErrorCode: INTERNAL_SERVER_ERROR, ErrorMsg: he.Message})
+				err = c.JSON(he.Code, ErrorResp{ErrorCode: INTERNAL_SERVER_ERROR, ErrorMsg: he.Message})
 			}
 		}
 	}
 
-	return ok, err
+	return true, err
 }
 
 // If any other error handler doesn't catch the error then finally `DefaultErrorHandlerFunc` will
@@ -246,7 +248,7 @@ func DefaultErrorHandlerFunc(err error, c echo.Context) (bool, error) {
 	if val, ok := def["json"]; ok {
 		err = c.JSON(http.StatusInternalServerError, converter(val))
 	} else {
-		err = c.JSON(http.StatusInternalServerError, errorResp{
+		err = c.JSON(http.StatusInternalServerError, ErrorResp{
 			ErrorCode: INTERNAL_SERVER_ERROR,
 			ErrorMsg:  err.Error(),
 		})
