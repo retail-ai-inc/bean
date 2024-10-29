@@ -26,7 +26,7 @@ else
 endif
 
 test: ## run tests with race detactor
-	go test -v -race ./...
+	go test -race -gcflags "all=-N -l" -shuffle=on ./...
 
 clean: ## remove the output binary from go build, as well as go install and build cache
 	go clean -i -r -cache
