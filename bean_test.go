@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/v2/internal/route"
 	"github.com/spf13/viper"
@@ -132,8 +133,9 @@ func TestBean_ServeAt(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := &Bean{
-				Echo:   echo.New(),
-				Config: Config{},
+				Echo:     echo.New(),
+				Config:   Config{},
+				validate: validator.New(),
 			}
 			b.Config.HTTP.ShutdownTimeout = tt.fields.sdTimeout
 
@@ -184,7 +186,8 @@ func TestBean_ServeAt(t *testing.T) {
 			for {
 				select {
 				case <-timer.C:
-					t.Fatal("timeout waiting for server to start")
+					err := <-srvErr
+					t.Fatalf("timeout waiting for server to start: %v", err)
 				case <-ticker.C:
 					if ping() {
 						break waitSrv
