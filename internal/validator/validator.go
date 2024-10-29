@@ -34,11 +34,14 @@
 package validator
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/labstack/echo/v4"
 )
 
+// ValidatorFunc is a custom validator function you can define and add to the validator.
 type ValidatorFunc func(*validator.Validate) error
 
 // ValidationError implements the builtin `error` interface and extends custom output function.
@@ -51,6 +54,8 @@ type DefaultValidator struct {
 	Validator *validator.Validate
 }
 
+var _ echo.Validator = &DefaultValidator{}
+
 // Validate implements the `Echo#Validator.Validate` function.
 func (dv *DefaultValidator) Validate(data interface{}) error {
 	if err := dv.Validator.Struct(data); err != nil {
@@ -61,6 +66,14 @@ func (dv *DefaultValidator) Validate(data interface{}) error {
 		return &ValidationError{err}
 	}
 	return nil
+}
+
+func NewDefaultValidator(v *validator.Validate) (*DefaultValidator, error) {
+	if v == nil {
+		return nil, errors.New("validator is nil")
+	}
+
+	return &DefaultValidator{Validator: v}, nil
 }
 
 // ErrCollection formats the validation errors and return it as a slice.
@@ -156,4 +169,9 @@ func (ve *ValidationError) ErrCollection() []map[string]string {
 // Error implements the builtin `error.Error` function.
 func (ve *ValidationError) Error() string {
 	return ve.Err.Error()
+}
+
+// Unwrap implements the builtin `error.Unwrap` function.
+func (ve *ValidationError) Unwrap() error {
+	return ve.Err
 }

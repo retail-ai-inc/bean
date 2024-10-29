@@ -524,7 +524,11 @@ func (b *Bean) ServeAt(host, port string) error {
 	b.UseErrorHandlerFuncs(berror.DefaultErrorHandlerFunc)
 	b.Echo.HTTPErrorHandler = b.DefaultHTTPErrorHandler()
 
-	b.Echo.Validator = &validator.DefaultValidator{Validator: b.validate}
+	v, err := NewValidator(b.validate)
+	if err != nil {
+		return err
+	}
+	b.Echo.Validator = v
 
 	s := http.Server{
 		Addr:    host + ":" + port,
@@ -565,7 +569,6 @@ func (b *Bean) ServeAt(host, port string) error {
 		close(errCh)
 	}()
 
-	var err error
 	select {
 	case srvErr := <-errCh:
 		if srvErr != nil {
@@ -866,4 +869,10 @@ func LoadConfig(filename string) (*Config, error) {
 	}
 
 	return BeanConfig, nil
+}
+
+// NewValidator creates a new validator instance.
+// Currently, it only supports a default validator.
+func NewValidator(v *validatorV10.Validate) (*validator.DefaultValidator, error) {
+	return validator.NewDefaultValidator(v)
 }
