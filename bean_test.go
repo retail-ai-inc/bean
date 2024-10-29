@@ -135,7 +135,7 @@ func TestBean_ServeAt(t *testing.T) {
 			b := &Bean{
 				Echo:     echo.New(),
 				Config:   Config{},
-				validate: validator.New(),
+				Validate: validator.New(),
 			}
 			b.Config.HTTP.ShutdownTimeout = tt.fields.sdTimeout
 

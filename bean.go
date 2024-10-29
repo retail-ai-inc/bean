@@ -87,7 +87,7 @@ type Bean struct {
 	Echo              *echo.Echo
 	BeforeServe       func()
 	errorHandlerFuncs []berror.ErrorHandlerFunc
-	validate          *validatorV10.Validate
+	Validate          *validatorV10.Validate
 	Config            Config
 }
 
@@ -248,7 +248,7 @@ func New() (b *Bean) {
 
 	b = &Bean{
 		Echo:     e,
-		validate: validatorV10.New(),
+		Validate: validatorV10.New(),
 		Config:   *BeanConfig,
 	}
 
@@ -524,7 +524,7 @@ func (b *Bean) ServeAt(host, port string) error {
 	b.UseErrorHandlerFuncs(berror.DefaultErrorHandlerFunc)
 	b.Echo.HTTPErrorHandler = b.DefaultHTTPErrorHandler()
 
-	v, err := NewValidator(b.validate)
+	v, err := NewValidator(b.Validate)
 	if err != nil {
 		return err
 	}
@@ -623,7 +623,7 @@ func (b *Bean) UseErrorHandlerFuncs(errHdlrFuncs ...berror.ErrorHandlerFunc) {
 
 func (b *Bean) UseValidation(validateFuncs ...validator.ValidatorFunc) {
 	for _, validateFunc := range validateFuncs {
-		if err := validateFunc(b.validate); err != nil {
+		if err := validateFunc(b.Validate); err != nil {
 			b.Echo.Logger.Error(err)
 		}
 	}
