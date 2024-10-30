@@ -24,13 +24,15 @@ package bytesconv
 import "unsafe"
 
 // StringToBytes converts string to byte slice without a memory allocation.
+// WARN: The returned byte slice must not be modified, as strings are immutable.
 // For more details, see https://github.com/golang/go/issues/53003#issuecomment-1140276077.
 func StringToBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
 // BytesToString converts byte slice to string without a memory allocation.
+// WARN: The byte slice must not be modified while the returned string is in use.
 // For more details, see https://github.com/golang/go/issues/53003#issuecomment-1140276077.
 func BytesToString(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
+	return unsafe.String(&b[0], unsafe.IntegerType(len(b)))
 }
