@@ -25,6 +25,22 @@ else
 	$(GOPATH)/bin/golangci-lint run
 endif
 
+vet-field: ## Field Alignment
+ifeq (,$(wildcard $(GOPATH)/bin/fieldalignment))
+	go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest
+	go vet -vettool=$(GOPATH)/bin/fieldalignment ./...
+else
+	go vet -vettool=$(GOPATH)/bin/fieldalignment ./...
+endif
+
+vet-field-fix: ##If fixed, the annotation for struct fields will be removed
+ifeq (,$(wildcard $(GOPATH)/bin/fieldalignment))
+	go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest
+	$(GOPATH)/bin/fieldalignment -fix ./... || exit 0
+else
+	$(GOPATH)/bin/fieldalignment -fix ./... || exit 0
+endif
+
 test: ## run tests with race detactor
 	go test -v -race ./...
 
