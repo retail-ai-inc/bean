@@ -19,6 +19,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+
 package bytesconv
 
 import "unsafe"
@@ -33,6 +34,7 @@ func StringToBytes(s string) []byte {
 // BytesToString converts byte slice to string without a memory allocation.
 // WARN: The byte slice must not be modified while the returned string is in use.
 // For more details, see https://github.com/golang/go/issues/53003#issuecomment-1140276077.
+
 func BytesToString(b []byte) string {
-	return unsafe.String(&b[0], unsafe.IntegerType(len(b)))
+	return unsafe.String(&b[0], len(b))
 }
