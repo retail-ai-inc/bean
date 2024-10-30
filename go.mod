@@ -27,7 +27,7 @@ require (
 	golang.org/x/tools v0.26.0
 	gorm.io/datatypes v1.2.1
 	gorm.io/driver/mysql v1.5.7
-	gorm.io/gorm v1.25.10
+	gorm.io/gorm v1.25.12
 )
 
 require (
