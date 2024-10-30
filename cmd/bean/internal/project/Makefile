@@ -29,7 +29,7 @@ lint-upgrade: ## upgrade lint version
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 test: ## run tests with race detactor
-	go test -race ./...
+	go test -race -gcflags "all=-N -l" -shuffle=on ./...
 
 clean: ## remove the output binary from go build, as well as go install and build cache
 	go clean -i -r -cache

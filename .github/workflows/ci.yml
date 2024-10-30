@@ -1,32 +1,38 @@
-name: Lint, Build, and Test
+name: CI
 
 on:
   pull_request:
     branches: [ develop ]
+  workflow_dispatch:
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21' # Ensure this is the correct Go version for your project
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21' # Ensure this matches go version in your project
 
-      - name: Lint
-        uses: reviewdog/action-golangci-lint@v2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          go_version: '1.21' # Use the same Go version as setup above
-          level: error
-          reporter: github-pr-review
-          filter_mode: nofilter
-          golangci_lint_flags: "--timeout=180s --out-format=colored-line-number"
+    - name: Run golangci-lint with Reviewdog
+      uses: reviewdog/action-golangci-lint@v2
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        go_version: '1.21' # Ensure this matches go version in your project
+        level: error
+        reporter: github-pr-review
+        filter_mode: nofilter
+        golangci_lint_flags: "--timeout=180s --out-format=colored-line-number"
 
-      - name: Build
-        run: go build ./...
+    - name: Build
+      run: go build ./...
 
-      - name: Test
-        run: go test -race -shuffle=on ./...
+    - name: Test
+      run: go test -race -gcflags "all=-N -l" -shuffle=on ./...
