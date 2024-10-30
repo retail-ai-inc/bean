@@ -54,7 +54,7 @@ type DefaultValidator struct {
 	Validator *validator.Validate
 }
 
-var _ echo.Validator = &DefaultValidator{}
+var _ echo.Validator = (*DefaultValidator)(nil)
 
 // Validate implements the `Echo#Validator.Validate` function.
 func (dv *DefaultValidator) Validate(data interface{}) error {

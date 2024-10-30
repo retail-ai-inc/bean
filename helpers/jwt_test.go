@@ -42,7 +42,7 @@ type customClaims struct {
 	jwt.RegisteredClaims
 }
 
-var _ jwt.Claims = &customClaims{}
+var _ jwt.Claims = (*customClaims)(nil)
 
 // Validate validates the custom claims based on application-specific logic.
 // OPTIONAL: Implement jwt.ClaimsValidator interface if you want to validate the claims.
@@ -53,7 +53,7 @@ func (c *customClaims) Validate() error {
 	return nil
 }
 
-var _ jwt.ClaimsValidator = &customClaims{}
+var _ jwt.ClaimsValidator = (*customClaims)(nil)
 
 func Test_DecodeJWTWithJsonUnmarshalStyle(t *testing.T) {
 	e := echo.New()
