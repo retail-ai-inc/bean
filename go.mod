@@ -8,7 +8,7 @@ require (
 	github.com/getsentry/sentry-go v0.29.1
 	github.com/go-playground/validator/v10 v10.22.0
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/go-resty/resty/v2 v2.14.0
+	github.com/go-resty/resty/v2 v2.15.3
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
 	github.com/labstack/echo-contrib v0.17.1
