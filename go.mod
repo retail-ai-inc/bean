@@ -3,7 +3,7 @@ module github.com/retail-ai-inc/bean/v2
 go 1.22.5
 
 require (
-	github.com/alphadose/haxmap v1.4.0
+	github.com/alphadose/haxmap v1.4.1
 	github.com/getsentry/sentry-go v0.29.1
 	github.com/go-playground/validator/v10 v10.22.0
 	github.com/go-redis/redis/v8 v8.11.5
