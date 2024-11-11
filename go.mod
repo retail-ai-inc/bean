@@ -23,7 +23,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/valyala/fasttemplate v1.2.2
 	go.mongodb.org/mongo-driver v1.17.1
-	golang.org/x/sync v0.8.0
+	golang.org/x/sync v0.9.0
 	golang.org/x/tools v0.26.0
 	gorm.io/datatypes v1.2.4
 	gorm.io/driver/mysql v1.5.7
