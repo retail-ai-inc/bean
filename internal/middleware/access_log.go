@@ -34,12 +34,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/color"
-	"github.com/retail-ai-inc/bean/v2/helpers"
-	"github.com/spf13/viper"
 	"github.com/valyala/fasttemplate"
 )
 
@@ -134,13 +131,6 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
-			// Start a sentry span for tracing.
-			if viper.GetBool("sentry.on") {
-				span := sentry.StartSpan(c.Request().Context(), "http.middleware")
-				span.Description = helpers.CurrFuncName()
-				defer span.Finish()
-			}
-
 			// Skip the logging if skipper is configured via `skipEndpoints` parameter in env.json.
 			if config.Skipper(c) {
 				return next(c)
