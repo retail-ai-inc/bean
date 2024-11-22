@@ -24,10 +24,12 @@ package trace
 
 import (
 	"context"
+	"net/http"
 	"runtime"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc/metadata"
 )
 
 // StartSpan starts a span and returns context containing the span and a function to finish the corresponding span.
@@ -53,4 +55,49 @@ func StartSpan(c context.Context, operation string, spanOpts ...sentry.SpanOptio
 	return newCtx, func() {
 		span.Finish()
 	}
+}
+
+// PropagateToHTTP propagates the Sentry tracing information to the outgoing HTTP/1.X request header.
+// Refers to the following link for more information.
+// https://docs.sentry.io/platforms/go/tracing/trace-propagation/custom-instrumentation/#step-2-inject-tracing-information-to-outgoing-requests
+func PropagateToHTTP(ctx context.Context, header http.Header) http.Header {
+
+	sentryTrace, baggage := extractTracing(ctx)
+	if sentryTrace == "" {
+		return header
+	}
+
+	header.Add(sentry.SentryTraceHeader, sentryTrace)
+	header.Add(sentry.SentryBaggageHeader, baggage)
+
+	return header
+}
+
+// PropagateToGRPC propagates the Sentry tracing information to the outgoing gRPC request metadata.
+// Refers to the following link for more information.
+// https://docs.sentry.io/platforms/go/tracing/trace-propagation/custom-instrumentation/#step-2-inject-tracing-information-to-outgoing-requests
+func PropagateToGRPC(ctx context.Context) context.Context {
+
+	sentryTrace, baggage := extractTracing(ctx)
+	if sentryTrace == "" {
+		return ctx
+	}
+
+	md := metadata.Pairs(
+		sentry.SentryTraceHeader, sentryTrace,
+		sentry.SentryBaggageHeader, baggage,
+	)
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
+	return ctx
+}
+
+func extractTracing(ctx context.Context) (sentryTrace, baggage string) {
+
+	span := sentry.SpanFromContext(ctx)
+	if span == nil {
+		return "", ""
+	}
+
+	return span.ToSentryTrace(), span.ToBaggage()
 }

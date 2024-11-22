@@ -2,6 +2,8 @@ package trace_test
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"reflect"
 	"testing"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/metadata"
 )
 
 func TestStartSpan(t *testing.T) {
@@ -104,5 +107,106 @@ func setSentryConfig(enabled bool) func() {
 		// Restore original config
 		viper.Set("sentry.tracesSampleRate", originalSampleRate)
 		viper.Set("sentry.on", originalSentryOn)
+	}
+}
+
+func Test_Propagate_Sentry_Tracing_To_HTTP_Request(t *testing.T) {
+	tests := []struct {
+		name                string
+		ctx                 context.Context
+		setCfg              bool
+		nonEmptySentryTrace bool
+		baggage             string
+	}{
+		{
+			name:                "propagate_sentry_tracing_info_to_HTTP_request",
+			ctx:                 context.Background(),
+			setCfg:              true,
+			nonEmptySentryTrace: true,
+			baggage:             "",
+		},
+		{
+			name:                "no_sentry_tracing_information_to_propagate",
+			ctx:                 context.Background(),
+			setCfg:              false,
+			nonEmptySentryTrace: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			// Arrange
+			reset := setSentryConfig(tt.setCfg)
+			defer reset()
+			ctx, finish := trace.StartSpan(tt.ctx, "test")
+			defer finish()
+			header := http.Header{}
+
+			// Act
+			got := trace.PropagateToHTTP(ctx, header)
+
+			// Assert
+			if tt.nonEmptySentryTrace {
+				assert.NotEmpty(t, got.Get(sentry.SentryTraceHeader), "the sentry trace header should not be empty")
+				assert.Equal(t, tt.baggage, got.Get(sentry.SentryBaggageHeader), "the sentry baggage header is not as expected")
+			} else {
+				assert.Empty(t, got.Get(sentry.SentryTraceHeader), "the sentry trace header should be empty")
+				assert.Empty(t, got.Get(sentry.SentryBaggageHeader), "the sentry baggage header should be empty")
+			}
+		})
+	}
+}
+
+func Test_Propagate_Sentry_Tracing_To_gRPC_Request(t *testing.T) {
+	tests := []struct {
+		name                string
+		ctx                 context.Context
+		setCfg              bool
+		nonEmptySentryTrace bool
+		baggage             string
+	}{
+		{
+			name:                "propagate_sentry_tracing_info_to_gRPC_request",
+			ctx:                 context.Background(),
+			setCfg:              true,
+			nonEmptySentryTrace: true,
+			baggage:             "",
+		},
+		{
+			name:                "no_sentry_tracing_information_to_propagate",
+			ctx:                 context.Background(),
+			setCfg:              false,
+			nonEmptySentryTrace: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			// Arrange
+			reset := setSentryConfig(tt.setCfg)
+			defer reset()
+			ctx, finish := trace.StartSpan(tt.ctx, "test")
+			defer finish()
+
+			// Act
+			got := trace.PropagateToGRPC(ctx)
+
+			// Assert
+			if tt.nonEmptySentryTrace {
+				md, ok := metadata.FromOutgoingContext(got)
+				require.True(t, ok, "the context should have metadata")
+				if got := md.Get(sentry.SentryTraceHeader); len(got) != 1 || got[0] == "" {
+					assert.Fail(t, "the sentry trace header should not be empty", fmt.Sprintf("got: %v", got))
+				}
+				if got := md.Get(sentry.SentryBaggageHeader); len(got) != 1 || got[0] != tt.baggage {
+					assert.Fail(t, "the sentry baggage header is not as expected", fmt.Sprintf("got: %v", got))
+				}
+			} else {
+				_, ok := metadata.FromOutgoingContext(got)
+				require.False(t, ok, "the context should have metadata")
+			}
+		})
 	}
 }
