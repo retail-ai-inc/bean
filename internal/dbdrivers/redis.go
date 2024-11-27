@@ -709,7 +709,7 @@ func (clients *RedisDBConn) EvalSha(ctx context.Context, sha1 string, keys []str
 
 // Run wraps redis.Script.
 func (clients *RedisDBConn) Run(ctx context.Context, script *redis.Script, keys []string, args ...interface{}) (interface{}, error) {
-	v, err := script.Run(ctx, clients.Primary, keys, args).Result()
+	v, err := script.Run(ctx, clients.Primary, keys, args...).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return nil, nil

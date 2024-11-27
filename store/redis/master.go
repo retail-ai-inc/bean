@@ -224,13 +224,13 @@ func (m *masterCache) Pipelined(c context.Context, fn func(redis.Pipeliner) erro
 }
 
 func (m *masterCache) Eval(c context.Context, script string, keys []string, args ...interface{}) (interface{}, error) {
-	return m.cache.Eval(c, masterID, script, keys, args)
+	return m.cache.Eval(c, masterID, script, keys, args...)
 }
 
 func (m *masterCache) EvalSha(c context.Context, sha1 string, keys []string, args ...interface{}) (interface{}, error) {
-	return m.cache.EvalSha(c, masterID, sha1, keys, args)
+	return m.cache.EvalSha(c, masterID, sha1, keys, args...)
 }
 
 func (m *masterCache) Run(c context.Context, script *redis.Script, keys []string, args ...interface{}) (interface{}, error) {
-	return m.cache.Run(c, masterID, script, keys, args)
+	return m.cache.Run(c, masterID, script, keys, args...)
 }
