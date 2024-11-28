@@ -446,14 +446,15 @@ func NewEcho() *echo.Echo {
 				sentry.ConfigureScope(BeanConfig.Sentry.ConfigureScope)
 			}
 
+			// Start tracing for the incoming request.
 			e.Use(sentryecho.New(sentryecho.Options{
 				Repanic: true,
 				Timeout: BeanConfig.Sentry.Timeout,
 			}))
 
-			regex.CompileTraceSkipPaths(BeanConfig.Sentry.SkipTracesEndpoints)
 			if helpers.FloatInRange(BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
-				e.Pre(middleware.Tracer())
+				regex.CompileTraceSkipPaths(BeanConfig.Sentry.SkipTracesEndpoints)
+				e.Use(middleware.SkipSampling())
 			}
 		}
 	}

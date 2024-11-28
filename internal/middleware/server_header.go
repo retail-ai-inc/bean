@@ -25,23 +25,13 @@ package middleware
 import (
 	"path"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/helpers"
-	"github.com/spf13/viper"
 )
 
 // ServerHeader middleware adds a `Server` header to the response.
 func ServerHeader(name, version string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
-			// Start a sentry span for tracing.
-			if viper.GetBool("sentry.on") {
-				span := sentry.StartSpan(c.Request().Context(), "http.middleware")
-				span.Description = helpers.CurrFuncName()
-				defer span.Finish()
-				c.SetRequest(c.Request().WithContext(span.Context()))
-			}
 
 			c.Response().Header().Set(echo.HeaderServer, path.Join(name, version))
 			return next(c)

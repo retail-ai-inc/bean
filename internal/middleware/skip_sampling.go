@@ -28,29 +28,37 @@ import (
 	"github.com/retail-ai-inc/bean/v2/internal/regex"
 
 	"github.com/getsentry/sentry-go"
+	sentryecho "github.com/getsentry/sentry-go/echo"
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/v2/helpers"
 )
 
-// Tracer attach a root sentry span context to the request.
-func Tracer() echo.MiddlewareFunc {
+// SkipSampling skips the sampling of the transaction if the request path is in the skip list.
+func SkipSampling() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			var ctx = c.Request().Context()
-			hub := sentry.GetHubFromContext(ctx)
-			if hub == nil {
-				hub = sentry.CurrentHub().Clone()
-				ctx = sentry.SetHubOnContext(ctx, hub)
-			}
-			path := c.Request().URL.Path
-			// Start a sentry span for tracing.
-			span := sentry.StartTransaction(ctx, fmt.Sprintf("%s %s", c.Request().Method, path),
-				sentry.WithOpName("http"),
-				sentry.WithDescription(helpers.CurrFuncName()),
-				sentry.ContinueFromRequest(c.Request()),
-			)
-			defer span.Finish()
 
+			span := sentryecho.GetSpanFromContext(c)
+			if span == nil {
+				// Should not happen due to the sentryecho middleware's handler, but just in case.
+				// https://github.com/getsentry/sentry-go/blob/v0.29.1/echo/sentryecho.go#L39-L113
+				ctx := c.Request().Context()
+				hub := sentryecho.GetHubFromContext(c)
+				if hub == nil {
+					hub = sentry.CurrentHub().Clone()
+					ctx = sentry.SetHubOnContext(ctx, hub)
+				}
+				path := c.Request().URL.Path
+				// Start a sentry span for tracing.
+				span = sentry.StartTransaction(ctx, fmt.Sprintf("%s %s", c.Request().Method, path),
+					sentry.WithOpName("http"),
+					sentry.WithDescription(helpers.CurrFuncName()),
+					sentry.ContinueFromRequest(c.Request()),
+				)
+				defer span.Finish()
+			}
+
+			path := c.Request().URL.Path
 			if regex.MatchAnyTraceSkipPath(path) {
 				span.Sampled = sentry.SampledFalse
 			}
