@@ -107,12 +107,16 @@ func start(cmd *cobra.Command, args []string) {
 		go func() {
 			// TODO: start the queue
 		}()
-		b.ServeAt(host, port)
+		if err := b.ServeAt(host, port); err != nil {
+			log.Fatalf("Failed to start the web service: %v", err)
+		}
 	} else if startQueue && !startWeb {
 		// Only start worker pool
 		// TODO: start the queue
 	} else {
 		// Only start the web
-		b.ServeAt(host, port)
+		if err := b.ServeAt(host, port); err != nil {
+			log.Fatalf("Failed to start the web service: %v", err)
+		}
 	}
 }
