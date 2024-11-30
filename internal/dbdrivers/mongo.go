@@ -147,11 +147,11 @@ func connectMongoDB(userName, password, host, port, dbName string, maxConnection
 		},
 		Succeeded: func(ctx context.Context, succeededEvent *event.CommandSucceededEvent) {
 			logger.Debugf("mongo reqId:%d exec cmd:%s success duration %d ns", succeededEvent.RequestID,
-				succeededEvent.CommandName, succeededEvent.DurationNanos)
+				succeededEvent.CommandName, succeededEvent.Duration)
 		},
 		Failed: func(ctx context.Context, failedEvent *event.CommandFailedEvent) {
 			logger.Debugf("mongo reqId:%d exec cmd:%s failed duration %d ns", failedEvent.RequestID,
-				failedEvent.CommandName, failedEvent.DurationNanos)
+				failedEvent.CommandName, failedEvent.Duration)
 		},
 	}
 	if debug {
