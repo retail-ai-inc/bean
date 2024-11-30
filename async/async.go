@@ -35,6 +35,7 @@ import (
 	"github.com/retail-ai-inc/bean/v2"
 	"github.com/retail-ai-inc/bean/v2/internal/gopool"
 	"github.com/retail-ai-inc/bean/v2/internal/regex"
+	bsentry "github.com/retail-ai-inc/bean/v2/internal/sentry"
 )
 
 type (
@@ -182,27 +183,7 @@ func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutT
 }
 
 func CaptureException(c context.Context, err error) {
-	if err == nil {
-		return
-	}
-
-	if !bean.BeanConfig.Sentry.On {
-		bean.Logger().Error(err)
-		return
-	}
-
-	if c != nil {
-		// If the function get a proper context then push the request headers and URI along with other meaningful info.
-		if hub := sentry.GetHubFromContext(c); hub != nil {
-			hub.CaptureException(err)
-		} else {
-			sentry.CurrentHub().Clone().CaptureException(fmt.Errorf("async context is missing hub information: %w", err))
-		}
-		return
-	}
-
-	// If someone call the function from service/repository without a proper context.
-	sentry.CurrentHub().Clone().CaptureException(err)
+	bsentry.CaptureException(c, err, bean.Logger(), bean.BeanConfig.Sentry.On, "async context is missing hub information")
 }
 
 // Recover the panic and send the exception to sentry.

@@ -59,6 +59,7 @@ import (
 	"github.com/retail-ai-inc/bean/v2/internal/middleware"
 	"github.com/retail-ai-inc/bean/v2/internal/regex"
 	broute "github.com/retail-ai-inc/bean/v2/internal/route"
+	bsentry "github.com/retail-ai-inc/bean/v2/internal/sentry"
 	"github.com/retail-ai-inc/bean/v2/internal/validator"
 	"github.com/retail-ai-inc/bean/v2/store/memory"
 	"github.com/rs/dnscache"
@@ -697,50 +698,27 @@ func Logger() echo.Logger {
 	return BeanLogger
 }
 
-// SentryCaptureException  This is a global function to send sentry exception if you configure the sentry through env.json. You cann pass a proper context or nil.
+// SentryCaptureException captures an exception with echo context and send to sentry.
+// This is a global function to send sentry exception if you configure the sentry through env.json. You cann pass a proper context or nil.
 // if you want to capture exception in async function, please use async.CaptureException.
 func SentryCaptureException(c echo.Context, err error) {
-	if err == nil {
-		return
-	}
-
-	if !BeanConfig.Sentry.On {
-		Logger().Error(err)
-		return
-	}
-
-	if c != nil {
-		// If the function get a proper context then push the request headers and URI along with other meaningful info.
-		if hub := sentryecho.GetHubFromContext(c); hub != nil {
-			hub.CaptureException(err)
-		} else {
-			sentry.CurrentHub().Clone().CaptureException(fmt.Errorf("echo context is missing hub information: %w", err))
-		}
-
-		return
-	}
-
-	// If someone call the function from service/repository without a proper context.
-	sentry.CurrentHub().Clone().CaptureException(err)
+	bsentry.CaptureExceptionWithEchoCtx(c, err, BeanLogger, BeanConfig.Sentry.On, "echo context is missing hub information")
 }
 
+// CaptureException captures an exception with context and send to sentry if sentry is configured.
+func CaptureException(ctx context.Context, err error) {
+	bsentry.CaptureException(ctx, err, BeanLogger, BeanConfig.Sentry.On, "context is missing hub information")
+}
+
+// SentryCaptureMessage captures a message with echo context and send to sentry.
 // This is a global function to send sentry message if you configure the sentry through env.json. You cann pass a proper context or nil.
 func SentryCaptureMessage(c echo.Context, msg string) {
-	if !BeanConfig.Sentry.On {
-		return
-	}
+	bsentry.CaptureMessageWithEchoCtx(c, msg, BeanConfig.Sentry.On)
+}
 
-	if c != nil {
-		// If the function get a proper context then push the request headers and URI along with other meaningful info.
-		if hub := sentryecho.GetHubFromContext(c); hub != nil {
-			hub.CaptureMessage(msg)
-		}
-
-		return
-	}
-
-	// If someone call the function from service/repository without a proper context.
-	sentry.CurrentHub().Clone().CaptureMessage(msg)
+// CaptureMessage captures a message with context and send to sentry if sentry is configured.
+func CaptureMessage(ctx context.Context, msg string) {
+	bsentry.CaptureMessage(ctx, msg, BeanConfig.Sentry.On)
 }
 
 // To clean up any bean resources before the program terminates.
