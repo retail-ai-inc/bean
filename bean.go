@@ -26,7 +26,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"html/template"
 	"log"
 	"net"
@@ -49,6 +48,7 @@ import (
 	elog "github.com/labstack/gommon/log"
 	"github.com/panjf2000/ants/v2"
 	pkgerrors "github.com/pkg/errors"
+	"github.com/retail-ai-inc/bean/v2/config"
 	"github.com/retail-ai-inc/bean/v2/echoview"
 	berror "github.com/retail-ai-inc/bean/v2/error"
 	"github.com/retail-ai-inc/bean/v2/goview"
@@ -59,11 +59,11 @@ import (
 	"github.com/retail-ai-inc/bean/v2/internal/middleware"
 	"github.com/retail-ai-inc/bean/v2/internal/regex"
 	broute "github.com/retail-ai-inc/bean/v2/internal/route"
-	bsentry "github.com/retail-ai-inc/bean/v2/internal/sentry"
 	"github.com/retail-ai-inc/bean/v2/internal/validator"
+	blog "github.com/retail-ai-inc/bean/v2/log"
 	"github.com/retail-ai-inc/bean/v2/store/memory"
+	"github.com/retail-ai-inc/bean/v2/trace"
 	"github.com/rs/dnscache"
-	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
 )
@@ -89,158 +89,20 @@ type Bean struct {
 	BeforeServe       func()
 	errorHandlerFuncs []berror.ErrorHandlerFunc
 	Validate          *validatorV10.Validate
-	Config            Config
+	Config            config.Config
 }
-
-type SentryConfig struct {
-	On                  bool
-	Debug               bool
-	Dsn                 string
-	Timeout             time.Duration
-	TracesSampleRate    float64
-	ProfilesSampleRate  float64
-	SkipTracesEndpoints []string
-	ClientOptions       *sentry.ClientOptions
-	ConfigureScope      func(scope *sentry.Scope)
-}
-
-type Config struct {
-	ProjectName  string
-	Environment  string
-	DebugLogPath string
-	Secret       string
-	AccessLog    struct {
-		On                bool
-		BodyDump          bool
-		Path              string
-		BodyDumpMaskParam []string
-		ReqHeaderParam    []string
-		SkipEndpoints     []string
-	}
-	Prometheus struct {
-		On            bool
-		SkipEndpoints []string
-		Subsystem     string
-	}
-	HTTP struct {
-		Port            string
-		Host            string
-		BodyLimit       string
-		IsHttpsRedirect bool
-		Timeout         time.Duration
-		ErrorMessage    struct {
-			E404 struct {
-				Json []struct {
-					Key   string
-					Value string
-				}
-				Html struct {
-					File string
-				}
-			}
-			E405 struct {
-				Json []struct {
-					Key   string
-					Value string
-				}
-				Html struct {
-					File string
-				}
-			}
-			E500 struct {
-				Json []struct {
-					Key   string
-					Value string
-				}
-				Html struct {
-					File string
-				}
-			}
-			E504 struct {
-				Json []struct {
-					Key   string
-					Value string
-				}
-				Html struct {
-					File string
-				}
-			}
-			Default struct {
-				Json []struct {
-					Key   string
-					Value string
-				}
-				Html struct {
-					File string
-				}
-			}
-		}
-		KeepAlive     bool
-		AllowedMethod []string
-		SSL           struct {
-			On            bool
-			CertFile      string
-			PrivFile      string
-			MinTLSVersion uint16
-		}
-		ShutdownTimeout time.Duration
-	}
-	NetHttpFastTransporter struct {
-		On                  bool
-		MaxIdleConns        *int
-		MaxIdleConnsPerHost *int
-		MaxConnsPerHost     *int
-		IdleConnTimeout     *time.Duration
-		DNSCacheTimeout     *time.Duration
-	}
-	HTML struct {
-		ViewsTemplateCache bool
-	}
-	Database struct {
-		Tenant struct {
-			On bool
-		}
-		MySQL  dbdrivers.SQLConfig
-		Mongo  dbdrivers.MongoConfig
-		Redis  dbdrivers.RedisConfig
-		Memory dbdrivers.MemoryConfig
-	}
-	Sentry   SentryConfig
-	Security struct {
-		HTTP struct {
-			Header struct {
-				XssProtection         string
-				ContentTypeNosniff    string
-				XFrameOptions         string
-				HstsMaxAge            int
-				ContentSecurityPolicy string
-			}
-		}
-	}
-	AsyncPool []struct {
-		Name       string
-		Size       *int
-		BlockAfter *int
-	}
-}
-
-// This is a global variable to hold the debug logger so that we can log data from service, repository or anywhere.
-var BeanLogger echo.Logger
 
 // If a command or service wants to use a different `host` parameter for tenant database connection
 // then it's easy to do just by passing that parameter string name using `bean.TenantAlterDbHostParam`.
 // Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
 var TenantAlterDbHostParam string
 
-// Hold the useful configuration settings of bean so that we can use it quickly from anywhere.
-var BeanConfig *Config
-
 // Support a DNS cache version of the net/http Transport.
 var NetHttpFastTransporter *http.Transport
 
 func New() (b *Bean) {
 
-	if BeanConfig == nil {
+	if config.Bean == nil {
 		log.Fatal("config is not loaded")
 	}
 
@@ -250,30 +112,30 @@ func New() (b *Bean) {
 	b = &Bean{
 		Echo:     e,
 		Validate: validatorV10.New(),
-		Config:   *BeanConfig,
+		Config:   *config.Bean,
 	}
 
 	// If `NetHttpFastTransporter` is on from env.json then initialize it.
-	if BeanConfig.NetHttpFastTransporter.On {
+	if config.Bean.NetHttpFastTransporter.On {
 		resolver := &dnscache.Resolver{}
-		if BeanConfig.NetHttpFastTransporter.MaxIdleConns == nil {
-			*BeanConfig.NetHttpFastTransporter.MaxIdleConns = 0
+		if config.Bean.NetHttpFastTransporter.MaxIdleConns == nil {
+			*config.Bean.NetHttpFastTransporter.MaxIdleConns = 0
 		}
 
-		if BeanConfig.NetHttpFastTransporter.MaxIdleConnsPerHost == nil {
-			*BeanConfig.NetHttpFastTransporter.MaxIdleConnsPerHost = 0
+		if config.Bean.NetHttpFastTransporter.MaxIdleConnsPerHost == nil {
+			*config.Bean.NetHttpFastTransporter.MaxIdleConnsPerHost = 0
 		}
 
-		if BeanConfig.NetHttpFastTransporter.MaxConnsPerHost == nil {
-			*BeanConfig.NetHttpFastTransporter.MaxConnsPerHost = 0
+		if config.Bean.NetHttpFastTransporter.MaxConnsPerHost == nil {
+			*config.Bean.NetHttpFastTransporter.MaxConnsPerHost = 0
 		}
 
-		if BeanConfig.NetHttpFastTransporter.IdleConnTimeout == nil {
-			*BeanConfig.NetHttpFastTransporter.IdleConnTimeout = 0
+		if config.Bean.NetHttpFastTransporter.IdleConnTimeout == nil {
+			*config.Bean.NetHttpFastTransporter.IdleConnTimeout = 0
 		}
 
-		if BeanConfig.NetHttpFastTransporter.DNSCacheTimeout == nil {
-			*BeanConfig.NetHttpFastTransporter.DNSCacheTimeout = 5 * time.Minute
+		if config.Bean.NetHttpFastTransporter.DNSCacheTimeout == nil {
+			*config.Bean.NetHttpFastTransporter.DNSCacheTimeout = 5 * time.Minute
 		}
 
 		NetHttpFastTransporter = &http.Transport{
@@ -293,15 +155,15 @@ func New() (b *Bean) {
 
 				return
 			},
-			MaxIdleConns:        *BeanConfig.NetHttpFastTransporter.MaxIdleConns,
-			MaxIdleConnsPerHost: *BeanConfig.NetHttpFastTransporter.MaxIdleConnsPerHost,
-			MaxConnsPerHost:     *BeanConfig.NetHttpFastTransporter.MaxConnsPerHost,
-			IdleConnTimeout:     *BeanConfig.NetHttpFastTransporter.IdleConnTimeout,
+			MaxIdleConns:        *config.Bean.NetHttpFastTransporter.MaxIdleConns,
+			MaxIdleConnsPerHost: *config.Bean.NetHttpFastTransporter.MaxIdleConnsPerHost,
+			MaxConnsPerHost:     *config.Bean.NetHttpFastTransporter.MaxConnsPerHost,
+			IdleConnTimeout:     *config.Bean.NetHttpFastTransporter.IdleConnTimeout,
 		}
 
 		// IMPORTANT: Refresh unused DNS cache in every 5 minutes by default unless set via env.json.
 		go func() {
-			t := time.NewTicker(*BeanConfig.NetHttpFastTransporter.DNSCacheTimeout)
+			t := time.NewTicker(*config.Bean.NetHttpFastTransporter.DNSCacheTimeout)
 			defer t.Stop()
 			for range t.C {
 				resolver.Refresh(true)
@@ -310,12 +172,12 @@ func New() (b *Bean) {
 	}
 
 	// If `memory` database is on and `delKeyAPI` end point along with bearer token are properly set.
-	if BeanConfig.Database.Memory.On && BeanConfig.Database.Memory.DelKeyAPI.EndPoint != "" {
-		e.DELETE(BeanConfig.Database.Memory.DelKeyAPI.EndPoint, func(c echo.Context) error {
+	if config.Bean.Database.Memory.On && config.Bean.Database.Memory.DelKeyAPI.EndPoint != "" {
+		e.DELETE(config.Bean.Database.Memory.DelKeyAPI.EndPoint, func(c echo.Context) error {
 			// If you set empty `authBearerToken` string in env.json then bean will not check the `Authorization` header.
-			if BeanConfig.Database.Memory.DelKeyAPI.AuthBearerToken != "" {
+			if config.Bean.Database.Memory.DelKeyAPI.AuthBearerToken != "" {
 				tokenString := helpers.ExtractJWTFromHeader(c)
-				if tokenString != BeanConfig.Database.Memory.DelKeyAPI.AuthBearerToken {
+				if tokenString != config.Bean.Database.Memory.DelKeyAPI.AuthBearerToken {
 					return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 						"message": "Unauthorized!",
 					})
@@ -335,7 +197,7 @@ func New() (b *Bean) {
 
 func NewEcho() *echo.Echo {
 
-	if BeanConfig == nil {
+	if config.Bean == nil {
 		log.Fatal("config is not loaded")
 	}
 
@@ -348,7 +210,7 @@ func NewEcho() *echo.Echo {
 	e.Binder = &binder.CustomBinder{}
 
 	// Setup HTML view templating engine.
-	viewsTemplateCache := BeanConfig.HTML.ViewsTemplateCache
+	viewsTemplateCache := config.Bean.HTML.ViewsTemplateCache
 	e.Renderer = echoview.New(goview.Config{
 		Root:         "views",
 		Extension:    ".html",
@@ -360,8 +222,8 @@ func NewEcho() *echo.Echo {
 	})
 
 	// IMPORTANT: Configure debug log.
-	if BeanConfig.DebugLogPath != "" {
-		if file, err := openFile(BeanConfig.DebugLogPath); err != nil {
+	if config.Bean.DebugLogPath != "" {
+		if file, err := openFile(config.Bean.DebugLogPath); err != nil {
 			e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
 		} else {
 			e.Logger.SetOutput(file)
@@ -370,27 +232,27 @@ func NewEcho() *echo.Echo {
 	e.Logger.SetLevel(elog.DEBUG)
 
 	// Initialize `BeanLogger` global variable using `e.Logger`.
-	BeanLogger = e.Logger
+	blog.Set(e.Logger)
 
 	// Adds a `Server` header to the response.
-	e.Use(middleware.ServerHeader(BeanConfig.ProjectName, helpers.CurrVersion()))
+	e.Use(middleware.ServerHeader(config.Bean.ProjectName, helpers.CurrVersion()))
 
 	// Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
-	e.Use(echomiddleware.BodyLimit(BeanConfig.HTTP.BodyLimit))
+	e.Use(echomiddleware.BodyLimit(config.Bean.HTTP.BodyLimit))
 
 	// CORS initialization and support only HTTP methods which are configured under `http.allowedMethod` parameters in `env.json`.
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
 		AllowOrigins: []string{"*"},
-		AllowMethods: BeanConfig.HTTP.AllowedMethod,
+		AllowMethods: config.Bean.HTTP.AllowedMethod,
 	}))
 
 	// Basic HTTP headers security like XSS protection...
 	e.Use(echomiddleware.SecureWithConfig(echomiddleware.SecureConfig{
-		XSSProtection:         BeanConfig.Security.HTTP.Header.XssProtection,         // Adds the X-XSS-Protection header with the value `1; mode=block`.
-		ContentTypeNosniff:    BeanConfig.Security.HTTP.Header.ContentTypeNosniff,    // Adds the X-Content-Type-Options header with the value `nosniff`.
-		XFrameOptions:         BeanConfig.Security.HTTP.Header.XFrameOptions,         // The X-Frame-Options header value to be set with a custom value.
-		HSTSMaxAge:            BeanConfig.Security.HTTP.Header.HstsMaxAge,            // HSTS header is only included when the connection is HTTPS.
-		ContentSecurityPolicy: BeanConfig.Security.HTTP.Header.ContentSecurityPolicy, // Allows the Content-Security-Policy header value to be set with a custom value.
+		XSSProtection:         config.Bean.Security.HTTP.Header.XssProtection,         // Adds the X-XSS-Protection header with the value `1; mode=block`.
+		ContentTypeNosniff:    config.Bean.Security.HTTP.Header.ContentTypeNosniff,    // Adds the X-Content-Type-Options header with the value `nosniff`.
+		XFrameOptions:         config.Bean.Security.HTTP.Header.XFrameOptions,         // The X-Frame-Options header value to be set with a custom value.
+		HSTSMaxAge:            config.Bean.Security.HTTP.Header.HstsMaxAge,            // HSTS header is only included when the connection is HTTPS.
+		ContentSecurityPolicy: config.Bean.Security.HTTP.Header.ContentSecurityPolicy, // Allows the Content-Security-Policy header value to be set with a custom value.
 	}))
 
 	// Return `405 Method Not Allowed` if a wrong HTTP method been called for an API route.
@@ -398,23 +260,23 @@ func NewEcho() *echo.Echo {
 	e.Use(middleware.MethodNotAllowedAndRouteNotFound())
 
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
-	if BeanConfig.AccessLog.On {
-		regex.CompileAccessLogSkipPaths(BeanConfig.AccessLog.SkipEndpoints)
+	if config.Bean.AccessLog.On {
+		regex.CompileAccessLogSkipPaths(config.Bean.AccessLog.SkipEndpoints)
 		accessLogConfig := middleware.LoggerConfig{
 			Skipper:       pathSkipper(regex.AccessLogSkipPaths),
-			BodyDump:      BeanConfig.AccessLog.BodyDump,
-			RequestHeader: BeanConfig.AccessLog.ReqHeaderParam,
+			BodyDump:      config.Bean.AccessLog.BodyDump,
+			RequestHeader: config.Bean.AccessLog.ReqHeaderParam,
 		}
 
-		if BeanConfig.AccessLog.Path != "" {
-			if file, err := openFile(BeanConfig.AccessLog.Path); err != nil {
+		if config.Bean.AccessLog.Path != "" {
+			if file, err := openFile(config.Bean.AccessLog.Path); err != nil {
 				e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
 			} else {
 				accessLogConfig.Output = file
 			}
 		}
-		if len(BeanConfig.AccessLog.BodyDumpMaskParam) > 0 {
-			accessLogConfig.MaskedParameters = BeanConfig.AccessLog.BodyDumpMaskParam
+		if len(config.Bean.AccessLog.BodyDumpMaskParam) > 0 {
+			accessLogConfig.MaskedParameters = config.Bean.AccessLog.BodyDumpMaskParam
 		}
 		accessLogger := middleware.AccessLoggerWithConfig(accessLogConfig)
 		e.Use(accessLogger)
@@ -422,19 +284,19 @@ func NewEcho() *echo.Echo {
 
 	// Add context timeout.
 	// If no timeout is set or timeout=0, skip adding the timeout middleware.
-	timeoutDur := BeanConfig.HTTP.Timeout
+	timeoutDur := config.Bean.HTTP.Timeout
 	if timeoutDur > 0 {
 		e.Use(ContextTimeout(timeoutDur))
 	}
 
 	// IMPORTANT: Capturing error and send to sentry if needed.
 	// Sentry `panic` error handler and APM initialization if activated from `env.json`
-	if BeanConfig.Sentry.On {
+	if config.Bean.Sentry.On {
 		// Check the sentry client options is not nil
-		if BeanConfig.Sentry.ClientOptions == nil {
+		if config.Bean.Sentry.ClientOptions == nil {
 			e.Logger.Error("Sentry initialization failed: client options is empty")
 		} else {
-			clientOption := BeanConfig.Sentry.ClientOptions
+			clientOption := config.Bean.Sentry.ClientOptions
 			if clientOption.TracesSampleRate > 0 {
 				clientOption.EnableTracing = true
 			}
@@ -443,18 +305,18 @@ func NewEcho() *echo.Echo {
 			}
 
 			// Configure custom scope
-			if BeanConfig.Sentry.ConfigureScope != nil {
-				sentry.ConfigureScope(BeanConfig.Sentry.ConfigureScope)
+			if config.Bean.Sentry.ConfigureScope != nil {
+				sentry.ConfigureScope(config.Bean.Sentry.ConfigureScope)
 			}
 
 			// Start tracing for the incoming request.
 			e.Use(sentryecho.New(sentryecho.Options{
 				Repanic: true,
-				Timeout: BeanConfig.Sentry.Timeout,
+				Timeout: config.Bean.Sentry.Timeout,
 			}))
 
-			if helpers.FloatInRange(BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
-				regex.CompileTraceSkipPaths(BeanConfig.Sentry.SkipTracesEndpoints)
+			if helpers.FloatInRange(config.Bean.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
+				regex.CompileTraceSkipPaths(config.Bean.Sentry.SkipTracesEndpoints)
 				e.Use(middleware.SkipSampling())
 			}
 		}
@@ -462,7 +324,7 @@ func NewEcho() *echo.Echo {
 
 	// Some pre-build middleware initialization.
 	e.Pre(echomiddleware.RemoveTrailingSlash())
-	if BeanConfig.HTTP.IsHttpsRedirect {
+	if config.Bean.HTTP.IsHttpsRedirect {
 		e.Pre(echomiddleware.HTTPSRedirect())
 	}
 	e.Use(echomiddleware.Recover())
@@ -475,23 +337,23 @@ func NewEcho() *echo.Echo {
 
 	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
 	// This will help us to integrate `bean's` health into `k8s`.
-	if BeanConfig.Prometheus.On {
+	if config.Bean.Prometheus.On {
 		const metricsPath = "/metrics" // fixed path
-		if err := regex.CompilePrometheusSkipPaths(BeanConfig.Prometheus.SkipEndpoints, metricsPath); err != nil {
+		if err := regex.CompilePrometheusSkipPaths(config.Bean.Prometheus.SkipEndpoints, metricsPath); err != nil {
 			e.Logger.Fatalf("Prometheus initialization failed: %v. Server 🚀  crash landed. Exiting...\n", err)
 		}
 		conf := echoprometheus.MiddlewareConfig{
 			Skipper: pathSkipper(regex.PrometheusSkipPaths),
 		}
-		if BeanConfig.Prometheus.Subsystem != "" {
-			conf.Subsystem = BeanConfig.Prometheus.Subsystem
+		if config.Bean.Prometheus.Subsystem != "" {
+			conf.Subsystem = config.Bean.Prometheus.Subsystem
 		}
 		e.Use(echoprometheus.NewMiddlewareWithConfig(conf))
 		e.GET(metricsPath, echoprometheus.NewHandler())
 	}
 
 	// Register goroutine pool
-	for _, asyncPool := range BeanConfig.AsyncPool {
+	for _, asyncPool := range config.Bean.AsyncPool {
 		if asyncPool.Name == "" {
 			continue
 		}
@@ -641,7 +503,7 @@ func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
 		for _, handle := range b.errorHandlerFuncs {
 			handled, err := handle(err, c)
 			if err != nil {
-				SentryCaptureException(c, err)
+				trace.SentryCaptureExceptionWithEcho(c, err)
 			}
 			if handled {
 				break
@@ -665,12 +527,12 @@ func (b *Bean) InitDB() {
 	var masterMemoryDB memory.Cache
 
 	masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
-	masterMongoDB, masterMongoDBName = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo, Logger())
+	masterMongoDB, masterMongoDBName = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo, blog.Logger())
 	masterRedisDB = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
 
 	if b.Config.Database.Tenant.On {
 		tenantMySQLDBs, tenantMySQLDBNames = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
-		tenantMongoDBs, tenantMongoDBNames = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, Logger())
+		tenantMongoDBs, tenantMongoDBNames = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, blog.Logger())
 		tenantRedisDBs = dbdrivers.InitRedisTenantConns(b.Config.Database.Redis, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
 	}
 
@@ -693,73 +555,13 @@ func (b *Bean) InitDB() {
 	}
 }
 
-// The bean Logger to have debug log from anywhere.
-func Logger() echo.Logger {
-	return BeanLogger
-}
-
-// SentryCaptureException captures an exception with echo context and send to sentry.
-// This is a global function to send sentry exception if you configure the sentry through env.json. You cann pass a proper context or nil.
-// if you want to capture exception in async function, please use async.CaptureException.
-func SentryCaptureException(c echo.Context, err error) {
-	bsentry.CaptureExceptionWithEchoCtx(c, err, BeanLogger, BeanConfig.Sentry.On, "echo context is missing hub information")
-}
-
-// CaptureException captures an exception with context and send to sentry if sentry is configured.
-func CaptureException(ctx context.Context, err error) {
-	bsentry.CaptureException(ctx, err, BeanLogger, BeanConfig.Sentry.On, "context is missing hub information")
-}
-
-// SentryCaptureMessage captures a message with echo context and send to sentry.
-// This is a global function to send sentry message if you configure the sentry through env.json. You cann pass a proper context or nil.
-func SentryCaptureMessage(c echo.Context, msg string) {
-	bsentry.CaptureMessageWithEchoCtx(c, msg, BeanConfig.Sentry.On)
-}
-
-// CaptureMessage captures a message with context and send to sentry if sentry is configured.
-func CaptureMessage(ctx context.Context, msg string) {
-	bsentry.CaptureMessage(ctx, msg, BeanConfig.Sentry.On)
-}
-
 // To clean up any bean resources before the program terminates.
 // Call this function using `defer` like `defer Cleanup()`
 func Cleanup() {
-	if BeanConfig.Sentry.On {
+	if config.Bean.Sentry.On {
 		// Flush buffered sentry events if any.
-		sentry.Flush(BeanConfig.Sentry.Timeout)
+		sentry.Flush(config.Bean.Sentry.Timeout)
 	}
-}
-
-// Modify event through beforeSend function.
-func DefaultBeforeSend(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
-	// Example: enriching the event by adding aditional data.
-	switch err := hint.OriginalException.(type) {
-	case *validator.ValidationError:
-		return event
-	case *berror.APIError:
-		if err.Ignorable {
-			return nil
-		}
-		event.Contexts["Error"] = map[string]interface{}{
-			"HTTPStatusCode": err.HTTPStatusCode,
-			"GlobalErrCode":  err.GlobalErrCode,
-			"Message":        err.Error(),
-		}
-		return event
-	case *echo.HTTPError:
-		return event
-	default:
-		return event
-	}
-}
-
-// Modify breadcrumbs through beforeBreadcrumb function.
-func DefaultBeforeBreadcrumb(breadcrumb *sentry.Breadcrumb, hint *sentry.BreadcrumbHint) *sentry.Breadcrumb {
-	// Example: discard the breadcrumb by return nil.
-	// if breadcrumb.Category == "example" {
-	// 	return nil
-	// }
-	return breadcrumb
 }
 
 // pathSkipper ignores a path based on the provided regular expressions
@@ -816,38 +618,6 @@ func ContextTimeout(timeout time.Duration) echo.MiddlewareFunc {
 		Timeout:      timeout,
 		ErrorHandler: timeoutErrorHandler,
 	})
-}
-
-// LoadConfig parses a given config file into global `BeanConfig` instance.
-func LoadConfig(filename string) (*Config, error) {
-
-	ext := filepath.Ext(filename)
-	if ext == "" {
-		return nil, fmt.Errorf("file extension is missing in the filename")
-	}
-
-	absPath, err := filepath.Abs(filename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get absolute path: %v", err)
-	}
-	path := filepath.Dir(absPath)
-	name := filepath.Base(filename[:len(filename)-len(ext)])
-
-	viper.AddConfigPath(path)
-	viper.SetConfigType(ext[1:])
-	viper.SetConfigName(name)
-
-	if err := viper.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("error reading config file, %s", err)
-	}
-
-	BeanConfig = &Config{}
-	if err := viper.Unmarshal(BeanConfig); err != nil {
-		BeanConfig = nil
-		return nil, fmt.Errorf("unable to decode into struct, %v", err)
-	}
-
-	return BeanConfig, nil
 }
 
 // NewValidator creates a new validator instance.

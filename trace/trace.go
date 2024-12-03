@@ -28,6 +28,9 @@ import (
 	"runtime"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/labstack/echo/v4"
+	berror "github.com/retail-ai-inc/bean/v2/error"
+	"github.com/retail-ai-inc/bean/v2/internal/validator"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/metadata"
 )
@@ -100,4 +103,36 @@ func extractTracing(ctx context.Context) (sentryTrace, baggage string) {
 	}
 
 	return span.ToSentryTrace(), span.ToBaggage()
+}
+
+// Modify event through beforeSend function.
+func DefaultBeforeSend(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
+	// Example: enriching the event by adding aditional data.
+	switch err := hint.OriginalException.(type) {
+	case *validator.ValidationError:
+		return event
+	case *berror.APIError:
+		if err.Ignorable {
+			return nil
+		}
+		event.Contexts["Error"] = map[string]interface{}{
+			"HTTPStatusCode": err.HTTPStatusCode,
+			"GlobalErrCode":  err.GlobalErrCode,
+			"Message":        err.Error(),
+		}
+		return event
+	case *echo.HTTPError:
+		return event
+	default:
+		return event
+	}
+}
+
+// Modify breadcrumbs through beforeBreadcrumb function.
+func DefaultBeforeBreadcrumb(breadcrumb *sentry.Breadcrumb, hint *sentry.BreadcrumbHint) *sentry.Breadcrumb {
+	// Example: discard the breadcrumb by return nil.
+	// if breadcrumb.Category == "example" {
+	// 	return nil
+	// }
+	return breadcrumb
 }
