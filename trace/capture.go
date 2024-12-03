@@ -43,6 +43,10 @@ func SentryCaptureExceptionWithEcho(c echo.Context, err error) {
 // This is a global function to send sentry message if you configure the sentry through env.json. You cann pass a proper context or nil.
 func SentryCaptureMessageWithEcho(c echo.Context, msg string) {
 
+	if msg == "" {
+		return
+	}
+
 	if !config.Bean.Sentry.On {
 		return
 	}
@@ -87,6 +91,10 @@ func SentryCaptureException(ctx context.Context, err error) {
 
 // SentryCaptureMessage captures a message with context and send to sentry if sentry is configured.
 func SentryCaptureMessage(ctx context.Context, msg string) {
+
+	if msg == "" {
+		return
+	}
 
 	if !config.Bean.Sentry.On {
 		return
@@ -135,6 +143,10 @@ func LogAndSentryCaptureException(ctx context.Context, err error) {
 
 // LogAndSentryCaptureMessage logs the message and captures a message with context and send to sentry if sentry is configured.
 func LogAndSentryCaptureMessage(ctx context.Context, msg string) {
+
+	if msg == "" {
+		return
+	}
 
 	// Log the message first whether sentry is on or off.
 	log.Logger().Info(msg)
