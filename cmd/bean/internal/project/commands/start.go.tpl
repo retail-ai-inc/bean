@@ -79,9 +79,9 @@ func start(cmd *cobra.Command, args []string) {
 	// Bean use a error function chain inside the default http error handler,
 	// so that it can easily add or remove the different kind of error handling.
 	b.UseErrorHandlerFuncs(
-		berror.ValidationErrorHanderFunc, // You can use your own custom validation error handler func.
-		berror.APIErrorHanderFunc, // You can use your own custom API error handler func.
-		berror.HTTPErrorHanderFunc,
+		berror.ValidationErrorHandlerFunc, // You can use your own custom validation error handler func.
+		berror.APIErrorHandlerFunc, // You can use your own custom API error handler func.
+		berror.HTTPErrorHandlerFunc,
 		// Set your custom error handler func here, for example:
 		// func(e error, c echo.Context) (bool, error) {
 		// 	return false, nil
@@ -107,12 +107,16 @@ func start(cmd *cobra.Command, args []string) {
 		go func() {
 			// TODO: start the queue
 		}()
-		b.ServeAt(host, port)
+		if err := b.ServeAt(host, port); err != nil {
+			log.Fatalf("Failed to start the service: %v", err)
+		}
 	} else if startQueue && !startWeb {
 		// Only start worker pool
 		// TODO: start the queue
 	} else {
 		// Only start the web
-		b.ServeAt(host, port)
+		if err := b.ServeAt(host, port); err != nil {
+			log.Fatalf("Failed to start the service: %v", err)
+		}
 	}
 }

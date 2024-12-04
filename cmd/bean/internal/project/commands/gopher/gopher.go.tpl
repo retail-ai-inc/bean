@@ -63,7 +63,7 @@ func initBean(isInitDB ...bool) *bean.Bean {
 		bean.TenantAlterDbHostParam = ""
 
 		// Init DB dependency.
-		if len(isInitDB) == 0 || isInitDB[0] == true {
+		if len(isInitDB) == 0 || isInitDB[0] {
 			b.InitDB()
 		}
 	})
