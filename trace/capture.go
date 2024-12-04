@@ -11,159 +11,144 @@ import (
 	"github.com/retail-ai-inc/bean/v2/log"
 )
 
-// SentryCaptureExceptionWithEcho captures an exception with echo context and send to sentry.
-// This is a global function to send sentry exception if you configure the sentry through env.json. You cann pass a proper context or nil.
+// SentryCaptureExceptionWithEcho captures an exception with echo context and send to sentry if sentry is configured.
+// It caputures the exception even if the context or sentry hub in the context is nil.
 func SentryCaptureExceptionWithEcho(c echo.Context, err error) {
 
-	if err == nil {
-		return
-	}
+	sentryCaptureException(err, false, func() (*sentry.Hub, bool) {
 
-	if !config.Bean.Sentry.On {
-		log.Logger().Error(err)
-		return
-	}
-
-	if c != nil {
-		// If the function get a proper context then push the request headers and URI along with other meaningful info.
-		if hub := sentryecho.GetHubFromContext(c); hub != nil {
-			hub.CaptureException(err)
-		} else {
-			sentry.CurrentHub().Clone().CaptureException(fmt.Errorf("echo context is missing hub information: %w", err))
+		if c != nil {
+			return sentryecho.GetHubFromContext(c), true
 		}
 
-		return
-	}
-
-	// If someone call the function from service/repository without a proper context.
-	sentry.CurrentHub().Clone().CaptureException(err)
-}
-
-// SentryCaptureMessageWithEcho captures a message with echo context and send to sentry.
-// This is a global function to send sentry message if you configure the sentry through env.json. You cann pass a proper context or nil.
-func SentryCaptureMessageWithEcho(c echo.Context, msg string) {
-
-	if msg == "" {
-		return
-	}
-
-	if !config.Bean.Sentry.On {
-		return
-	}
-
-	if c != nil {
-		// If the function get a proper context then push the request headers and URI along with other meaningful info.
-		if hub := sentryecho.GetHubFromContext(c); hub != nil {
-			hub.CaptureMessage(msg)
-		}
-
-		return
-	}
-
-	// If someone call the function from service/repository without a proper context.
-	sentry.CurrentHub().Clone().CaptureMessage(msg)
+		return nil, false
+	})
 }
 
 // SentryCaptureException captures an exception with context and send to sentry if sentry is configured.
+// It caputures the exception even if the context or sentry hub in the context is nil.
 func SentryCaptureException(ctx context.Context, err error) {
 
-	if err == nil {
-		return
-	}
+	sentryCaptureException(err, false, func() (*sentry.Hub, bool) {
 
-	if !config.Bean.Sentry.On {
-		return
-	}
-
-	if ctx != nil {
-		// If the function get a proper context then push the request headers and URI along with other meaningful info.
-		if hub := sentry.GetHubFromContext(ctx); hub != nil {
-			hub.CaptureException(err)
-		} else {
-			sentry.CurrentHub().Clone().CaptureException(fmt.Errorf("context is missing hub information: %w", err))
-		}
-		return
-	}
-
-	// If someone call the function from service/repository without a proper context.
-	sentry.CurrentHub().Clone().CaptureException(err)
-}
-
-// SentryCaptureMessage captures a message with context and send to sentry if sentry is configured.
-func SentryCaptureMessage(ctx context.Context, msg string) {
-
-	if msg == "" {
-		return
-	}
-
-	if !config.Bean.Sentry.On {
-		return
-	}
-
-	if ctx != nil {
-		// If the function get a proper context then push the request headers and URI along with other meaningful info.
-		if hub := sentry.GetHubFromContext(ctx); hub != nil {
-			hub.CaptureMessage(msg)
+		if ctx != nil {
+			return sentry.GetHubFromContext(ctx), true
 		}
 
-		return
-	}
-
-	// If someone call the function from service/repository without a proper context.
-	sentry.CurrentHub().Clone().CaptureMessage(msg)
+		return nil, false
+	})
 }
 
 // LogAndSentryCaptureException logs the error and captures an exception with context and send to sentry if sentry is configured.
+// It caputures the exception even if the context or sentry hub in the context is nil.
 func LogAndSentryCaptureException(ctx context.Context, err error) {
+
+	sentryCaptureException(err, true, func() (*sentry.Hub, bool) {
+
+		if ctx != nil {
+			return sentry.GetHubFromContext(ctx), true
+		}
+
+		return nil, false
+	})
+}
+
+func sentryCaptureException(err error, logging bool, getHub func() (hub *sentry.Hub, addMissHubInfo bool)) {
 
 	if err == nil {
 		return
 	}
 
-	// Log the error first whether sentry is on or off.
-	log.Logger().Error(err)
+	// Log the error if logging is on, whether sentry is on or off.
+	if logging {
+		log.Logger().Error(err)
+	}
 
 	if !config.Bean.Sentry.On {
 		return
 	}
 
-	if ctx != nil {
-		// If the function get a proper context then push the request headers and URI along with other meaningful info.
-		if hub := sentry.GetHubFromContext(ctx); hub != nil {
-			hub.CaptureException(err)
-		} else {
-			sentry.CurrentHub().Clone().CaptureException(fmt.Errorf("context is missing hub information: %w", err))
+	hub, addMissHubInfo := getHub()
+	if hub == nil {
+		wrapErr := err
+		if addMissHubInfo {
+			wrapErr = fmt.Errorf("context is missing hub information: %w", err)
 		}
+		// Capture the exception without context even if the hub is nil.
+		sentry.CurrentHub().Clone().CaptureException(wrapErr)
 		return
 	}
 
-	// If someone call the function from service/repository without a proper context.
-	sentry.CurrentHub().Clone().CaptureException(err)
+	hub.CaptureException(err)
+}
+
+// SentryCaptureMessageWithEcho captures a message with echo context and send to sentry.
+// It captures the message even if the context or sentry hub in the context is nil.
+func SentryCaptureMessageWithEcho(c echo.Context, msg string) {
+
+	sentryCaptureMsg(msg, false, func() (*sentry.Hub, bool) {
+
+		if c != nil {
+			return sentryecho.GetHubFromContext(c), true
+		}
+
+		return nil, false
+	})
+}
+
+// SentryCaptureMessage captures a message with context and send to sentry if sentry is configured.
+// It captures the message even if the context or sentry hub in the context is nil.
+func SentryCaptureMessage(ctx context.Context, msg string) {
+
+	sentryCaptureMsg(msg, false, func() (*sentry.Hub, bool) {
+
+		if ctx != nil {
+			return sentry.GetHubFromContext(ctx), true
+		}
+
+		return nil, false
+	})
 }
 
 // LogAndSentryCaptureMessage logs the message and captures a message with context and send to sentry if sentry is configured.
+// It captures the message without context even if the context or sentry hub in the context is nil.
 func LogAndSentryCaptureMessage(ctx context.Context, msg string) {
+
+	sentryCaptureMsg(msg, true, func() (*sentry.Hub, bool) {
+
+		if ctx != nil {
+			return sentry.GetHubFromContext(ctx), true
+		}
+
+		return nil, false
+	})
+}
+
+func sentryCaptureMsg(msg string, logging bool, getHub func() (hub *sentry.Hub, addMissHubInfo bool)) {
 
 	if msg == "" {
 		return
 	}
 
-	// Log the message first whether sentry is on or off.
-	log.Logger().Info(msg)
+	// Log the message if logging is on, whether sentry is on or off.
+	if logging {
+		log.Logger().Info(msg)
+	}
 
 	if !config.Bean.Sentry.On {
 		return
 	}
 
-	if ctx != nil {
-		// If the function get a proper context then push the request headers and URI along with other meaningful info.
-		if hub := sentry.GetHubFromContext(ctx); hub != nil {
-			hub.CaptureMessage(msg)
+	hub, addMissHubInfo := getHub()
+	if hub == nil {
+		wrapMsg := msg
+		if addMissHubInfo {
+			wrapMsg = fmt.Sprintf("context is missing hub information: %s", msg)
 		}
-
+		// Capture the message without context even if the hub is nil.
+		sentry.CurrentHub().Clone().CaptureMessage(wrapMsg)
 		return
 	}
 
-	// If someone call the function from service/repository without a proper context.
-	sentry.CurrentHub().Clone().CaptureMessage(msg)
+	hub.CaptureMessage(msg)
 }
