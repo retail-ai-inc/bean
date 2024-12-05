@@ -27,6 +27,8 @@ import (
 	"net/http"
 	"runtime"
 
+	sentryecho "github.com/getsentry/sentry-go/echo"
+
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v4"
 	berror "github.com/retail-ai-inc/bean/v2/error"
@@ -35,21 +37,35 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// StartSpanWithEcho starts a span and returns context containing the span and a function to finish the corresponding span.
+// It also carries over the sentry hub from the echo context to child context.
+// Make sure to call the returned function to finish the span.
+func StartSpanWithEcho(c echo.Context, operation string, spanOpts ...sentry.SpanOption) (context.Context, func()) {
+	var ctx context.Context
+	if hub := sentryecho.GetHubFromContext(c); hub != nil {
+		ctx = sentry.SetHubOnContext(c.Request().Context(), hub)
+	} else {
+		ctx = c.Request().Context()
+	}
+	return startSpan(ctx, operation, 1, spanOpts...)
+}
+
 // StartSpan starts a span and returns context containing the span and a function to finish the corresponding span.
 // Make sure to call the returned function to finish the span.
 func StartSpan(c context.Context, operation string, spanOpts ...sentry.SpanOption) (context.Context, func()) {
+	return startSpan(c, operation, 1, spanOpts...)
+}
+
+// startSpan starts a span and returns context containing the span and a function to finish the corresponding span.
+func startSpan(c context.Context, operation string, skip int, spanOpts ...sentry.SpanOption) (context.Context, func()) {
 	// If trace sample rate is 0.0 or 0 or Sentry is off, use the provided context as-is.
 	if viper.GetFloat64("sentry.tracesSampleRate") == 0 || !viper.GetBool("sentry.on") {
 		return c, func() {}
 	}
 
 	if len(spanOpts) == 0 {
-		// Add defalut options if none provided.
-		functionName := "unknown function"
-		if pc, _, _, ok := runtime.Caller(1); ok {
-			functionName = runtime.FuncForPC(pc).Name()
-		}
-		spanOpts = append(spanOpts, sentry.WithDescription(functionName))
+		// Add default options if none provided.
+		spanOpts = append(spanOpts, defaultDescription(skip+1))
 	}
 
 	span := sentry.StartSpan(c, operation, spanOpts...)
@@ -58,6 +74,16 @@ func StartSpan(c context.Context, operation string, spanOpts ...sentry.SpanOptio
 	return newCtx, func() {
 		span.Finish()
 	}
+}
+
+func defaultDescription(skip int) sentry.SpanOption {
+
+	functionName := "unknown function"
+	if pc, _, _, ok := runtime.Caller(skip + 1); ok {
+		functionName = runtime.FuncForPC(pc).Name()
+	}
+
+	return sentry.WithDescription(functionName)
 }
 
 // PropagateToHTTP propagates the Sentry tracing information to the outgoing HTTP/1.X request header.
