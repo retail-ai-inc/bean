@@ -4,7 +4,7 @@ go 1.22.7
 
 require (
 	github.com/alphadose/haxmap v1.4.1
-	github.com/getsentry/sentry-go v0.29.1
+	github.com/getsentry/sentry-go v0.30.0
 	github.com/go-playground/validator/v10 v10.23.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-resty/resty/v2 v2.16.2
