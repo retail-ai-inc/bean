@@ -45,6 +45,7 @@ type MongoConfig struct {
 	}
 	ConnectTimeout        time.Duration
 	MaxConnectionPoolSize uint64
+	MinConnectionPoolSize uint64
 	MaxConnectionLifeTime time.Duration
 	Debug                 bool
 }
@@ -62,7 +63,10 @@ func InitMongoMasterConn(config MongoConfig, logger echo.Logger) (*mongo.Client,
 	masterCfg := config.Master
 	if masterCfg != nil && masterCfg.Database != "" {
 		return connectMongoDB(masterCfg.Username, masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
-			config.MaxConnectionPoolSize, config.ConnectTimeout, config.MaxConnectionLifeTime, config.Debug, logger)
+			config.MaxConnectionPoolSize, config.MinConnectionPoolSize,
+			config.ConnectTimeout, config.MaxConnectionLifeTime,
+			config.Debug, logger,
+		)
 	}
 
 	return nil, ""
@@ -109,8 +113,11 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 			dbName := mongoCfg["database"].(string)
 
 			mongoConns[t.TenantID], mongoDBNames[t.TenantID] = connectMongoDB(
-				userName, password, host, port, dbName, config.MaxConnectionPoolSize,
-				config.ConnectTimeout, config.MaxConnectionLifeTime, config.Debug, logger)
+				userName, password, host, port, dbName,
+				config.MaxConnectionPoolSize, config.MinConnectionPoolSize,
+				config.ConnectTimeout, config.MaxConnectionLifeTime,
+				config.Debug, logger,
+			)
 
 		} else {
 			mongoConns[t.TenantID], mongoDBNames[t.TenantID] = nil, ""
@@ -120,8 +127,11 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 	return mongoConns, mongoDBNames
 }
 
-func connectMongoDB(userName, password, host, port, dbName string, maxConnectionPoolSize uint64,
-	connectTimeout, maxConnectionLifeTime time.Duration, debug bool, logger echo.Logger) (*mongo.Client, string) {
+func connectMongoDB(userName, password, host, port, dbName string,
+	maxPoolSize, minPoolSize uint64,
+	connectTimeout, maxConnIdleTime time.Duration,
+	debug bool, logger echo.Logger,
+) (*mongo.Client, string) {
 
 	connStr := "mongodb://" + host + ":" + port
 
@@ -131,8 +141,9 @@ func connectMongoDB(userName, password, host, port, dbName string, maxConnection
 	opts := options.Client().
 		ApplyURI(connStr).
 		SetConnectTimeout(connectTimeout).
-		SetMaxPoolSize(maxConnectionPoolSize).
-		SetMaxConnIdleTime(maxConnectionLifeTime)
+		SetMaxPoolSize(maxPoolSize).
+		SetMinPoolSize(minPoolSize).
+		SetMaxConnIdleTime(maxConnIdleTime)
 
 	if userName != "" && password != "" {
 		credential := options.Credential{Username: userName, Password: password, AuthSource: dbName}
