@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
+	"github.com/retail-ai-inc/bean/v2/config"
 	"github.com/retail-ai-inc/bean/v2/internal/route"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -134,7 +135,7 @@ func TestBean_ServeAt(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := &Bean{
 				Echo:     echo.New(),
-				Config:   Config{},
+				Config:   config.Config{},
 				Validate: validator.New(),
 			}
 			b.Config.HTTP.ShutdownTimeout = tt.fields.sdTimeout
@@ -348,7 +349,7 @@ func Test_NewEcho(t *testing.T) {
 func setConf(t *testing.T, timeout time.Duration) func() {
 	t.Helper()
 
-	originalConf := BeanConfig
+	originalConf := config.Bean
 	viper.SetConfigType("json")
 	err := viper.ReadConfig(bytes.NewBufferString(`
 	{
@@ -362,14 +363,14 @@ func setConf(t *testing.T, timeout time.Duration) func() {
 		t.Fatalf("failed to read config: %v", err)
 	}
 
-	if BeanConfig == nil {
-		BeanConfig = &Config{}
+	if config.Bean == nil {
+		config.Bean = &config.Config{}
 	}
-	if err := viper.Unmarshal(BeanConfig); err != nil {
+	if err := viper.Unmarshal(config.Bean); err != nil {
 		t.Fatalf("failed to unmarshal config: %v", err)
 	}
 
 	return func() {
-		BeanConfig = originalConf
+		config.Bean = originalConf
 	}
 }

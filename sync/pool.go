@@ -11,7 +11,7 @@ import (
 	"runtime"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/retail-ai-inc/bean/v2"
+	"github.com/retail-ai-inc/bean/v2/config"
 	"github.com/retail-ai-inc/bean/v2/internal/regex"
 	"github.com/sourcegraph/conc/panics"
 	"github.com/sourcegraph/conc/pool"
@@ -133,7 +133,7 @@ func (p *Pool) Wait() error {
 func setSpan(ctx context.Context, req *http.Request) *sentry.Span {
 	var span *sentry.Span
 
-	if bean.BeanConfig.Sentry.On {
+	if config.Bean.Sentry.On {
 		hub := sentry.GetHubFromContext(ctx)
 		if hub == nil {
 			hub = sentry.CurrentHub().Clone()
@@ -142,11 +142,11 @@ func setSpan(ctx context.Context, req *http.Request) *sentry.Span {
 		hub.Scope().SetRequest(req)
 		ctx = sentry.SetHubOnContext(ctx, hub)
 
-		if bean.BeanConfig.Sentry.TracesSampleRate > 0.0 {
+		if config.Bean.Sentry.TracesSampleRate > 0.0 {
 			urlPath := req.URL.Path
 
 			functionName := "unknown function"
-			if bean.BeanConfig.Sentry.On && bean.BeanConfig.Sentry.TracesSampleRate > 0.0 {
+			if config.Bean.Sentry.On && config.Bean.Sentry.TracesSampleRate > 0.0 {
 				if pc, file, line, ok := runtime.Caller(1); ok {
 					functionName = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
 				}
@@ -167,7 +167,7 @@ func setSpan(ctx context.Context, req *http.Request) *sentry.Span {
 }
 
 func capturePanic(ctx context.Context, err error) {
-	if bean.BeanConfig.Sentry.On {
+	if config.Bean.Sentry.On {
 		var localHub *sentry.Hub
 		if ctx != nil {
 			localHub = sentry.GetHubFromContext(ctx)

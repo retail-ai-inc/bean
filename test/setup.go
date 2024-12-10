@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/retail-ai-inc/bean/v2"
+	"github.com/retail-ai-inc/bean/v2/config"
 	"github.com/spf13/viper"
 )
 
@@ -65,10 +65,10 @@ func SetupConfig(filename string, opts ...CfgOption) error {
 	if err := viper.ReadInConfig(); err != nil {
 		return err
 	}
-	if err := viper.Unmarshal(&bean.BeanConfig); err != nil {
+	if err := viper.Unmarshal(&config.Bean); err != nil {
 		return err
 	}
-	if err := setEnv(bean.BeanConfig.Environment); err != nil {
+	if err := setEnv(config.Bean.Environment); err != nil {
 		return err
 	}
 	if PROD.IsCurrEnv() {

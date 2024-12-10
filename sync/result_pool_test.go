@@ -33,14 +33,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retail-ai-inc/bean/v2"
+	"github.com/retail-ai-inc/bean/v2/config"
 	"github.com/retail-ai-inc/bean/v2/sync"
 	"github.com/retail-ai-inc/bean/v2/trace"
 )
 
 func Test_ResultPool(t *testing.T) {
-	bean.BeanConfig = &bean.Config{
-		Sentry: bean.SentryConfig{
+	config.Bean = &config.Config{
+		Sentry: config.Sentry{
 			On:               true,
 			TracesSampleRate: 1.0,
 		},
