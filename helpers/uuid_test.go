@@ -23,30 +23,46 @@
 package helpers
 
 import (
-	"crypto/md5"
-	"encoding/hex"
-
-	"github.com/google/uuid"
+	"testing"
 )
 
-// DeterministicUUID generates a deterministic UUID based on the provided seeder string.
-// It uses the MD5 hash of the seeder as the input to create the UUID.
-// The first 16 bytes of the MD5 hash are used to generate the UUID, ensuring that the same
-// seeder always produces the same UUID.
-func DeterministicUUID(seeder string) (string, error) {
-
-	// calculate the MD5 hash of the seeder reference
-	md5hash := md5.New()
-	md5hash.Write([]byte(seeder))
-
-	// convert the hash value to a string
-	md5string := hex.EncodeToString(md5hash.Sum(nil))
-
-	// generate the UUID from the first 16 bytes of the MD5 hash
-	uuid, err := uuid.FromBytes([]byte(md5string[0:16]))
-	if err != nil {
-		return "", err
+func TestDeterministicUUID(t *testing.T) {
+	// Define test cases
+	testCases := []struct {
+		name        string
+		seeder1     string
+		seeder2     string
+		expectEqual bool
+	}{
+		{
+			name:        "Same seeder produces same UUID",
+			seeder1:     "test-seeder",
+			seeder2:     "test-seeder",
+			expectEqual: true,
+		},
+		{
+			name:        "Different seeders produce different UUIDs",
+			seeder1:     "test-seeder-1",
+			seeder2:     "test-seeder-2",
+			expectEqual: false,
+		},
 	}
 
-	return uuid.String(), nil
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			uuid1, err := DeterministicUUID(tc.seeder1)
+			if err != nil {
+				t.Fatalf("unexpected error for seeder1: %v", err)
+			}
+
+			uuid2, err := DeterministicUUID(tc.seeder2)
+			if err != nil {
+				t.Fatalf("unexpected error for seeder2: %v", err)
+			}
+
+			if (uuid1 == uuid2) != tc.expectEqual {
+				t.Errorf("expected equality: %v, but got uuid1=%v and uuid2=%v", tc.expectEqual, uuid1, uuid2)
+			}
+		})
+	}
 }
