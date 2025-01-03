@@ -41,12 +41,15 @@ import (
 // It also carries over the sentry hub from the echo context to child context.
 // Make sure to call the returned function to finish the span.
 func StartSpanWithEcho(c echo.Context, operation string, spanOpts ...sentry.SpanOption) (context.Context, func()) {
-	var ctx context.Context
-	if hub := sentryecho.GetHubFromContext(c); hub != nil {
-		ctx = sentry.SetHubOnContext(c.Request().Context(), hub)
-	} else {
-		ctx = c.Request().Context()
+
+	ctx := c.Request().Context()
+
+	if sentry.GetHubFromContext(ctx) == nil {
+		if hub := sentryecho.GetHubFromContext(c); hub != nil {
+			ctx = sentry.SetHubOnContext(ctx, hub)
+		}
 	}
+
 	return startSpan(ctx, operation, 1, spanOpts...)
 }
 
