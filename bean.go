@@ -325,6 +325,7 @@ func NewEcho() (*echo.Echo, func() error) {
 				Repanic: true,
 				Timeout: config.Bean.Sentry.Timeout,
 			}))
+			e.Use(middleware.SetHubToContext)
 
 			if helpers.FloatInRange(config.Bean.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
 				regex.SetSamplingPathSkipper(config.Bean.Sentry.SkipTracesEndpoints)
@@ -344,7 +345,9 @@ func NewEcho() (*echo.Echo, func() error) {
 	// IMPORTANT: Request related middleware.
 	// Set the `X-Request-ID` header field if it doesn't exist.
 	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
-		Generator: uuid.NewString,
+		Generator:        uuid.NewString,
+		RequestIDHandler: middleware.RequestIDHandler,
+		TargetHeader:     echo.HeaderXRequestID,
 	}))
 
 	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
