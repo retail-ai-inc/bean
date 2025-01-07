@@ -457,7 +457,6 @@ func (b *Bean) ServeAt(host, port string) error {
 		}
 		sdnCtx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
-		b.Echo.Logger.Info("Shutting down server...🛬")
 		err = s.Shutdown(sdnCtx)
 		if err != nil {
 			// Even after timeout, shutdown keeps handling ongoing requests in the background
@@ -466,7 +465,6 @@ func (b *Bean) ServeAt(host, port string) error {
 			return err
 		}
 
-		b.Echo.Logger.Info("Server has been shutdown gracefully.")
 		return nil
 	})
 
@@ -616,6 +614,7 @@ func (b *Bean) InitDB() error {
 	return nil
 }
 
+// ShutdownAll closes all the server and database related resources.
 func (b *Bean) ShutdownAll() error {
 
 	var err error
@@ -637,22 +636,38 @@ func (b *Bean) ShutdownAll() error {
 	return nil
 }
 
+// Shutdown closes all the server related resources.
 func (b *Bean) Shutdown() error {
 	if len(b.ShutdownSrv) == 0 {
 		b.Echo.Logger.Info("No server shutdown function found.")
 		return nil
 	}
 
-	return closer(b.ShutdownSrv)()
+	b.Echo.Logger.Info("Shutting down server...🛬")
+
+	if err := closer(b.ShutdownSrv)(); err != nil {
+		return err
+	}
+
+	b.Echo.Logger.Info("Server has been shutdown gracefully.")
+	return nil
 }
 
+// CleanupDB closes all the database (master and tenant) related resources.
 func (b *Bean) CleanupDB() error {
 	if len(b.CleanupDBs) == 0 {
 		b.Echo.Logger.Info("No database cleanup function found.")
 		return nil
 	}
 
-	return closer(b.CleanupDBs)()
+	b.Echo.Logger.Info("Cleaning up databases...🧹")
+
+	if err := closer(b.CleanupDBs)(); err != nil {
+		return err
+	}
+
+	b.Echo.Logger.Info("Databases have been cleaned up successfully.")
+	return nil
 }
 
 func closer(closers []func() error) func() error {
