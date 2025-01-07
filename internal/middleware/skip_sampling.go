@@ -46,8 +46,9 @@ func SkipSampling() echo.MiddlewareFunc {
 				hub := sentryecho.GetHubFromContext(c)
 				if hub == nil {
 					hub = sentry.CurrentHub().Clone()
-					ctx = sentry.SetHubOnContext(ctx, hub)
 				}
+				hub.Scope().SetRequest(c.Request())
+				ctx = sentry.SetHubOnContext(ctx, hub)
 				path := c.Request().URL.Path
 				// Start a sentry span for tracing.
 				span = sentry.StartTransaction(ctx, fmt.Sprintf("%s %s", c.Request().Method, path),
@@ -59,7 +60,7 @@ func SkipSampling() echo.MiddlewareFunc {
 			}
 
 			path := c.Request().URL.Path
-			if regex.MatchAnyTraceSkipPath(path) {
+			if regex.SkipSampling(path) {
 				span.Sampled = sentry.SampledFalse
 			}
 

@@ -33,7 +33,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -261,9 +260,8 @@ func NewEcho() *echo.Echo {
 
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if config.Bean.AccessLog.On {
-		regex.CompileAccessLogSkipPaths(config.Bean.AccessLog.SkipEndpoints)
 		accessLogConfig := middleware.LoggerConfig{
-			Skipper:       pathSkipper(regex.AccessLogSkipPaths),
+			Skipper:       regex.InitAccessLogPathSkipper(config.Bean.AccessLog.SkipEndpoints),
 			BodyDump:      config.Bean.AccessLog.BodyDump,
 			RequestHeader: config.Bean.AccessLog.ReqHeaderParam,
 		}
@@ -316,7 +314,7 @@ func NewEcho() *echo.Echo {
 			}))
 
 			if helpers.FloatInRange(config.Bean.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
-				regex.CompileTraceSkipPaths(config.Bean.Sentry.SkipTracesEndpoints)
+				regex.SetSamplingPathSkipper(config.Bean.Sentry.SkipTracesEndpoints)
 				e.Use(middleware.SkipSampling())
 			}
 		}
@@ -339,11 +337,12 @@ func NewEcho() *echo.Echo {
 	// This will help us to integrate `bean's` health into `k8s`.
 	if config.Bean.Prometheus.On {
 		const metricsPath = "/metrics" // fixed path
-		if err := regex.CompilePrometheusSkipPaths(config.Bean.Prometheus.SkipEndpoints, metricsPath); err != nil {
+		skipper, err := regex.InitPrometheusPathSkipper(config.Bean.Prometheus.SkipEndpoints, metricsPath)
+		if err != nil {
 			e.Logger.Fatalf("Prometheus initialization failed: %v. Server 🚀  crash landed. Exiting...\n", err)
 		}
 		conf := echoprometheus.MiddlewareConfig{
-			Skipper: pathSkipper(regex.PrometheusSkipPaths),
+			Skipper: skipper,
 		}
 		if config.Bean.Prometheus.Subsystem != "" {
 			conf.Subsystem = config.Bean.Prometheus.Subsystem
@@ -561,26 +560,6 @@ func Cleanup() {
 	if config.Bean.Sentry.On {
 		// Flush buffered sentry events if any.
 		sentry.Flush(config.Bean.Sentry.Timeout)
-	}
-}
-
-// pathSkipper ignores a path based on the provided regular expressions
-// for logging or metrics data collection.
-func pathSkipper(skipPathRegexes []*regexp.Regexp) func(c echo.Context) bool {
-
-	if len(skipPathRegexes) == 0 {
-		return echomiddleware.DefaultSkipper
-	}
-
-	return func(c echo.Context) bool {
-		path := c.Request().URL.Path
-		for _, r := range skipPathRegexes {
-			if r.MatchString(path) {
-				return true
-			}
-		}
-
-		return false
 	}
 }
 

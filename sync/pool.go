@@ -157,7 +157,7 @@ func setSpan(ctx context.Context, req *http.Request) *sentry.Span {
 				sentry.WithDescription(functionName),
 			)
 
-			if regex.MatchAnyTraceSkipPath(urlPath) {
+			if regex.SkipSampling(urlPath) {
 				span.Sampled = sentry.SampledFalse
 			}
 		}

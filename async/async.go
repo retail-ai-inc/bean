@@ -54,7 +54,7 @@ func Execute(fn func(), poolName ...string) {
 		}()
 	}
 
-	if len(poolName) > 0 {
+	if len(poolName) > 0 && poolName[0] != "" {
 		pool, err := gopool.GetPool(poolName[0])
 		if err == nil && pool != nil {
 			asyncFunc = func(task func()) {
@@ -111,7 +111,7 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 
 				span.Description = functionName
 
-				if regex.MatchAnyTraceSkipPath(urlPath) {
+				if regex.SkipSampling(urlPath) {
 					span.Sampled = sentry.SampledFalse
 				}
 
