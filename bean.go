@@ -110,7 +110,7 @@ func New() *Bean {
 	}
 
 	// Create a new echo instance
-	e, flusher := NewEcho()
+	e, closeEcho := NewEcho()
 
 	b := &Bean{
 		Echo:     e,
@@ -195,7 +195,7 @@ func New() *Bean {
 		})
 	}
 
-	b.ShutdownSrv = append(b.ShutdownSrv, flusher)
+	b.ShutdownSrv = append(b.ShutdownSrv, closeEcho)
 
 	return b
 }
