@@ -233,12 +233,13 @@ func ExecuteContext(fn TimeoutTask, ctx context.Context, asyncOpts ...AsyncOptio
 		// Set scope to the hub.
 		hub := sentry.GetHubFromContext(ctx)
 		if hub == nil {
-			hub = sentry.CurrentHub().Clone()
+			hub = sentry.CurrentHub()
 		}
+		clone := hub.Clone()
 		if reqFound {
-			hub.Scope().SetRequest(req)
+			clone.Scope().SetRequest(req)
 		}
-		newCtx = sentry.SetHubOnContext(newCtx, hub)
+		newCtx = sentry.SetHubOnContext(newCtx, clone)
 
 		// Set the sentry options.
 		if config.Bean.Sentry.TracesSampleRate > 0.0 {
@@ -348,14 +349,15 @@ func recoverPanic(c context.Context) {
 			}
 
 			if localHub == nil {
-				localHub = sentry.CurrentHub().Clone()
+				localHub = sentry.CurrentHub()
 			}
+			clone := localHub.Clone()
 
-			localHub.ConfigureScope(func(scope *sentry.Scope) {
+			clone.ConfigureScope(func(scope *sentry.Scope) {
 				scope.SetTag("goroutine", "true")
 			})
 
-			localHub.Recover(v)
+			clone.Recover(v)
 		}
 
 		msg := map[string]interface{}{
