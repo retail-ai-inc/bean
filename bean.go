@@ -315,7 +315,7 @@ func NewEcho() *echo.Echo {
 
 			if helpers.FloatInRange(config.Bean.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
 				regex.SetSamplingPathSkipper(config.Bean.Sentry.SkipTracesEndpoints)
-				e.Use(middleware.SkipSampling())
+				e.Use(middleware.SkipSampling)
 			}
 		}
 	}

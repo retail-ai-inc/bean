@@ -34,39 +34,37 @@ import (
 )
 
 // SkipSampling skips the sampling of the transaction if the request path is in the skip list.
-func SkipSampling() echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+var SkipSampling = func(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
 
-			span := sentryecho.GetSpanFromContext(c)
-			if span == nil {
-				// Should not happen due to the sentryecho middleware's handler, but just in case.
-				// https://github.com/getsentry/sentry-go/blob/v0.29.1/echo/sentryecho.go#L39-L113
-				ctx := c.Request().Context()
-				hub := sentryecho.GetHubFromContext(c)
-				if hub == nil {
-					hub = sentry.CurrentHub().Clone()
-				}
-				hub.Scope().SetRequest(c.Request())
-				ctx = sentry.SetHubOnContext(ctx, hub)
-				path := c.Request().URL.Path
-				// Start a sentry span for tracing.
-				span = sentry.StartTransaction(ctx, fmt.Sprintf("%s %s", c.Request().Method, path),
-					sentry.WithOpName("http"),
-					sentry.WithDescription(helpers.CurrFuncName()),
-					sentry.ContinueFromRequest(c.Request()),
-				)
-				defer span.Finish()
+		span := sentryecho.GetSpanFromContext(c)
+		if span == nil {
+			// Should not happen due to the sentryecho middleware's handler, but just in case.
+			// https://github.com/getsentry/sentry-go/blob/v0.29.1/echo/sentryecho.go#L39-L113
+			ctx := c.Request().Context()
+			hub := sentryecho.GetHubFromContext(c)
+			if hub == nil {
+				hub = sentry.CurrentHub().Clone()
 			}
-
+			hub.Scope().SetRequest(c.Request())
+			ctx = sentry.SetHubOnContext(ctx, hub)
 			path := c.Request().URL.Path
-			if regex.SkipSampling(path) {
-				span.Sampled = sentry.SampledFalse
-			}
-
-			r := c.Request().WithContext(span.Context())
-			c.SetRequest(r)
-			return next(c)
+			// Start a sentry span for tracing.
+			span = sentry.StartTransaction(ctx, fmt.Sprintf("%s %s", c.Request().Method, path),
+				sentry.WithOpName("http"),
+				sentry.WithDescription(helpers.CurrFuncName()),
+				sentry.ContinueFromRequest(c.Request()),
+			)
+			defer span.Finish()
 		}
+
+		path := c.Request().URL.Path
+		if regex.SkipSampling(path) {
+			span.Sampled = sentry.SampledFalse
+		}
+
+		r := c.Request().WithContext(span.Context())
+		c.SetRequest(r)
+		return next(c)
 	}
 }
