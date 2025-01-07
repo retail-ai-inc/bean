@@ -13,6 +13,8 @@ import (
 
 // SentryCaptureExceptionWithEcho captures an exception with echo context and send to sentry if sentry is configured.
 // It caputures the exception even if the context or sentry hub in the context is nil.
+// To capture an exception with a stack trace, include the top-level error.
+// For supported libraries, see: https://pkg.go.dev/github.com/getsentry/sentry-go@v0.30.0#ExtractStacktrace
 func SentryCaptureExceptionWithEcho(c echo.Context, err error) {
 
 	sentryCaptureException(err, false, func() (*sentry.Hub, bool) {
@@ -27,6 +29,8 @@ func SentryCaptureExceptionWithEcho(c echo.Context, err error) {
 
 // SentryCaptureException captures an exception with context and send to sentry if sentry is configured.
 // It caputures the exception even if the context or sentry hub in the context is nil.
+// To capture an exception with a stack trace, include the top-level error.
+// For supported libraries, see: https://pkg.go.dev/github.com/getsentry/sentry-go@v0.30.0#ExtractStacktrace
 func SentryCaptureException(ctx context.Context, err error) {
 
 	sentryCaptureException(err, false, func() (*sentry.Hub, bool) {

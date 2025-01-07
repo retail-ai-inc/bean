@@ -209,7 +209,7 @@ type asyncOptions struct {
 
 // ExecuteWithContext execute a function returning an error asynchronously
 // with a starndard context (not echo context), recovering if they panic.
-func ExecuteContext(fn TimeoutTask, ctx context.Context, asyncOpts ...AsyncOption) {
+func ExecuteContext(ctx context.Context, fn TimeoutTask, asyncOpts ...AsyncOption) {
 
 	// by default
 	opts := &asyncOptions{
