@@ -136,11 +136,12 @@ func setSpan(ctx context.Context, req *http.Request) *sentry.Span {
 	if config.Bean.Sentry.On {
 		hub := sentry.GetHubFromContext(ctx)
 		if hub == nil {
-			hub = sentry.CurrentHub().Clone()
+			hub = sentry.CurrentHub()
 		}
+		clone := hub.Clone()
 
-		hub.Scope().SetRequest(req)
-		ctx = sentry.SetHubOnContext(ctx, hub)
+		clone.Scope().SetRequest(req)
+		ctx = sentry.SetHubOnContext(ctx, clone)
 
 		if config.Bean.Sentry.TracesSampleRate > 0.0 {
 			urlPath := req.URL.Path
@@ -173,11 +174,12 @@ func capturePanic(ctx context.Context, err error) {
 			localHub = sentry.GetHubFromContext(ctx)
 		}
 		if localHub == nil {
-			localHub = sentry.CurrentHub().Clone()
+			localHub = sentry.CurrentHub()
 		}
-		localHub.ConfigureScope(func(scope *sentry.Scope) {
+		clone := localHub.Clone()
+		clone.ConfigureScope(func(scope *sentry.Scope) {
 			scope.SetTag("goroutine", "true")
 		})
-		localHub.Recover(err)
+		clone.Recover(err)
 	}
 }
