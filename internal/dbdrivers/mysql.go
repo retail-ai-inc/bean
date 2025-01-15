@@ -168,8 +168,8 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
 		port := mysqlCfg["port"].(string)
 		dbName := mysqlCfg["database"].(string)
 
-		var close func() error
-		mysqlConns[t.TenantID], mysqlDBNames[t.TenantID], close, err = connectMysqlDB(
+		var closeDB func() error
+		mysqlConns[t.TenantID], mysqlDBNames[t.TenantID], closeDB, err = connectMysqlDB(
 			userName, password, host, port, dbName, config.MaxIdleConnections,
 			config.MaxOpenConnections, config.MaxConnectionLifeTime, config.MaxIdleConnectionLifeTime,
 			config.Debug,
@@ -177,7 +177,7 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
 		if err != nil {
 			return nil, nil, noClosers, fmt.Errorf("failed to connect mysql tenant database (%d:%s): %w", t.TenantID, t.Code, err)
 		}
-		closers = append(closers, close)
+		closers = append(closers, closeDB)
 	}
 
 	return mysqlConns, mysqlDBNames, closers, nil

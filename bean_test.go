@@ -325,9 +325,9 @@ func Test_NewEcho(t *testing.T) {
 			rec := httptest.NewRecorder()
 
 			// Act
-			e, close := NewEcho()
+			e, closeEcho := NewEcho()
 			defer func() {
-				_ = close()
+				_ = closeEcho()
 			}()
 			e.GET("/", func(c echo.Context) error {
 				if err := c.Request().Context().Err(); err != nil {

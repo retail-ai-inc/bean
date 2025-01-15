@@ -123,8 +123,8 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 		port := mongoCfg["port"].(string)
 		dbName := mongoCfg["database"].(string)
 
-		var close func() error
-		mongoConns[t.TenantID], mongoDBNames[t.TenantID], close, err = connectMongoDB(
+		var closeDB func() error
+		mongoConns[t.TenantID], mongoDBNames[t.TenantID], closeDB, err = connectMongoDB(
 			userName, password, host, port, dbName,
 			config.MaxConnectionPoolSize, config.MinConnectionPoolSize,
 			config.ConnectTimeout, config.MaxConnectionLifeTime,
@@ -133,7 +133,7 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 		if err != nil {
 			return nil, nil, noClosers, fmt.Errorf("failed to connect mongo tenant database: %w", err)
 		}
-		closers = append(closers, close)
+		closers = append(closers, closeDB)
 	}
 
 	return mongoConns, mongoDBNames, closers, nil

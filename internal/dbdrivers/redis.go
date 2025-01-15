@@ -95,7 +95,7 @@ func InitRedisTenantConns(config RedisConfig, masterMySQL *gorm.DB, tenantAlterD
 func InitRedisMasterConn(config RedisConfig) (*RedisDBConn, []func() error, error) {
 
 	var masterRedisDB *RedisDBConn
-	var closers []func() error
+	var closeDBs []func() error
 
 	masterCfg := config.Master
 	if masterCfg != nil {
@@ -114,7 +114,7 @@ func InitRedisMasterConn(config RedisConfig) (*RedisDBConn, []func() error, erro
 		if err != nil {
 			return nil, noClosers, err
 		}
-		closers = append(closers, close)
+		closeDBs = append(closeDBs, close)
 
 		// when `len(strings.Split(masterCfg.Host, ","))>1`, it means that Redis will operate in `cluster` mode, and the `read` config will be ignored.
 		if len(strings.Split(masterCfg.Host, ",")) > 1 {
@@ -133,7 +133,7 @@ func InitRedisMasterConn(config RedisConfig) (*RedisDBConn, []func() error, erro
 				if err != nil {
 					return nil, noClosers, err
 				}
-				closers = append(closers, close)
+				closeDBs = append(closeDBs, close)
 			}
 
 			masterRedisDB.Reads = redisReadConns
@@ -141,7 +141,7 @@ func InitRedisMasterConn(config RedisConfig) (*RedisDBConn, []func() error, erro
 		}
 	}
 
-	return masterRedisDB, closers, nil
+	return masterRedisDB, closeDBs, nil
 }
 
 func (clients *RedisDBConn) KeyExists(c context.Context, key string) (bool, error) {
