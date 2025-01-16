@@ -129,8 +129,6 @@ func GetPool(poolName string) (*ants.Pool, error) {
 
 // GetDefaultPool returns the default pool.
 func GetDefaultPool() *ants.Pool {
-	poolsMu.Lock()
-	defer poolsMu.Unlock()
 	return defaultPool
 }
 
