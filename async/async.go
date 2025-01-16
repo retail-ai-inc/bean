@@ -222,27 +222,28 @@ func ExecuteContext(ctx context.Context, fn TimeoutTask, asyncOpts ...AsyncOptio
 	}
 
 	var (
-		pc, file, line, reported = runtime.Caller(1)
-		newCtx                   = context.Background()
-		sentryOpts               []sentry.SpanOption
-		// Get the request from the context.
-		req, reqFound = bctx.GetRequest(ctx)
+		newCtx         = context.Background()
+		sentryOpts     []sentry.SpanOption
+		sentryOn       = config.Bean.Sentry.On
+		sentrySampleOn = sentryOn && config.Bean.Sentry.TracesSampleRate > 0.0
 	)
 
-	if config.Bean.Sentry.On {
+	if sentryOn {
 		// Set scope to the hub.
 		hub := sentry.GetHubFromContext(ctx)
 		if hub == nil {
 			hub = sentry.CurrentHub()
 		}
 		clone := hub.Clone()
+
+		req, reqFound := bctx.GetRequest(ctx)
 		if reqFound {
 			clone.Scope().SetRequest(req)
 		}
 		newCtx = sentry.SetHubOnContext(newCtx, clone)
 
 		// Set the sentry options.
-		if config.Bean.Sentry.TracesSampleRate > 0.0 {
+		if sentrySampleOn {
 
 			// Continue the trace by passing the sentry-trace id, not by sharing the same span object, like distributed tracing across different servers.
 			// This is because the same span in the context is used in multiple goroutines, which causes a data race issue.
@@ -257,8 +258,10 @@ func ExecuteContext(ctx context.Context, fn TimeoutTask, asyncOpts ...AsyncOptio
 				description = span.Description
 				transactionName = span.Name
 			}
-			if description == "" && reported {
-				description = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
+			if description == "" {
+				if pc, file, line, reported := runtime.Caller(1); reported {
+					description = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
+				}
 			}
 			sentryOpts = append(sentryOpts, sentry.WithDescription(fmt.Sprintf("%s ASYNC", description)))
 
@@ -297,7 +300,7 @@ func ExecuteContext(ctx context.Context, fn TimeoutTask, asyncOpts ...AsyncOptio
 	// Define the task to be executed.
 	task := func() {
 
-		if config.Bean.Sentry.On && config.Bean.Sentry.TracesSampleRate > 0.0 {
+		if sentrySampleOn {
 			// Start a new span with a new context to avoid data race when the same span in the same context is used in multiple goroutines.
 			span := sentry.StartSpan(newCtx, "async", sentryOpts...)
 			defer span.Finish()
