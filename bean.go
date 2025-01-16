@@ -26,6 +26,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"html/template"
 	"log"
 	"net"
@@ -45,7 +46,6 @@ import (
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	elog "github.com/labstack/gommon/log"
-	"github.com/panjf2000/ants/v2"
 	pkgerrors "github.com/pkg/errors"
 	"github.com/retail-ai-inc/bean/v2/config"
 	"github.com/retail-ai-inc/bean/v2/echoview"
@@ -86,6 +86,8 @@ type Bean struct {
 	DBConn            *DBDeps
 	Echo              *echo.Echo
 	BeforeServe       func()
+	ShutdownSrv       []func() error
+	CleanupDBs        []func() error
 	errorHandlerFuncs []berror.ErrorHandlerFunc
 	Validate          *validatorV10.Validate
 	Config            config.Config
@@ -99,16 +101,16 @@ var TenantAlterDbHostParam string
 // Support a DNS cache version of the net/http Transport.
 var NetHttpFastTransporter *http.Transport
 
-func New() (b *Bean) {
+func New() *Bean {
 
 	if config.Bean == nil {
 		log.Fatal("config is not loaded")
 	}
 
 	// Create a new echo instance
-	e := NewEcho()
+	e, closeEcho := NewEcho()
 
-	b = &Bean{
+	b := &Bean{
 		Echo:     e,
 		Validate: validatorV10.New(),
 		Config:   *config.Bean,
@@ -191,16 +193,19 @@ func New() (b *Bean) {
 		})
 	}
 
+	b.ShutdownSrv = append(b.ShutdownSrv, closeEcho)
+
 	return b
 }
 
-func NewEcho() *echo.Echo {
+func NewEcho() (*echo.Echo, func() error) {
 
 	if config.Bean == nil {
 		log.Fatal("config is not loaded")
 	}
 
 	e := echo.New()
+	closes := []func() error{}
 
 	// Hide default `Echo` banner during startup.
 	e.HideBanner = true
@@ -287,6 +292,7 @@ func NewEcho() *echo.Echo {
 		e.Use(ContextTimeout(timeoutDur))
 	}
 
+	flushSentry := func() error { return nil }
 	// IMPORTANT: Capturing error and send to sentry if needed.
 	// Sentry `panic` error handler and APM initialization if activated from `env.json`
 	if config.Bean.Sentry.On {
@@ -300,6 +306,13 @@ func NewEcho() *echo.Echo {
 			}
 			if err := sentry.Init(*clientOption); err != nil {
 				e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
+			}
+			flushSentry = func() error {
+				notTimeout := sentry.Flush(config.Bean.Sentry.Timeout)
+				if !notTimeout {
+					return errors.New("sentry flush timeout")
+				}
+				return nil
 			}
 
 			// Configure custom scope
@@ -319,6 +332,7 @@ func NewEcho() *echo.Echo {
 			}
 		}
 	}
+	closes = append(closes, flushSentry)
 
 	// Some pre-build middleware initialization.
 	e.Pre(echomiddleware.RemoveTrailingSlash())
@@ -352,33 +366,25 @@ func NewEcho() *echo.Echo {
 	}
 
 	// Register goroutine pool
-	for _, asyncPool := range config.Bean.AsyncPool {
-		if asyncPool.Name == "" {
-			continue
-		}
+	if len(config.Bean.AsyncPool) > 0 {
+		for _, asyncPool := range config.Bean.AsyncPool {
+			if asyncPool.Name == "" {
+				continue
+			}
 
-		poolSize := -1
-		if asyncPool.Size != nil {
-			poolSize = *asyncPool.Size
-		}
+			pool, err := gopool.NewPool(asyncPool.Size, asyncPool.BlockAfter)
+			if err != nil {
+				e.Logger.Fatal(err, ". Server 🚀  crash landed. Exiting...")
+			}
 
-		blockAfter := 0
-		if asyncPool.BlockAfter != nil {
-			blockAfter = *asyncPool.BlockAfter
+			if err := gopool.Register(asyncPool.Name, pool); err != nil {
+				e.Logger.Fatal(err, ". Server 🚀  crash landed. Exiting...")
+			}
 		}
-
-		pool, err := ants.NewPool(poolSize, ants.WithMaxBlockingTasks(blockAfter))
-		if err != nil {
-			e.Logger.Fatal("async pool initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
-		}
-
-		err = gopool.Register(asyncPool.Name, pool)
-		if err != nil {
-			e.Logger.Fatal("goroutine pool register failed: ", err, ". Server 🚀  crash landed. Exiting...")
-		}
+		closes = append(closes, gopool.UnregisterAllPools)
 	}
 
-	return e
+	return e, closer(closes)
 }
 
 func (b *Bean) ServeAt(host, port string) error {
@@ -432,12 +438,7 @@ func (b *Bean) ServeAt(host, port string) error {
 		close(errCh)
 	}()
 
-	select {
-	case srvErr := <-errCh:
-		if srvErr != nil {
-			return pkgerrors.Wrapf(srvErr, "error during server startup")
-		}
-	case <-ctx.Done(): // Wait for the interrupt signal or termination signal.
+	b.ShutdownSrv = append(b.ShutdownSrv, func() error {
 		var timeout time.Duration
 		if b.Config.HTTP.ShutdownTimeout > 0 {
 			timeout = b.Config.HTTP.ShutdownTimeout
@@ -446,15 +447,24 @@ func (b *Bean) ServeAt(host, port string) error {
 		}
 		sdnCtx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
-		b.Echo.Logger.Info("Shutting down server...🛬")
 		err = s.Shutdown(sdnCtx)
 		if err != nil {
 			// Even after timeout, shutdown keeps handling ongoing requests in the background
 			// while returning timeout error until main goroutine exits.
 			err = pkgerrors.Wrapf(err, "failed to gracefully shutdown")
-		} else {
-			b.Echo.Logger.Info("Server has been shutdown gracefully.")
+			return err
 		}
+
+		return nil
+	})
+
+	select {
+	case srvErr := <-errCh:
+		if srvErr != nil {
+			return pkgerrors.Wrapf(srvErr, "error during server startup")
+		}
+	case <-ctx.Done(): // Wait for the interrupt signal or termination signal.
+		err = b.ShutdownAll()
 	}
 
 	// Check if there might be any other error than `http.ErrServerClosed`
@@ -512,7 +522,7 @@ func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
 }
 
 // InitDB initialize all the database dependencies and store it in global variable `global.DBConn`.
-func (b *Bean) InitDB() {
+func (b *Bean) InitDB() error {
 	var masterMySQLDB *gorm.DB
 	var masterMySQLDBName string
 	var masterMongoDB *mongo.Client
@@ -524,19 +534,55 @@ func (b *Bean) InitDB() {
 	var tenantMongoDBNames map[uint64]string
 	var tenantRedisDBs map[uint64]*dbdrivers.RedisDBConn
 	var masterMemoryDB memory.Cache
+	var cleanups []func() error
 
-	masterMySQLDB, masterMySQLDBName = dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
-	masterMongoDB, masterMongoDBName = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo, blog.Logger())
-	masterRedisDB = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
+	masterMySQLDB, masterMySQLDBName, close, err := dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
+	if err != nil {
+		return fmt.Errorf("failed to initialize master mysql db: %w", err)
+	}
+	cleanups = append(cleanups, close)
+
+	masterMongoDB, masterMongoDBName, close, err = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo, blog.Logger())
+	if err != nil {
+		return fmt.Errorf("failed to initialize master mongo db: %w", err)
+	}
+	cleanups = append(cleanups, close)
+
+	var redisCloses []func() error
+	masterRedisDB, redisCloses, err = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
+	if err != nil {
+		return fmt.Errorf("failed to initialize master redis db: %w", err)
+	}
+	cleanups = append(cleanups, redisCloses...)
 
 	if b.Config.Database.Tenant.On {
-		tenantMySQLDBs, tenantMySQLDBNames = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
-		tenantMongoDBs, tenantMongoDBNames = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, blog.Logger())
-		tenantRedisDBs = dbdrivers.InitRedisTenantConns(b.Config.Database.Redis, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
+		var closeDBs []func() error
+
+		tenantMySQLDBs, tenantMySQLDBNames, closeDBs, err = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
+		if err != nil {
+			return fmt.Errorf("failed to initialize tenant mysql dbs: %w", err)
+		}
+		cleanups = append(cleanups, closeDBs...)
+
+		tenantMongoDBs, tenantMongoDBNames, closeDBs, err = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, blog.Logger())
+		if err != nil {
+			return fmt.Errorf("failed to initialize tenant mongo dbs: %w", err)
+		}
+		cleanups = append(cleanups, closeDBs...)
+
+		tenantRedisDBs, closeDBs, err = dbdrivers.InitRedisTenantConns(b.Config.Database.Redis, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
+		if err != nil {
+			return fmt.Errorf("failed to initialize tenant redis dbs: %w", err)
+		}
+		cleanups = append(cleanups, closeDBs...)
 	}
 
 	if b.Config.Database.Memory.On {
 		masterMemoryDB = memory.NewMemoryCache()
+		cleanups = append(cleanups, func() error {
+			masterMemoryDB.CloseMemory()
+			return nil // no error
+		})
 	}
 
 	b.DBConn = &DBDeps{
@@ -552,14 +598,90 @@ func (b *Bean) InitDB() {
 		TenantRedisDBs:     tenantRedisDBs,
 		MemoryDB:           masterMemoryDB,
 	}
+
+	b.CleanupDBs = append(b.CleanupDBs, cleanups...)
+
+	return nil
 }
 
-// To clean up any bean resources before the program terminates.
-// Call this function using `defer` like `defer Cleanup()`
-func Cleanup() {
-	if config.Bean.Sentry.On {
-		// Flush buffered sentry events if any.
-		sentry.Flush(config.Bean.Sentry.Timeout)
+// ShutdownAll closes all the server and database related resources.
+func (b *Bean) ShutdownAll() error {
+
+	var err error
+
+	// Close the server related resources first.
+	if srvErr := b.Shutdown(); srvErr != nil {
+		err = errors.Join(err, srvErr)
+	}
+
+	// Close the database related resources next.
+	if dbErr := b.CleanupDB(); dbErr != nil {
+		err = errors.Join(err, dbErr)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to shutdown: %w", err)
+	}
+
+	return nil
+}
+
+// Shutdown closes all the server related resources.
+func (b *Bean) Shutdown() error {
+	if len(b.ShutdownSrv) == 0 {
+		b.Echo.Logger.Info("No server shutdown function found.")
+		return nil
+	}
+
+	b.Echo.Logger.Info("Shutting down server...🛬")
+
+	if err := closer(b.ShutdownSrv)(); err != nil {
+		return err
+	}
+
+	b.Echo.Logger.Info("Server has been shutdown gracefully.")
+	return nil
+}
+
+// CleanupDB closes all the database (master and tenant) related resources.
+func (b *Bean) CleanupDB() error {
+	if len(b.CleanupDBs) == 0 {
+		b.Echo.Logger.Info("No database cleanup function found.")
+		return nil
+	}
+
+	b.Echo.Logger.Info("Cleaning up databases...🧹")
+
+	if err := closer(b.CleanupDBs)(); err != nil {
+		return err
+	}
+
+	b.Echo.Logger.Info("Databases have been cleaned up successfully.")
+	return nil
+}
+
+func closer(closers []func() error) func() error {
+
+	return func() error {
+		if len(closers) == 0 {
+			return nil
+		}
+
+		var err error
+		// Execute the last added closer first.
+		for i := len(closers) - 1; i >= 0; i-- {
+			if closers[i] == nil {
+				continue // Skip nil closer
+			}
+			if cErr := closers[i](); cErr != nil {
+				err = errors.Join(err, cErr)
+			}
+		}
+		if err != nil {
+			return err
+		}
+
+		return nil
 	}
 }
 

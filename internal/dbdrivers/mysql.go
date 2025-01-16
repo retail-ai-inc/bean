@@ -68,8 +68,13 @@ func (TenantConnections) TableName() string {
 	return "TenantConnections"
 }
 
+var (
+	noClose   = func() error { return nil }
+	noClosers = []func() error{}
+)
+
 // InitMysqlMasterConn returns mysql master db connection.
-func InitMysqlMasterConn(config SQLConfig) (*gorm.DB, string) {
+func InitMysqlMasterConn(config SQLConfig) (*gorm.DB, string, func() error, error) {
 
 	masterCfg := config.Master
 
@@ -81,95 +86,106 @@ func InitMysqlMasterConn(config SQLConfig) (*gorm.DB, string) {
 		)
 	}
 
-	return nil, ""
+	return nil, "", noClose, nil
 }
 
-func InitMysqlTenantConns(config SQLConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string) (map[uint64]*gorm.DB, map[uint64]string) {
+func InitMysqlTenantConns(config SQLConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string,
+) (map[uint64]*gorm.DB, map[uint64]string, []func() error, error) {
 
 	err := createTenantConnectionsTableIfNotExist(master)
 	if err != nil {
-		panic(err)
+		return nil, nil, noClosers, err
 	}
 
-	tenantCfgs := GetAllTenantCfgs(master)
+	tenantCfgs, err := GetAllTenantCfgs(master)
+	if err != nil {
+		return nil, nil, noClosers, err
+	}
 
 	return getAllMysqlTenantDB(config, tenantCfgs, tenantAlterDbHostParam, tenantDBPassPhraseKey)
 }
 
 // GetAllTenantCfgs return all Tenant data from master db.
-func GetAllTenantCfgs(db *gorm.DB) []*TenantConnections {
+func GetAllTenantCfgs(db *gorm.DB) ([]*TenantConnections, error) {
 
 	var tt []*TenantConnections
 
 	err := db.Table("TenantConnections").Find(&tt).Error
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to get all tenant connections: %w", err)
 	}
 
 	// TODO: save the config in memory
 
-	return tt
+	return tt, nil
 }
 
 // getAllMysqlTenantDB returns all tenant db connection.
 func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
-	tenantAlterDbHostParam, tenantDBPassPhraseKey string) (map[uint64]*gorm.DB, map[uint64]string) {
+	tenantAlterDbHostParam, tenantDBPassPhraseKey string,
+) (map[uint64]*gorm.DB, map[uint64]string, []func() error, error) {
 
 	mysqlConns := make(map[uint64]*gorm.DB, len(tenantCfgs))
 	mysqlDBNames := make(map[uint64]string, len(tenantCfgs))
 
+	closers := make([]func() error, 0, len(tenantCfgs))
 	for _, t := range tenantCfgs {
 
 		var cfgsMap map[string]map[string]interface{}
 		var err error
 		if t.Connections != nil {
 			if err = json.Unmarshal(t.Connections, &cfgsMap); err != nil {
-				panic(err)
+				return nil, nil, noClosers, fmt.Errorf("failed to unmarshal tenant connections (%d:%s): %w", t.TenantID, t.Code, err)
 			}
 		}
 
 		// IMPORTANT: Check the `mysql` object exist in the Connections column or not.
-		if mysqlCfg, ok := cfgsMap["mysql"]; ok {
-			userName := mysqlCfg["username"].(string)
-			password := mysqlCfg["password"].(string)
-
-			// IMPORTANT: If tenant database password is encrypted in master db config.
-			if tenantDBPassPhraseKey != "" {
-				password, err = aes.BeanAESDecrypt(tenantDBPassPhraseKey, password)
-				if err != nil {
-					panic(err)
-				}
-			}
-
-			host := mysqlCfg["host"].(string)
-
-			// IMPORTANT - If a command or service wants to use a different `host` parameter for tenant database connection
-			// then it's easy to do just by passing that parameter string name using `bean.TenantAlterDbHostParam`.
-			// Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
-			if tenantAlterDbHostParam != "" && mysqlCfg[tenantAlterDbHostParam] != nil {
-				host = mysqlCfg[tenantAlterDbHostParam].(string)
-			}
-
-			port := mysqlCfg["port"].(string)
-			dbName := mysqlCfg["database"].(string)
-
-			mysqlConns[t.TenantID], mysqlDBNames[t.TenantID] = connectMysqlDB(
-				userName, password, host, port, dbName, config.MaxIdleConnections,
-				config.MaxOpenConnections, config.MaxConnectionLifeTime, config.MaxIdleConnectionLifeTime,
-				config.Debug,
-			)
-
-		} else {
+		mysqlCfg, exists := cfgsMap["mysql"]
+		if !exists {
 			mysqlConns[t.TenantID], mysqlDBNames[t.TenantID] = nil, ""
+			continue
 		}
+		userName := mysqlCfg["username"].(string)
+		password := mysqlCfg["password"].(string)
+
+		// IMPORTANT: If tenant database password is encrypted in master db config.
+		if tenantDBPassPhraseKey != "" {
+			password, err = aes.BeanAESDecrypt(tenantDBPassPhraseKey, password)
+			if err != nil {
+				return nil, nil, noClosers, fmt.Errorf("failed to decrypt mysql tenant database password (%d:%s): %w", t.TenantID, t.Code, err)
+			}
+		}
+
+		host := mysqlCfg["host"].(string)
+
+		// IMPORTANT - If a command or service wants to use a different `host` parameter for tenant database connection
+		// then it's easy to do just by passing that parameter string name using `bean.TenantAlterDbHostParam`.
+		// Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
+		if tenantAlterDbHostParam != "" && mysqlCfg[tenantAlterDbHostParam] != nil {
+			host = mysqlCfg[tenantAlterDbHostParam].(string)
+		}
+
+		port := mysqlCfg["port"].(string)
+		dbName := mysqlCfg["database"].(string)
+
+		var closeDB func() error
+		mysqlConns[t.TenantID], mysqlDBNames[t.TenantID], closeDB, err = connectMysqlDB(
+			userName, password, host, port, dbName, config.MaxIdleConnections,
+			config.MaxOpenConnections, config.MaxConnectionLifeTime, config.MaxIdleConnectionLifeTime,
+			config.Debug,
+		)
+		if err != nil {
+			return nil, nil, noClosers, fmt.Errorf("failed to connect mysql tenant database (%d:%s): %w", t.TenantID, t.Code, err)
+		}
+		closers = append(closers, closeDB)
 	}
 
-	return mysqlConns, mysqlDBNames
+	return mysqlConns, mysqlDBNames, closers, nil
 }
 
 func connectMysqlDB(userName, password, host, port, dbName string,
 	maxIdleConnections, maxOpenConnections int, maxConnectionLifeTime, maxIdleConnectionLifeTime time.Duration,
-	debug bool) (*gorm.DB, string) {
+	debug bool) (*gorm.DB, string, func() error, error) {
 
 	dsn := fmt.Sprintf(
 		"%s:%s@tcp(%s:%s)/%s?parseTime=true&multiStatements=true",
@@ -185,12 +201,12 @@ func connectMysqlDB(userName, password, host, port, dbName string,
 		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	}
 	if err != nil {
-		panic(err)
+		return nil, "", noClose, fmt.Errorf("failed to connect mysql database: %w", err)
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		panic(err)
+		return nil, "", noClose, fmt.Errorf("failed to get mysql database connection: %w", err)
 	}
 
 	sqlDB.SetMaxIdleConns(maxIdleConnections)
@@ -204,14 +220,14 @@ func connectMysqlDB(userName, password, host, port, dbName string,
 		sqlDB.SetConnMaxIdleTime(maxIdleConnectionLifeTime)
 	}
 
-	return db, dbName
+	return db, dbName, sqlDB.Close, nil
 }
 
 func createTenantConnectionsTableIfNotExist(masterDb *gorm.DB) error {
 
 	if !masterDb.Migrator().HasTable("TenantConnections") {
 		err := masterDb.Migrator().CreateTable(&TenantConnections{})
-		return err
+		return fmt.Errorf("failed to create TenantConnections table: %w", err)
 	}
 
 	return nil

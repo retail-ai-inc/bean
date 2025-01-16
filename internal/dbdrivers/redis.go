@@ -25,6 +25,7 @@ package dbdrivers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"strings"
 	"time"
@@ -76,31 +77,44 @@ type FieldValuePair struct {
 
 var cachePrefix string
 
-func InitRedisTenantConns(config RedisConfig, masterMySQL *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string) map[uint64]*RedisDBConn {
+func InitRedisTenantConns(config RedisConfig, masterMySQL *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string,
+) (map[uint64]*RedisDBConn, []func() error, error) {
 	cachePrefix = config.Prefix
-	tenantCfgs := GetAllTenantCfgs(masterMySQL)
+	tenantCfgs, err := GetAllTenantCfgs(masterMySQL)
+	if err != nil {
+		return nil, noClosers, err
+	}
 
 	if len(tenantCfgs) > 0 {
 		return getAllRedisTenantDB(config, tenantCfgs, tenantAlterDbHostParam, tenantDBPassPhraseKey)
 	}
 
-	return nil
+	return nil, noClosers, nil
 }
 
-func InitRedisMasterConn(config RedisConfig) *RedisDBConn {
+func InitRedisMasterConn(config RedisConfig) (*RedisDBConn, []func() error, error) {
 
 	var masterRedisDB *RedisDBConn
+	var closeDBs []func() error
 
 	masterCfg := config.Master
 	if masterCfg != nil {
 
-		masterRedisDB = &RedisDBConn{}
+		var (
+			masterRedisDB = &RedisDBConn{}
+			close         func() error
+			err           error
+		)
 
-		masterRedisDB.Primary, masterRedisDB.Name = connectRedisDB(
+		masterRedisDB.Primary, masterRedisDB.Name, close, err = connectRedisDB(
 			masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
 			config.Maxretries, config.PoolSize, config.MinIdleConnections, config.DialTimeout,
 			config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, false,
 		)
+		if err != nil {
+			return nil, noClosers, err
+		}
+		closeDBs = append(closeDBs, close)
 
 		// when `len(strings.Split(masterCfg.Host, ","))>1`, it means that Redis will operate in `cluster` mode, and the `read` config will be ignored.
 		if len(strings.Split(masterCfg.Host, ",")) > 1 {
@@ -108,22 +122,26 @@ func InitRedisMasterConn(config RedisConfig) *RedisDBConn {
 			masterRedisDB.isCluster = true
 
 		} else if len(strings.Split(masterCfg.Host, ",")) == 1 && len(masterCfg.Reads) > 0 {
-			redisReadConn := make(map[uint64]redis.UniversalClient, len(masterCfg.Reads))
+			redisReadConns := make(map[uint64]redis.UniversalClient, len(masterCfg.Reads))
 
 			for i, readHost := range masterCfg.Reads {
-				redisReadConn[uint64(i)], _ = connectRedisDB(
+				redisReadConns[uint64(i)], _, close, err = connectRedisDB(
 					masterCfg.Password, readHost, masterCfg.Port, masterCfg.Database,
 					config.Maxretries, config.PoolSize, config.MinIdleConnections, config.DialTimeout,
 					config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, true,
 				)
+				if err != nil {
+					return nil, noClosers, err
+				}
+				closeDBs = append(closeDBs, close)
 			}
 
-			masterRedisDB.Reads = redisReadConn
+			masterRedisDB.Reads = redisReadConns
 			masterRedisDB.readCount = len(masterRedisDB.Reads)
 		}
 	}
 
-	return masterRedisDB
+	return masterRedisDB, closeDBs, nil
 }
 
 func (clients *RedisDBConn) KeyExists(c context.Context, key string) (bool, error) {
@@ -784,9 +802,11 @@ func wrapMGet(ctx context.Context, clients redis.UniversalClient, keys ...string
 }
 
 // getAllRedisTenantDB returns a singleton tenant db connection for each tenant.
-func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string) map[uint64]*RedisDBConn {
+func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string,
+) (map[uint64]*RedisDBConn, []func() error, error) {
 
 	tenantRedisDB := make(map[uint64]*RedisDBConn, len(tenantCfgs))
+	closers := make([]func() error, 0, len(tenantCfgs))
 
 	for _, t := range tenantCfgs {
 
@@ -794,7 +814,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 		var err error
 		if t.Connections != nil {
 			if err = json.Unmarshal(t.Connections, &cfgsMap); err != nil {
-				panic(err)
+				return nil, noClosers, fmt.Errorf("failed to unmarshal tenant connections (%d:%s): %w", t.TenantID, t.Code, err)
 			}
 		}
 
@@ -806,7 +826,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 			if tenantDBPassPhraseKey != "" {
 				password, err = aes.BeanAESDecrypt(tenantDBPassPhraseKey, password)
 				if err != nil {
-					panic(err)
+					return nil, noClosers, fmt.Errorf("failed to decrypt redis tenant database password (%d:%s): %w", t.TenantID, t.Code, err)
 				}
 			}
 
@@ -826,11 +846,18 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 			}
 
 			tenantRedisDB[t.TenantID] = &RedisDBConn{}
-
-			tenantRedisDB[t.TenantID].Primary, tenantRedisDB[t.TenantID].Name = connectRedisDB(
+			var (
+				close func() error
+				err   error
+			)
+			tenantRedisDB[t.TenantID].Primary, tenantRedisDB[t.TenantID].Name, close, err = connectRedisDB(
 				password, host, port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
 				config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, false,
 			)
+			if err != nil {
+				return nil, noClosers, fmt.Errorf("failed to connect redis tenant database (%d:%s): %w", t.TenantID, t.Code, err)
+			}
+			closers = append(closers, close)
 
 			// IMPORTANT: Let's initialize the read replica connection if it is available.
 			// when `len(strings.Split(host, ","))>1`, it means that Redis will operate in `cluster` mode, and the `read` config will be ignored.
@@ -846,10 +873,14 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 
 						var host, port = h.(string), redisCfg["port"].(string)
 
-						redisReadConn[uint64(i)], _ = connectRedisDB(
+						redisReadConn[uint64(i)], _, close, err = connectRedisDB(
 							password, host, port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
 							config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, true,
 						)
+						if err != nil {
+							return nil, noClosers, fmt.Errorf("failed to connect to redis tenant database read replica (%d:%s): %w", t.TenantID, t.Code, err)
+						}
+						closers = append(closers, close)
 					}
 
 					tenantRedisDB[t.TenantID].Reads = redisReadConn
@@ -859,13 +890,13 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 		}
 	}
 
-	return tenantRedisDB
+	return tenantRedisDB, closers, nil
 }
 
 func connectRedisDB(
 	password, host, port string, dbName int, maxretries, poolsize, minIdleConnections int,
 	dialTimeout, readTimeout, writeTimeout, poolTimeout time.Duration, readOnly bool,
-) (redis.UniversalClient, int) {
+) (redis.UniversalClient, int, func() error, error) {
 
 	hosts := strings.Split(host, ",")
 	for i, h := range hosts {
@@ -891,10 +922,10 @@ func connectRedisDB(
 	// Check the connection
 	_, err := rdb.Ping(context.TODO()).Result()
 	if err != nil {
-		panic(err)
+		return nil, 0, noClose, fmt.Errorf("redis connection error: %w", err)
 	}
 
-	return rdb, dbName
+	return rdb, dbName, rdb.Close, nil
 }
 
 func GetRedisCachePrefix() string {
