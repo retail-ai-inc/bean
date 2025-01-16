@@ -47,7 +47,6 @@ import (
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	elog "github.com/labstack/gommon/log"
-	"github.com/panjf2000/ants/v2"
 	pkgerrors "github.com/pkg/errors"
 	"github.com/retail-ai-inc/bean/v2/config"
 	"github.com/retail-ai-inc/bean/v2/echoview"
@@ -368,30 +367,22 @@ func NewEcho() (*echo.Echo, func() error) {
 	}
 
 	// Register goroutine pool
-	for _, asyncPool := range config.Bean.AsyncPool {
-		if asyncPool.Name == "" {
-			continue
-		}
+	if len(config.Bean.AsyncPool) > 0 {
+		for _, asyncPool := range config.Bean.AsyncPool {
+			if asyncPool.Name == "" {
+				continue
+			}
 
-		poolSize := -1
-		if asyncPool.Size != nil {
-			poolSize = *asyncPool.Size
-		}
+			pool, err := gopool.NewPool(asyncPool.Size, asyncPool.BlockAfter)
+			if err != nil {
+				e.Logger.Fatal(err, ". Server 🚀  crash landed. Exiting...")
+			}
 
-		blockAfter := 0
-		if asyncPool.BlockAfter != nil {
-			blockAfter = *asyncPool.BlockAfter
+			if err := gopool.Register(asyncPool.Name, pool); err != nil {
+				e.Logger.Fatal(err, ". Server 🚀  crash landed. Exiting...")
+			}
 		}
-
-		pool, err := ants.NewPool(poolSize, ants.WithMaxBlockingTasks(blockAfter))
-		if err != nil {
-			e.Logger.Fatal("async pool initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
-		}
-
-		err = gopool.Register(asyncPool.Name, pool)
-		if err != nil {
-			e.Logger.Fatal("goroutine pool register failed: ", err, ". Server 🚀  crash landed. Exiting...")
-		}
+		closes = append(closes, gopool.UnregisterAllPools)
 	}
 
 	return e, closer(closes)

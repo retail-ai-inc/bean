@@ -31,40 +31,69 @@ import (
 	"github.com/panjf2000/ants/v2"
 )
 
-// TODO: Consider utilizing the ants.MultiPool to provide a better performance improvement.
 var (
 	poolsMu sync.RWMutex
 	pools   = make(map[string]*ants.Pool)
 )
 
+// NewPool creates a goroutine pool with the specified size and blocking tasks limit.
+func NewPool(size *int, blockAfter *int) (*ants.Pool, error) {
+
+	poolSize := -1 // capacity of the pool is unlimited by default
+	if size != nil {
+		poolSize = *size
+	}
+
+	maxBlockingTasks := 0 // unlimited blocking tasks by default
+	if blockAfter != nil {
+		maxBlockingTasks = *blockAfter
+	}
+
+	pool, err := ants.NewPool(poolSize, ants.WithMaxBlockingTasks(maxBlockingTasks))
+	if err != nil {
+		return nil, fmt.Errorf("gopool: initialization failed: %w", err)
+	}
+
+	return pool, nil
+}
+
 // Register makes a goroutine pool available by the provided name.
 // If Register is called twice with the same name or if pool is nil,
 // it returns error.
 func Register(name string, pool *ants.Pool) error {
+
+	if name == "" {
+		return errors.New("gopool: register pool name is empty")
+	}
+
+	if pool == nil {
+		return errors.New("gopool: register pool is nil")
+	}
+
 	poolsMu.Lock()
 	defer poolsMu.Unlock()
 
-	if pool == nil {
-		return errors.New("gopool: Register pool is nil")
-	}
-
 	if _, dup := pools[name]; dup {
-		return errors.New("gopool: Register called twice for pool " + name)
+		return fmt.Errorf("gopool: register pool already exists with name %q", name)
 	}
 
 	pools[name] = pool
 	return nil
 }
 
-func UnregisterAllPools() {
+func UnregisterAllPools() error {
 	poolsMu.Lock()
 	defer poolsMu.Unlock()
 
+	// Basically release the pool in non-blocking way,
+	// which means it will release the pool immediately without waiting for the tasks to be finished.
 	for _, pool := range pools {
 		pool.Release()
 	}
 
-	pools = make(map[string]*ants.Pool)
+	pools = make(map[string]*ants.Pool) // Reset the pools
+
+	return nil // Always return nil
 }
 
 // Pools returns a sorted list of the names of the registered pools.
