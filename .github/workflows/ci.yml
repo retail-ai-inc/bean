@@ -21,6 +21,9 @@ jobs:
       with:
         go-version: '1.22.7' # Ensure this matches go version in your project
 
+    - name: Run go mod tidy
+      run: go mod tidy
+
     - name: Run golangci-lint with Reviewdog
       uses: reviewdog/action-golangci-lint@v2
       with:
