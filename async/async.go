@@ -30,19 +30,21 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/getsentry/sentry-go"
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/config"
 	bctx "github.com/retail-ai-inc/bean/v2/context"
 	"github.com/retail-ai-inc/bean/v2/internal/gopool"
 	"github.com/retail-ai-inc/bean/v2/internal/regex"
 	"github.com/retail-ai-inc/bean/v2/log"
 	"github.com/retail-ai-inc/bean/v2/trace"
+
+	"github.com/getsentry/sentry-go"
+	"github.com/labstack/echo/v4"
+	"github.com/panjf2000/ants/v2"
+	"github.com/retail-ai-inc/bean/v2/config"
 )
 
 type (
 	Task        func(c context.Context)
-	TimeoutTask func(c context.Context) error
+	TaskWithCtx func(c context.Context) error
 )
 
 // Execute provides a safe way to execute a function asynchronously without any context, recovering if they panic
@@ -131,7 +133,7 @@ func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
 	}, poolName...)
 }
 
-func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TimeoutTask, poolName ...string) {
+func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TaskWithCtx, poolName ...string) {
 	functionName := "unknown function"
 	if config.Bean.Sentry.On && config.Bean.Sentry.TracesSampleRate > 0.0 {
 		if pc, file, line, ok := runtime.Caller(1); ok {
@@ -209,7 +211,7 @@ type asyncOptions struct {
 
 // ExecuteWithContext execute a function returning an error asynchronously
 // with a starndard context (not echo context), recovering if they panic.
-func ExecuteContext(ctx context.Context, fn TimeoutTask, asyncOpts ...AsyncOption) {
+func ExecuteContext(ctx context.Context, fn TaskWithCtx, asyncOpts ...AsyncOption) {
 
 	// by default
 	opts := &asyncOptions{
@@ -324,9 +326,9 @@ func ExecuteContext(ctx context.Context, fn TimeoutTask, asyncOpts ...AsyncOptio
 
 	// Actually execute the task with the pool name if provided.
 	if opts.poolName != "" {
-		Execute(task, opts.poolName)
+		execute(newCtx, task, withPool(opts.poolName))
 	} else {
-		Execute(task)
+		execute(newCtx, task)
 	}
 }
 
@@ -341,14 +343,14 @@ func extractTracing(ctx context.Context) (sentryTrace, baggage string) {
 }
 
 // Recover the panic and send the exception to sentry.
-func recoverPanic(c context.Context) {
+func recoverPanic(ctx context.Context) {
 	if v := recover(); v != nil {
 		// Create a new Hub by cloning the existing one.
 		if config.Bean.Sentry.On {
 			var localHub *sentry.Hub
 
-			if c != nil {
-				localHub = sentry.GetHubFromContext(c)
+			if ctx != nil {
+				localHub = sentry.GetHubFromContext(ctx)
 			}
 
 			if localHub == nil {
@@ -367,9 +369,53 @@ func recoverPanic(c context.Context) {
 			"message": "Recovered panic from async task.",
 			"cause":   v,
 		}
-		if reqID, ok := bctx.GetRequestID(c); ok {
+		if reqID, ok := bctx.GetRequestID(ctx); ok {
 			msg["request_id"] = reqID
 		}
 		log.Logger().Errorj(msg)
 	}
+}
+
+type execOptions struct {
+	poolName *string
+}
+
+type execOption func(*execOptions)
+
+func withPool(name string) execOption {
+	return func(o *execOptions) {
+		o.poolName = &name
+	}
+}
+
+func execute(ctx context.Context, task func(), execOpts ...execOption) {
+
+	opts := &execOptions{
+		poolName: nil,
+	}
+
+	for _, apply := range execOpts {
+		apply(opts)
+	}
+
+	var pool *ants.Pool
+	if opts.poolName != nil {
+		if got, err := gopool.GetPool(*opts.poolName); err == nil && got != nil {
+			pool = got
+		} else {
+			log.Logger().Errorf("pool(%s) not found, using default pool", *opts.poolName)
+		}
+	}
+	if pool == nil {
+		pool = gopool.GetDefaultPool()
+	}
+
+	submitToPool := func(task func()) {
+		defer recoverPanic(ctx)
+		err := pool.Submit(task)
+		if err != nil {
+			panic(err)
+		}
+	}
+	submitToPool(task)
 }

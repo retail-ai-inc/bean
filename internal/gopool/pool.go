@@ -32,8 +32,9 @@ import (
 )
 
 var (
-	poolsMu sync.RWMutex
-	pools   = make(map[string]*ants.Pool)
+	poolsMu     sync.RWMutex
+	pools       = make(map[string]*ants.Pool)
+	defaultPool = initDefaultPool()
 )
 
 // NewPool creates a goroutine pool with the specified size and blocking tasks limit.
@@ -90,6 +91,9 @@ func UnregisterAllPools() error {
 	for _, pool := range pools {
 		pool.Release()
 	}
+	if defaultPool != nil {
+		defaultPool.Release()
+	}
 
 	pools = make(map[string]*ants.Pool) // Reset the pools
 
@@ -121,4 +125,24 @@ func GetPool(poolName string) (*ants.Pool, error) {
 	}
 
 	return pool, nil
+}
+
+// GetDefaultPool returns the default pool.
+func GetDefaultPool() *ants.Pool {
+	poolsMu.Lock()
+	defer poolsMu.Unlock()
+	return defaultPool
+}
+
+func initDefaultPool() *ants.Pool {
+	pool, err := ants.NewPool(-1)
+	if err != nil {
+		panic(fmt.Sprintf("gopool: default pool initialization failed: %v", err))
+	}
+
+	if pool == nil {
+		panic("gopool: default pool is nil")
+	}
+
+	return pool
 }
