@@ -131,6 +131,7 @@ type Config struct {
 		Size       *int
 		BlockAfter *int
 	}
+	AsyncPoolReleaseTimeout time.Duration
 }
 
 type Sentry struct {

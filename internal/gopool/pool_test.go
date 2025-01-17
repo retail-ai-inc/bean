@@ -212,7 +212,7 @@ func Test_Unregister_All_Pools(t *testing.T) {
 			}
 
 			// Act
-			err := UnregisterAllPoolsTimeout(tt.args.timeout)
+			err := ReleaseAllPools(tt.args.timeout)()
 
 			// Assert
 			if tt.wantErr {

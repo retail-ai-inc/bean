@@ -384,8 +384,8 @@ func NewEcho() (*echo.Echo, func() error) {
 				e.Logger.Fatal(err, ". Server 🚀  crash landed. Exiting...")
 			}
 		}
-		closes = append(closes, gopool.UnregisterAllPools)
 	}
+	closes = append(closes, gopool.ReleaseAllPools(config.Bean.AsyncPoolReleaseTimeout))
 
 	return e, closer(closes)
 }
