@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/panjf2000/ants/v2"
 )
@@ -82,22 +83,59 @@ func Register(name string, pool *ants.Pool) error {
 	return nil
 }
 
-func UnregisterAllPools() error {
+// UnregisterAllPools removes all pools in non-blocking way.
+func UnregisterAllPools() {
 	poolsMu.Lock()
 	defer poolsMu.Unlock()
 
-	// Basically release the pool in non-blocking way,
+	// Basically Release() is in non-blocking way,
 	// which means it will release the pool immediately without waiting for the tasks to be finished.
 	for _, pool := range pools {
 		pool.Release()
 	}
-	if defaultPool != nil {
-		defaultPool.Release()
-	}
-
 	pools = make(map[string]*ants.Pool) // Reset the pools
 
-	return nil // Always return nil
+	if defaultPool != nil {
+		defaultPool.Release()
+		// Do not reset the default pool
+	}
+}
+
+// UnregisterAllPoolsTimeout removes all pools in blocking way with a timeout.
+func UnregisterAllPoolsTimeout(timeout time.Duration) error {
+
+	if timeout <= 0 {
+		UnregisterAllPools()
+		return nil
+	}
+
+	poolsMu.Lock()
+	defer poolsMu.Unlock()
+	// Basically ReleaseTimeout() is in blocking way,
+	// which means it will wait for the tasks to be finished within the timeout.
+	var err error
+	// TODO: release all the pools in parallel with a timeout
+	for name, pool := range pools {
+		pErr := pool.ReleaseTimeout(timeout)
+		if pErr != nil {
+			err = errors.Join(err, fmt.Errorf("pool[%q]: %w", name, pErr))
+		}
+	}
+	pools = make(map[string]*ants.Pool) // Reset the pools
+
+	if defaultPool != nil {
+		pErr := defaultPool.ReleaseTimeout(timeout)
+		if pErr != nil {
+			err = errors.Join(err, fmt.Errorf("default pool: %w", pErr))
+		}
+		// Do not reset the default pool
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Pools returns a sorted list of the names of the registered pools.
