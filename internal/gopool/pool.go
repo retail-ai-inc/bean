@@ -23,6 +23,7 @@
 package gopool
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -30,6 +31,8 @@ import (
 	"time"
 
 	"github.com/panjf2000/ants/v2"
+	"github.com/sourcegraph/conc/panics"
+	"github.com/sourcegraph/conc/pool"
 )
 
 var (
@@ -109,33 +112,51 @@ func UnregisterAllPoolsTimeout(timeout time.Duration) error {
 		return nil
 	}
 
+	var ErrReleaseTimeout = errors.New("gopool: release timeout")
+	ctx, cancel := context.WithTimeoutCause(context.Background(), timeout, ErrReleaseTimeout)
+	defer cancel()
+
 	poolsMu.Lock()
 	defer poolsMu.Unlock()
 	// Basically ReleaseTimeout() is in blocking way,
 	// which means it will wait for the tasks to be finished within the timeout.
-	var err error
-	// TODO: release all the pools in parallel with a timeout
+	p := pool.New().WithContext(ctx).WithMaxGoroutines(len(pools) + 1)
 	for name, pool := range pools {
-		pErr := pool.ReleaseTimeout(timeout)
-		if pErr != nil {
-			err = errors.Join(err, fmt.Errorf("pool[%q]: %w", name, pErr))
-		}
+		p.Go(releaser(name, pool, timeout))
 	}
-	pools = make(map[string]*ants.Pool) // Reset the pools
-
 	if defaultPool != nil {
-		pErr := defaultPool.ReleaseTimeout(timeout)
-		if pErr != nil {
-			err = errors.Join(err, fmt.Errorf("default pool: %w", pErr))
-		}
-		// Do not reset the default pool
+		p.Go(releaser("default", defaultPool, timeout))
 	}
 
+	err := p.Wait()
 	if err != nil {
 		return err
 	}
+	pools = make(map[string]*ants.Pool) // reset pools
+	// Do not reset the default pool
 
 	return nil
+}
+
+func releaser(name string, pool *ants.Pool, timeout time.Duration) func(context.Context) error {
+	return func(ctx context.Context) (err error) {
+		var catcher panics.Catcher
+		defer func() {
+			if r := catcher.Recovered(); r != nil {
+				err = fmt.Errorf("pool[%s] release: %w", name, r.AsError())
+			}
+		}()
+
+		catcher.Try(func() {
+			err = pool.ReleaseTimeout(timeout)
+		})
+
+		if err != nil {
+			return fmt.Errorf("pool[%s] release: %w", name, err)
+		}
+
+		return nil
+	}
 }
 
 // Pools returns a sorted list of the names of the registered pools.

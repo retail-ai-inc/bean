@@ -2,6 +2,8 @@ package gopool
 
 import (
 	"log"
+	"math"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -22,7 +24,7 @@ func Test_Register_Pool(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "register",
+			name: "register_success",
 			args: args{
 				name: "test",
 				pool: newPool(t),
@@ -78,7 +80,7 @@ func Test_Get_Pool(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name: "get",
+			name: "get_success",
 			args: args{
 				name: "test",
 				pool: newPool(t),
@@ -116,15 +118,15 @@ func Test_Get_Pool(t *testing.T) {
 
 func Test_Unregister_All_Pools(t *testing.T) {
 
-	submitTask := func(dur time.Duration) func(*testing.T) error {
-		task := func(name string, dur time.Duration) func() {
-			return func() {
-				log.Printf("[%7s]task start (%s)", name, dur)
-				defer log.Printf("[%7s]task end   (%s)", name, dur)
-				time.Sleep(dur)
-			}
+	task := func(dur time.Duration) func() {
+		return func() {
+			log.Printf("task start (%s)", dur)
+			defer log.Printf("task end   (%s)", dur)
+			time.Sleep(dur)
 		}
+	}
 
+	submitNTasks := func(task func(), release bool) func(*testing.T) error {
 		return func(t *testing.T) error {
 			pool := newPool(t)
 			err := Register("test", pool)
@@ -132,15 +134,26 @@ func Test_Unregister_All_Pools(t *testing.T) {
 				return err
 			}
 
-			err = pool.Submit(task("test", dur))
-			if err != nil {
-				return err
-			}
+			n := math.Max(1, float64(rand.Intn(10)))
 
 			defPool := GetDefaultPool()
-			err = defPool.Submit(task("default", dur*2))
-			if err != nil {
-				return err
+			for i := 0; i < int(n); i++ {
+				err = defPool.Submit(task)
+				if err != nil {
+					return err
+				}
+			}
+
+			for i := 0; i < int(n); i++ {
+				err = pool.Submit(task)
+				if err != nil {
+					return err
+				}
+			}
+
+			if release {
+				pool.Release()
+				defPool.Release()
 			}
 
 			return nil
@@ -167,17 +180,25 @@ func Test_Unregister_All_Pools(t *testing.T) {
 		{
 			name: "unregister_with_timeout_success",
 			args: args{
-				timeout: 3 * time.Second,
+				timeout: 150 * time.Millisecond,
 			},
-			submitTask: submitTask(1 * time.Second),
+			submitTask: submitNTasks(task(100*time.Millisecond), false),
 			wantErr:    false,
 		},
 		{
 			name: "unregister_with_timeout_fail",
 			args: args{
-				timeout: 2 * time.Second,
+				timeout: 100 * time.Millisecond,
 			},
-			submitTask: submitTask(1 * time.Second),
+			submitTask: submitNTasks(task(100*time.Millisecond), false),
+			wantErr:    true,
+		},
+		{
+			name: "unregister_already_closed_pools",
+			args: args{
+				timeout: 150 * time.Millisecond,
+			},
+			submitTask: submitNTasks(task(100*time.Millisecond), true),
 			wantErr:    true,
 		},
 	}
@@ -190,11 +211,15 @@ func Test_Unregister_All_Pools(t *testing.T) {
 				require.NoError(t, err)
 			}
 
+			// Act
 			err := UnregisterAllPoolsTimeout(tt.args.timeout)
+
+			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+				assert.Empty(t, pools)
 			}
 		})
 	}
