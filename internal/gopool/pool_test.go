@@ -7,10 +7,59 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/panjf2000/ants/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func Test_New_Pool(t *testing.T) {
+	type args struct {
+		size       *int
+		blockAfter *int
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *ants.Pool
+		wantErr bool
+	}{
+		{
+			name: "new_pool_success",
+			args: args{
+				size:       nil,
+				blockAfter: nil,
+			},
+			want:    func() *ants.Pool { p, _ := ants.NewPool(0); return p }(),
+			wantErr: false,
+		},
+		{
+			name: "new_pool_with_size_and_block_after",
+			args: args{
+				size:       func() *int { i := 1; return &i }(),
+				blockAfter: func() *int { i := 1; return &i }(),
+			},
+			want:    func() *ants.Pool { p, _ := ants.NewPool(1, ants.WithMaxBlockingTasks(1)); return p }(),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewPool(tt.args.size, tt.args.blockAfter)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, got)
+			}
+
+			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(ants.Pool{})); diff != "" {
+				t.Errorf("NewPool() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
 func Test_Register_Pool(t *testing.T) {
 	type args struct {
