@@ -193,12 +193,16 @@ func CaptureException(c context.Context, err error) {
 
 type AsyncOption func(*asyncOptions)
 
+// WithPoolName sets the pool name for the async task.
+// If the pool name is not provided, the default pool will be used.
 func WithPoolName(poolName string) AsyncOption {
 	return func(o *asyncOptions) {
 		o.poolName = poolName
 	}
 }
 
+// WithTimeout sets the timeout for the async task.
+// If the timeout is not provided, the task will run without a timeout.
 func WithTimeout(d time.Duration) AsyncOption {
 	return func(o *asyncOptions) {
 		o.timeout = d
