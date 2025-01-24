@@ -38,7 +38,7 @@ func Test_Execute_Context(t *testing.T) {
 	type testCase struct {
 		name      string
 		ctx       context.Context
-		regPool   func() error
+		setupPool func() error
 		task      TaskWithCtx
 		asyncOpts []AsyncOption
 		wantError bool
@@ -46,14 +46,14 @@ func Test_Execute_Context(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name:      "Successful_task_execution_without_options",
+			name:      "task_execution_without_options_success",
 			ctx:       newCtx(),
 			task:      task,
 			asyncOpts: nil,
 			wantError: false,
 		},
 		{
-			name: "Task_execution_with_timeout",
+			name: "task_execution_with_timeout",
 			ctx:  newCtx(),
 			task: func(ctx context.Context) error {
 				_, finish := trace.StartSpan(ctx, "test")
@@ -70,9 +70,9 @@ func Test_Execute_Context(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name: "Task_execution_with_a_pool_name",
+			name: "task_execution_with_a_pool_name",
 			ctx:  newCtx(),
-			regPool: func() error {
+			setupPool: func() error {
 				pool, err := gopool.NewPool(nil, nil)
 				if err != nil {
 					return err
@@ -84,7 +84,59 @@ func Test_Execute_Context(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name: "Task_returning_an_error",
+			name: "task_execution_with_non_existent_pool_name",
+			ctx:  newCtx(),
+			task: task,
+			asyncOpts: []AsyncOption{
+				WithPoolName("nonExistentPool"),
+			},
+			wantError: false,
+		},
+		{
+			name: "task_submission_error_with_pool_name",
+			ctx:  newCtx(),
+			setupPool: func() error {
+				size := 1
+				blockAfter := 1
+				pool, err := gopool.NewPool(&size, &blockAfter)
+				if err != nil {
+					return err
+				}
+				err = gopool.Register("testPool2", pool)
+				if err != nil {
+					return err
+				}
+
+				testPool2, err := gopool.GetPool("testPool2")
+				if err != nil {
+					return err
+				}
+
+				// capacity is full after this task submission
+				err = testPool2.Submit(func() {
+					time.Sleep(60 * time.Second)
+				})
+				if err != nil {
+					return err
+				}
+
+				go func() {
+					// max blocking tasks limit is reached after this task submission
+					err := testPool2.Submit(func() {
+						time.Sleep(60 * time.Second)
+					})
+					require.Error(t, err)
+				}()
+				time.Sleep(100 * time.Millisecond) // wait for the goroutine to submit the task
+
+				return nil
+			},
+			asyncOpts: []AsyncOption{WithPoolName("testPool2")},
+			task:      task,
+			wantError: true,
+		},
+		{
+			name: "task_returning_an_error",
 			ctx:  newCtx(),
 			task: func(ctx context.Context) error {
 				_, finish := trace.StartSpan(ctx, "test")
@@ -96,7 +148,7 @@ func Test_Execute_Context(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name: "Panic_in_task_execution",
+			name: "panic_in_task_execution",
 			ctx:  newCtx(),
 			task: func(ctx context.Context) error {
 				_, finish := trace.StartSpan(ctx, "test")
@@ -112,8 +164,8 @@ func Test_Execute_Context(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			if tt.regPool != nil {
-				err := tt.regPool()
+			if tt.setupPool != nil {
+				err := tt.setupPool()
 				require.NoError(t, err)
 			}
 
