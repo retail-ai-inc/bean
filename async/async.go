@@ -25,6 +25,7 @@ package async
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"runtime"
@@ -211,7 +212,7 @@ type asyncOptions struct {
 
 // ExecuteWithContext execute a function returning an error asynchronously
 // with a starndard context (not echo context), recovering if they panic.
-func ExecuteContext(ctx context.Context, fn TaskWithCtx, asyncOpts ...AsyncOption) {
+func ExecuteContext(ctx context.Context, fn TaskWithCtx, asyncOpts ...AsyncOption) error {
 
 	// by default
 	opts := &asyncOptions{
@@ -223,113 +224,108 @@ func ExecuteContext(ctx context.Context, fn TaskWithCtx, asyncOpts ...AsyncOptio
 		apply(opts)
 	}
 
-	var (
-		newCtx         = context.Background()
-		sentryOpts     []sentry.SpanOption
-		sentryOn       = config.Bean.Sentry.On
-		sentrySampleOn = sentryOn && config.Bean.Sentry.TracesSampleRate > 0.0
-	)
+	newCtx, cancel := newContext(ctx, config.Bean.Sentry.On, opts.timeout)
+
+	var sentrySamplingOpts []sentry.SpanOption
+	if config.Bean.Sentry.On && config.Bean.Sentry.TracesSampleRate > 0.0 {
+		sentrySamplingOpts = setupSentrySampling(ctx)
+	}
+
+	// Define the task to be executed.
+	task := newTask(newCtx, fn, cancel, sentrySamplingOpts...)
+
+	// Actually execute the task with the pool name if provided.
+	var err error
+	if opts.poolName != "" {
+		err = execute(newCtx, task, withPool(opts.poolName))
+	} else {
+		err = execute(newCtx, task)
+	}
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+var ErrTaskTimeout = fmt.Errorf("task execution timeout")
+
+func newContext(current context.Context, sentryOn bool, timeout time.Duration) (context.Context, context.CancelFunc) {
+
+	new := context.Background()
 
 	if sentryOn {
 		// Set scope to the hub.
-		hub := sentry.GetHubFromContext(ctx)
+		hub := sentry.GetHubFromContext(current)
 		if hub == nil {
 			hub = sentry.CurrentHub()
 		}
 		clone := hub.Clone()
 
-		req, reqFound := bctx.GetRequest(ctx)
+		req, reqFound := bctx.GetRequest(current)
 		if reqFound {
 			clone.Scope().SetRequest(req)
 		}
-		newCtx = sentry.SetHubOnContext(newCtx, clone)
-
-		// Set the sentry options.
-		if sentrySampleOn {
-
-			// Continue the trace by passing the sentry-trace id, not by sharing the same span object, like distributed tracing across different servers.
-			// This is because the same span in the context is used in multiple goroutines, which causes a data race issue.
-			sentryOpts = append(sentryOpts, sentry.ContinueFromHeaders(extractTracing(ctx)))
-
-			var (
-				description     string
-				transactionName string
-			)
-			span := sentry.SpanFromContext(ctx)
-			if span != nil {
-				description = span.Description
-				transactionName = span.Name
-			}
-			if description == "" {
-				if pc, file, line, reported := runtime.Caller(1); reported {
-					description = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
-				}
-			}
-			sentryOpts = append(sentryOpts, sentry.WithDescription(fmt.Sprintf("%s ASYNC", description)))
-
-			if reqFound {
-				path := req.URL.Path
-				sampled := func() sentry.Sampled {
-					if regex.SkipSampling(path) {
-						return sentry.SampledFalse
-					}
-					return sentry.SampledUndefined
-				}()
-				sentryOpts = append(sentryOpts, sentry.WithSpanSampled(sampled))
-
-				if transactionName == "" {
-					transactionName = fmt.Sprintf("%s %s", req.Method, path)
-				}
-			}
-
-			sentryOpts = append(sentryOpts,
-				sentry.WithTransactionName(fmt.Sprintf("%s ASYNC", transactionName)),
-			)
-		}
+		new = sentry.SetHubOnContext(new, clone)
 	}
 
-	if reqID, ok := bctx.GetRequestID(ctx); ok {
-		newCtx = bctx.SetRequestID(newCtx, reqID)
+	if reqID, ok := bctx.GetRequestID(current); ok {
+		new = bctx.SetRequestID(new, reqID)
 	}
 
 	// Set the timeout to the context.
-	if opts.timeout > 0 {
-		var cancel context.CancelFunc
-		newCtx, cancel = context.WithTimeout(newCtx, opts.timeout)
-		defer cancel()
+	var cancel context.CancelFunc = func() {} // do nothing
+	if timeout > 0 {
+		new, cancel = context.WithTimeoutCause(new, timeout, ErrTaskTimeout)
 	}
 
-	// Define the task to be executed.
-	task := func() {
+	return new, cancel
+}
 
-		if sentrySampleOn {
-			// Start a new span with a new context to avoid data race when the same span in the same context is used in multiple goroutines.
-			span := sentry.StartSpan(newCtx, "async", sentryOpts...)
-			defer span.Finish()
-			newCtx = span.Context()
+func setupSentrySampling(current context.Context) []sentry.SpanOption {
+
+	opts := make([]sentry.SpanOption, 0, 3) // continue from headers, description, transaction name at least
+
+	// Continue the trace by passing the sentry-trace id, not by sharing the same span object, like distributed tracing across different servers.
+	// This is because the same span in the context is used in multiple goroutines, which causes a data race issue.
+	opts = append(opts, sentry.ContinueFromHeaders(extractTracing(current)))
+
+	var (
+		description     string
+		transactionName string
+	)
+
+	span := sentry.SpanFromContext(current)
+	if span != nil {
+		description = span.Description
+		transactionName = span.Name
+	}
+	if description == "" {
+		if pc, file, line, ok := runtime.Caller(2); ok {
+			description = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
 		}
+	}
+	opts = append(opts, sentry.WithDescription(fmt.Sprintf("%s ASYNC", description)))
 
-		defer recoverPanic(newCtx)
-		// Run the task with the context.
-		if err := fn(newCtx); err != nil {
-			trace.SentryCaptureException(newCtx, err)
-			msg := map[string]interface{}{
-				"message": "Async task failed.",
-				"error":   err.Error(),
+	req, reqFound := bctx.GetRequest(current)
+	if reqFound {
+		path := req.URL.Path
+		sampled := func() sentry.Sampled {
+			if regex.SkipSampling(path) {
+				return sentry.SampledFalse
 			}
-			if reqID, ok := bctx.GetRequestID(newCtx); ok {
-				msg["request_id"] = reqID
-			}
-			log.Logger().Errorj(msg)
+			return sentry.SampledUndefined
+		}()
+		opts = append(opts, sentry.WithSpanSampled(sampled))
+
+		if transactionName == "" {
+			transactionName = fmt.Sprintf("%s %s", req.Method, path)
 		}
 	}
 
-	// Actually execute the task with the pool name if provided.
-	if opts.poolName != "" {
-		execute(newCtx, task, withPool(opts.poolName))
-	} else {
-		execute(newCtx, task)
-	}
+	opts = append(opts, sentry.WithTransactionName(fmt.Sprintf("%s ASYNC", transactionName)))
+
+	return opts
 }
 
 func extractTracing(ctx context.Context) (sentryTrace, baggage string) {
@@ -342,7 +338,96 @@ func extractTracing(ctx context.Context) (sentryTrace, baggage string) {
 	return span.ToSentryTrace(), span.ToBaggage()
 }
 
-// Recover the panic and send the exception to sentry.
+func newTask(ctx context.Context, fn TaskWithCtx,
+	cancelFunc context.CancelFunc, sentryOpts ...sentry.SpanOption,
+) func() {
+
+	cancel := func() {}
+	if cancelFunc != nil {
+		cancel = cancelFunc
+	}
+
+	return func() {
+		defer cancel()
+
+		if len(sentryOpts) > 0 {
+			// Start a new span with a new context to avoid data race
+			// when the same span in the same context is used in multiple goroutines.
+			span := sentry.StartSpan(ctx, "async", sentryOpts...)
+			defer span.Finish()
+			ctx = span.Context()
+		}
+
+		defer recoverPanic(ctx)
+		// Run the task with the context.
+		err := fn(ctx)
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) && context.Cause(ctx) == ErrTaskTimeout {
+				err = errors.Join(ErrTaskTimeout, err)
+			}
+			trace.SentryCaptureException(ctx, err)
+			msg := map[string]interface{}{
+				"message": "Async task failed.",
+				"error":   err.Error(),
+			}
+			if reqID, ok := bctx.GetRequestID(ctx); ok {
+				msg["request_id"] = reqID
+			}
+			log.Logger().Errorj(msg)
+			return
+		}
+	}
+}
+
+type execOptions struct {
+	poolName *string
+}
+
+type execOption func(*execOptions)
+
+func withPool(name string) execOption {
+	return func(o *execOptions) {
+		o.poolName = &name
+	}
+}
+
+// execute runs a task asynchronously and with a default pool if no pool is provided.
+// It returns an error if the task cannot be submitted to the pool (not related to the outcome of the task).
+func execute(ctx context.Context, task func(), execOpts ...execOption) error {
+
+	opts := &execOptions{
+		poolName: nil,
+	}
+
+	for _, apply := range execOpts {
+		apply(opts)
+	}
+
+	var pool *ants.Pool
+	if opts.poolName != nil {
+		if got, err := gopool.GetPool(*opts.poolName); err == nil && got != nil {
+			pool = got
+		} else {
+			log.Logger().Errorf("pool(%s) not found, using default pool", *opts.poolName)
+		}
+	}
+	if pool == nil {
+		pool = gopool.GetDefaultPool()
+	}
+
+	submitToPool := func(task func()) error {
+		defer recoverPanic(ctx)
+		err := pool.Submit(task)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return submitToPool(task)
+}
+
+// recover the panic and send the exception to sentry.
 func recoverPanic(ctx context.Context) {
 	if v := recover(); v != nil {
 		// Create a new Hub by cloning the existing one.
@@ -374,48 +459,4 @@ func recoverPanic(ctx context.Context) {
 		}
 		log.Logger().Errorj(msg)
 	}
-}
-
-type execOptions struct {
-	poolName *string
-}
-
-type execOption func(*execOptions)
-
-func withPool(name string) execOption {
-	return func(o *execOptions) {
-		o.poolName = &name
-	}
-}
-
-func execute(ctx context.Context, task func(), execOpts ...execOption) {
-
-	opts := &execOptions{
-		poolName: nil,
-	}
-
-	for _, apply := range execOpts {
-		apply(opts)
-	}
-
-	var pool *ants.Pool
-	if opts.poolName != nil {
-		if got, err := gopool.GetPool(*opts.poolName); err == nil && got != nil {
-			pool = got
-		} else {
-			log.Logger().Errorf("pool(%s) not found, using default pool", *opts.poolName)
-		}
-	}
-	if pool == nil {
-		pool = gopool.GetDefaultPool()
-	}
-
-	submitToPool := func(task func()) {
-		defer recoverPanic(ctx)
-		err := pool.Submit(task)
-		if err != nil {
-			panic(err)
-		}
-	}
-	submitToPool(task)
 }
