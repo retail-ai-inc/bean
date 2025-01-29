@@ -139,7 +139,6 @@ type Sentry struct {
 	Dsn                 string
 	Timeout             time.Duration
 	TracesSampleRate    float64
-	ProfilesSampleRate  float64
 	SkipTracesEndpoints []string
 	ClientOptions       *sentry.ClientOptions
 	ConfigureScope      func(scope *sentry.Scope)

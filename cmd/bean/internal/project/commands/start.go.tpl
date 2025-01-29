@@ -50,7 +50,6 @@ func start(cmd *cobra.Command, args []string) {
 			BeforeSend:       bean.DefaultBeforeSend, // Default beforeSend function. You can initialize your own custom function.
 			AttachStacktrace: true,
 			TracesSampleRate: helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0),
-			ProfilesSampleRate: helpers.FloatInRange(bean.BeanConfig.Sentry.ProfilesSampleRate, 0.0, 1.0),
 		}
 
 		// Example of setting a global scope, if you want to set the scope per event,
