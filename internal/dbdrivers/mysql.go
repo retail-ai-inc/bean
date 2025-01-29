@@ -225,8 +225,11 @@ func connectMysqlDB(userName, password, host, port, dbName string,
 
 func createTenantConnectionsTableIfNotExist(masterDb *gorm.DB) error {
 
-	if !masterDb.Migrator().HasTable("TenantConnections") {
-		err := masterDb.Migrator().CreateTable(&TenantConnections{})
+	if masterDb.Migrator().HasTable("TenantConnections") {
+		return nil
+	}
+
+	if err := masterDb.Migrator().CreateTable(&TenantConnections{}); err != nil {
 		return fmt.Errorf("failed to create TenantConnections table: %w", err)
 	}
 
