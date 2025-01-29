@@ -26,6 +26,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -164,15 +165,13 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 			req := c.Request()
 			res := c.Response()
 			start := time.Now()
-			if err = next(c); err != nil {
-				c.Error(err)
-			}
+			hdlrErr := next(c)
 			stop := time.Now()
 			buf := config.pool.Get().(*bytes.Buffer)
 			buf.Reset()
 			defer config.pool.Put(buf)
 
-			if _, err = config.bodyDumpTemplate.ExecuteFunc(buf, func(w io.Writer, tag string) (int, error) {
+			if _, tmplErr := config.bodyDumpTemplate.ExecuteFunc(buf, func(w io.Writer, tag string) (int, error) {
 				switch tag {
 				case "time_unix":
 					return buf.WriteString(strconv.FormatInt(time.Now().Unix(), 10))
@@ -287,16 +286,16 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 					}
 				}
 				return 0, nil
-			}); err != nil {
-				return
+			}); tmplErr != nil {
+				return errors.Join(hdlrErr, tmplErr)
 			}
 
 			if config.Output == nil {
 				_, err = c.Logger().Output().Write(buf.Bytes())
-				return
+				return errors.Join(hdlrErr, err)
 			}
 			_, err = config.Output.Write(buf.Bytes())
-			return
+			return errors.Join(hdlrErr, err)
 
 		}
 	}
