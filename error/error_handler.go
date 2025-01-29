@@ -217,6 +217,11 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 // If any other error handler doesn't catch the error then finally `DefaultErrorHandlerFunc` will
 // cactch the error and treat all those errors as `http.StatusInternalServerError`.
 func DefaultErrorHandlerFunc(err error, c echo.Context) (bool, error) {
+
+	if err == nil {
+		return false, nil
+	}
+
 	// Send error event to sentry if configured.
 	if viper.GetBool("sentry.on") {
 		if hub := sentryecho.GetHubFromContext(c); hub != nil {
@@ -224,11 +229,7 @@ func DefaultErrorHandlerFunc(err error, c echo.Context) (bool, error) {
 		}
 	}
 
-	if err != nil {
-		c.Logger().Error(err.Error())
-	} else {
-		c.Logger().Error("unknown error")
-	}
+	c.Logger().Error(err.Error())
 
 	// Get Content-Type parameter from request header to identify the request content type. If the request is for
 	// html then we should display the error in html.
