@@ -366,7 +366,7 @@ func newTask(ctx context.Context, fn TaskWithCtx,
 		// Run the task with the context.
 		err := fn(ctx)
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) && context.Cause(ctx) == ErrTaskTimeout {
+			if !errors.Is(err, ErrTaskTimeout) && context.Cause(ctx) == ErrTaskTimeout {
 				err = errors.Join(ErrTaskTimeout, err)
 			}
 			trace.SentryCaptureException(ctx, err)
