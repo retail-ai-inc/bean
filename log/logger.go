@@ -8,26 +8,24 @@ import (
 )
 
 // This is a global variable to hold the debug logger so that we can log data from service, repository or anywhere.
-var logger echo.Logger
-var mu sync.Mutex
+var (
+	logger echo.Logger
+	once   sync.Once
+)
 
 func New() echo.Logger {
-	if logger == nil {
-		mu.Lock()
+	once.Do(func() {
 		logger = log.New("echo")
-		mu.Unlock()
-	}
-
+	})
 	return logger
 }
 
+// Set sets the logger. It is not thread-safe.
 func Set(l echo.Logger) {
-	mu.Lock()
-	defer mu.Unlock()
 	logger = l
 }
 
-// The bean Logger to have debug log from anywhere.
+// Logger returns the logger.
 func Logger() echo.Logger {
 	return logger
 }
