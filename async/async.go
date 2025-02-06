@@ -288,7 +288,7 @@ func newContext(current context.Context, sentryOn bool, timeout time.Duration) (
 
 func setupSentrySampling(current context.Context) []sentry.SpanOption {
 
-	opts := make([]sentry.SpanOption, 0, 3) // continue from headers, description, transaction name at least
+	opts := make([]sentry.SpanOption, 0, 4)
 
 	// Continue the trace by passing the sentry-trace id, not by sharing the same span object, like distributed tracing across different servers.
 	// This is because the same span in the context is used in multiple goroutines, which causes a data race issue.
