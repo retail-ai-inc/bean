@@ -23,17 +23,22 @@
 package gopool
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/panjf2000/ants/v2"
+	"github.com/sourcegraph/conc/panics"
+	"github.com/sourcegraph/conc/pool"
 )
 
 var (
-	poolsMu sync.RWMutex
-	pools   = make(map[string]*ants.Pool)
+	poolsMu     sync.RWMutex
+	pools       = make(map[string]*ants.Pool)
+	defaultPool = initDefaultPool()
 )
 
 // NewPool creates a goroutine pool with the specified size and blocking tasks limit.
@@ -81,19 +86,94 @@ func Register(name string, pool *ants.Pool) error {
 	return nil
 }
 
-func UnregisterAllPools() error {
+// UnregisterAllPools removes all pools in non-blocking way.
+// It releases the default pool as well.
+func UnregisterAllPools() {
 	poolsMu.Lock()
 	defer poolsMu.Unlock()
 
-	// Basically release the pool in non-blocking way,
+	// Basically Release() is in non-blocking way,
 	// which means it will release the pool immediately without waiting for the tasks to be finished.
 	for _, pool := range pools {
 		pool.Release()
 	}
-
 	pools = make(map[string]*ants.Pool) // Reset the pools
 
-	return nil // Always return nil
+	if defaultPool != nil {
+		defaultPool.Release()
+		// Do not reset the default pool
+	}
+}
+
+var ErrReleaseTimeout = errors.New("gopool: release timeout")
+
+// ReleaseAllPools provides a func to removes all pools in blocking way with a timeout.
+// It releases the default pool as well.
+func ReleaseAllPools(timeout time.Duration) func() error {
+	return func() error {
+		if timeout <= 0 {
+			UnregisterAllPools()
+			return nil
+		}
+
+		ctx, cancel := context.WithTimeoutCause(context.Background(), timeout, ErrReleaseTimeout)
+		defer cancel()
+
+		poolsMu.Lock()
+		defer poolsMu.Unlock()
+		// Basically ReleaseTimeout() is in blocking way,
+		// which means it will wait for the tasks to be finished within the timeout.
+		p := pool.New().WithContext(ctx).WithMaxGoroutines(len(pools) + 1)
+		for name, pool := range pools {
+			p.Go(releaser(name, pool, timeout))
+		}
+		if defaultPool != nil {
+			p.Go(releaser("default", defaultPool, timeout))
+		}
+
+		err := p.Wait()
+		if err != nil {
+			return err
+		}
+		pools = make(map[string]*ants.Pool) // reset pools
+		// Do not reset the default pool
+
+		return nil
+	}
+}
+
+func releaser(name string, pool *ants.Pool, timeout time.Duration) func(context.Context) error {
+	return func(ctx context.Context) (err error) {
+
+		// For a short timeout value, check if the context is done before releasing.
+		select {
+		case <-ctx.Done():
+			err := context.Cause(ctx)
+			if errors.Is(err, ErrReleaseTimeout) {
+				return fmt.Errorf("pool[%s] release cancelled due to timeout", name)
+			} else {
+				return fmt.Errorf("pool[%s] release cancelled: %w", name, err)
+			}
+		default:
+		}
+
+		var catcher panics.Catcher
+		defer func() {
+			if r := catcher.Recovered(); r != nil {
+				err = fmt.Errorf("pool[%s] release: %w", name, r.AsError())
+			}
+		}()
+
+		catcher.Try(func() {
+			err = pool.ReleaseTimeout(timeout)
+		})
+
+		if err != nil {
+			return fmt.Errorf("pool[%s] release: %w", name, err)
+		}
+
+		return nil
+	}
 }
 
 // Pools returns a sorted list of the names of the registered pools.
@@ -121,4 +201,22 @@ func GetPool(poolName string) (*ants.Pool, error) {
 	}
 
 	return pool, nil
+}
+
+// GetDefaultPool returns the default pool.
+func GetDefaultPool() *ants.Pool {
+	return defaultPool
+}
+
+func initDefaultPool() *ants.Pool {
+	pool, err := ants.NewPool(-1)
+	if err != nil {
+		panic(fmt.Sprintf("gopool: default pool initialization failed: %v", err))
+	}
+
+	if pool == nil {
+		panic("gopool: default pool is nil")
+	}
+
+	return pool
 }
