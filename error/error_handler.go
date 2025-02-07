@@ -67,15 +67,13 @@ func APIErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 		return false, nil
 	}
 
-	if ae.HTTPStatusCode >= 404 {
-		c.Logger().Error(ae.Error())
+	if ae.HTTPStatusCode > 404 {
+		c.Logger().Errorf("%+v", ae)
 
-		if ae.HTTPStatusCode > 404 {
-			// Send error event to sentry if configured.
-			if viper.GetBool("sentry.on") {
-				if hub := sentryecho.GetHubFromContext(c); hub != nil {
-					hub.CaptureException(ae)
-				}
+		// Send error event to sentry if configured.
+		if viper.GetBool("sentry.on") {
+			if hub := sentryecho.GetHubFromContext(c); hub != nil {
+				hub.CaptureException(ae)
 			}
 		}
 	} else {
@@ -229,7 +227,7 @@ func DefaultErrorHandlerFunc(err error, c echo.Context) (bool, error) {
 		}
 	}
 
-	c.Logger().Error(err.Error())
+	c.Logger().Errorf("%+v", err)
 
 	// Get Content-Type parameter from request header to identify the request content type. If the request is for
 	// html then we should display the error in html.
