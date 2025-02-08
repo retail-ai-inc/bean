@@ -24,6 +24,7 @@ package error
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/retail-ai-inc/bean/v2/stacktrace"
 )
@@ -74,4 +75,20 @@ func (e *APIError) Error() string {
 // Unwrap returns the wrapped error. It is used by errors.Is and errors.As.
 func (e *APIError) Unwrap() error {
 	return e.Err
+}
+
+func (e *APIError) Format(s fmt.State, verb rune) {
+	switch verb {
+	case 'v':
+		if s.Flag('+') {
+			_, _ = fmt.Fprintf(s, "%+v", e.Unwrap())
+			e.Stack.Format(s, verb)
+			return
+		}
+		fallthrough
+	case 's':
+		_, _ = io.WriteString(s, e.Error())
+	case 'q':
+		_, _ = fmt.Fprintf(s, "%q", e.Error())
+	}
 }

@@ -49,7 +49,7 @@ func ValidationErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 		return false, nil
 	}
 
-	c.Logger().Error(ve.Error())
+	c.Logger().Error(ve)
 
 	err := c.JSON(http.StatusBadRequest, ErrorResp{
 		ErrorCode: API_DATA_VALIDATION_FAILED,
@@ -70,7 +70,7 @@ func APIErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 	if ae.HTTPStatusCode > 404 {
 		// Send error event to sentry if configured.
 		if viper.GetBool("sentry.on") {
-			c.Logger().Error(ae.Error())
+			c.Logger().Error(ae)
 
 			if hub := sentryecho.GetHubFromContext(c); hub != nil {
 				hub.CaptureException(ae)
@@ -79,7 +79,7 @@ func APIErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 			c.Logger().Errorf("%+v", ae)
 		}
 	} else {
-		c.Logger().Error(ae.Error())
+		c.Logger().Error(ae)
 	}
 
 	err := c.JSON(ae.HTTPStatusCode, ErrorResp{
@@ -96,7 +96,7 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 		return false, nil
 	}
 
-	c.Logger().Error(he.Error())
+	c.Logger().Error(he)
 
 	// Return different response based on some defined error.
 	var err error
@@ -224,7 +224,7 @@ func DefaultErrorHandlerFunc(err error, c echo.Context) (bool, error) {
 
 	// Send error event to sentry if configured.
 	if viper.GetBool("sentry.on") {
-		c.Logger().Error(err.Error())
+		c.Logger().Error(err)
 
 		if hub := sentryecho.GetHubFromContext(c); hub != nil {
 			hub.CaptureException(err)
