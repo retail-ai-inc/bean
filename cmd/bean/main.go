@@ -22,15 +22,17 @@
 package main
 
 import (
+	"context"
 	"embed"
 
 	"github.com/retail-ai-inc/bean/v2/cmd"
 )
 
 // Diretory of template files.
+//
 //go:embed internal/*
 var internalFS embed.FS
 
 func main() {
-	cmd.Execute(internalFS)
+	cmd.Execute(context.Background(), internalFS)
 }
