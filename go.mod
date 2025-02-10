@@ -16,7 +16,7 @@ require (
 	github.com/labstack/echo-contrib v0.17.2
 	github.com/labstack/echo/v4 v4.13.3
 	github.com/labstack/gommon v0.4.2
-	github.com/panjf2000/ants/v2 v2.11.0
+	github.com/panjf2000/ants/v2 v2.11.1
 	github.com/pkg/errors v0.9.1
 	github.com/rs/dnscache v0.0.0-20230804202142-fc85eb664529
 	github.com/sourcegraph/conc v0.3.0
@@ -25,7 +25,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/valyala/fasttemplate v1.2.2
 	go.mongodb.org/mongo-driver v1.17.2
-	golang.org/x/sync v0.10.0
+	golang.org/x/sync v0.11.0
 	golang.org/x/tools v0.29.0
 	google.golang.org/grpc v1.70.0
 	gorm.io/datatypes v1.2.5
