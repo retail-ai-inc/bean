@@ -24,29 +24,32 @@ package helpers
 
 import (
 	"crypto/md5"
-	"encoding/hex"
+	"strings"
 
 	"github.com/google/uuid"
 )
 
 // DeterministicUUID generates a deterministic UUID based on the provided seeder string.
 // It uses the MD5 hash of the seeder as the input to create the UUID.
-// The first 16 bytes of the MD5 hash are used to generate the UUID, ensuring that the same
-// seeder always produces the same UUID.
-func DeterministicUUID(seeder string) (string, error) {
+// It takes an optional parameter removeHyphens to specify keeping hyphen or not
+func DeterministicUUID(seeder string, removeHyphens ...bool) (string, error) {
 
 	// calculate the MD5 hash of the seeder reference
 	md5hash := md5.New()
 	md5hash.Write([]byte(seeder))
 
-	// convert the hash value to a string
-	md5string := hex.EncodeToString(md5hash.Sum(nil))
-
-	// generate the UUID from the first 16 bytes of the MD5 hash
-	uuid, err := uuid.FromBytes([]byte(md5string[0:16]))
+	// generate the UUID from bytes of the MD5 hash
+	newUuid, err := uuid.FromBytes(md5hash.Sum(nil))
 	if err != nil {
 		return "", err
 	}
 
-	return uuid.String(), nil
+	newUuidString := newUuid.String()
+
+	// remove hyphens
+	if len(removeHyphens) > 0 && removeHyphens[0] {
+		return strings.ReplaceAll(newUuidString, "-", ""), nil
+	}
+
+	return newUuidString, nil
 }
