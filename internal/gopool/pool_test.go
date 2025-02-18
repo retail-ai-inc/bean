@@ -237,7 +237,7 @@ func Test_Unregister_All_Pools(t *testing.T) {
 		{
 			name: "unregister_with_timeout_fail",
 			args: args{
-				timeout: 80 * time.Millisecond,
+				timeout: 50 * time.Millisecond,
 			},
 			submitTask: submitNTasks(task(100*time.Millisecond), false),
 			wantErr:    true,
