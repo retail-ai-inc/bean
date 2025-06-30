@@ -1,12 +1,13 @@
 module github.com/retail-ai-inc/bean/v2
 
 go 1.23.4
+
 toolchain go1.24.1
 
 require (
 	github.com/alphadose/haxmap v1.4.1
-	github.com/getsentry/sentry-go v0.31.1
-	github.com/getsentry/sentry-go/echo v0.31.1
+	github.com/getsentry/sentry-go v0.34.0
+	github.com/getsentry/sentry-go/echo v0.34.0
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-resty/resty/v2 v2.16.5
