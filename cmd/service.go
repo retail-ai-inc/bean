@@ -177,7 +177,7 @@ func service(cmd *cobra.Command, args []string) {
 	}
 
 	// IMPORTANT: Instead of `defer` let's close the service file so that we can open it again if requires.
-	serviceFileCreate.Close()
+	_ = serviceFileCreate.Close()
 
 	if len(repoFlag) > 1 {
 		// Open service file and update 3 places

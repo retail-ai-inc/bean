@@ -229,7 +229,11 @@ func write(destination string, bs []byte) error {
 		if err != nil {
 			return fmt.Errorf("failed opening destination file: %w", err)
 		}
-		defer destinationFile.Close()
+		defer func(file *os.File) {
+			if err := file.Close(); err != nil {
+				log.Fatalf("Failed to close destination file: %v", err)
+			}
+		}(destinationFile)
 		output = destinationFile
 	}
 
@@ -400,7 +404,7 @@ func (g *generator) GenerateMethod(mockType string, m spec) error {
 func (g *generator) Output() ([]byte, error) {
 	bs, err := io.ReadAll(g.buf)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read buffer: %w\n", err)
+		return nil, fmt.Errorf("failed to read buffer: %w", err)
 	}
 	if path.Ext(g.destination) == ".go" {
 		src, err := toolsimports.Process(g.destination, bs, nil)

@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"strings"
 	"text/template"
@@ -131,7 +132,11 @@ func command(cmd *cobra.Command, args []string) {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	defer commandFileCreate.Close()
+	defer func(f *os.File) {
+		if err := f.Close(); err != nil {
+			log.Printf("Failed to close file:%v", err)
+		}
+	}(commandFileCreate)
 
 	err = tmpl.Execute(commandFileCreate, command)
 	if err != nil {

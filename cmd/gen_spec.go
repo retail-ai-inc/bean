@@ -144,7 +144,11 @@ func genSpec(cmd *cobra.Command, args []string) {
 		if err != nil {
 			log.Fatalf("Failed opening destination file: %v", err)
 		}
-		defer specJSONFile.Close()
+		defer func(f *os.File) {
+			if err := f.Close(); err != nil {
+				log.Printf("Failed close destination file:%v", err)
+			}
+		}(specJSONFile)
 		writer = specJSONFile
 	}
 

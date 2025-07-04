@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -122,8 +123,11 @@ func handler(cmd *cobra.Command, args []string) {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-
-	defer file.Close()
+	defer func(f fs.File) {
+		if err := f.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}(file)
 
 	fileData, err := io.ReadAll(file)
 	if err != nil {
@@ -154,8 +158,11 @@ func handler(cmd *cobra.Command, args []string) {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-
-	defer handlerFileCreate.Close()
+	defer func(f *os.File) {
+		if err := f.Close(); err != nil {
+			log.Println(err)
+		}
+	}(handlerFileCreate)
 
 	err = tmpl.Execute(handlerFileCreate, handler)
 	if err != nil {
@@ -226,7 +233,11 @@ func matchTextInFileAndReturnFirstOccurrenceLineNumber(filePath string, needle s
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		if err := f.Close(); err != nil {
+			log.Println(err)
+		}
+	}(f)
 
 	line := 1
 
@@ -252,7 +263,11 @@ func insertStringToNthLineOfFile(filePath, textToInsert string, lineNumber int) 
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func(fl *os.File) {
+		if err := fl.Close(); err != nil {
+			log.Println(err)
+		}
+	}(f)
 
 	var lines []string
 	scanner := bufio.NewScanner(f)
@@ -283,7 +298,11 @@ func replaceStringToNthLineOfFile(filePath, newText string, lineNumber int) erro
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func(file *os.File) {
+		if err := file.Close(); err != nil {
+			log.Println(err)
+		}
+	}(f)
 
 	var lines []string
 	scanner := bufio.NewScanner(f)
@@ -318,8 +337,7 @@ func replaceStringFromFileByRegex(filePath, regex, additonal, replaceWith string
 	match := re.FindStringSubmatch(string(input))
 	if len(match) > 1 {
 		replaceMe := additonal + match[1]
-		output := bytes.Replace(input, []byte(replaceMe), []byte(replaceWith), -1)
-
+		output := bytes.ReplaceAll(input, []byte(replaceMe), []byte(replaceWith))
 		if err = os.WriteFile(filePath, output, 0664); err != nil {
 			return err
 		}
@@ -333,8 +351,7 @@ func replaceStringFromFileByExactMatches(filePath, replaceMe, replaceWith string
 	if err != nil {
 		return err
 	}
-
-	output := bytes.Replace(input, []byte(replaceMe), []byte(replaceWith), -1)
+	output := bytes.ReplaceAll(input, []byte(replaceMe), []byte(replaceWith))
 	if err = os.WriteFile(filePath, output, 0664); err != nil {
 		return err
 	}
