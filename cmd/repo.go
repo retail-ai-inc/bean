@@ -136,7 +136,9 @@ func repo(cmd *cobra.Command, args []string) {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	defer repoFileCreate.Close()
+	defer func(file2 *os.File) {
+		_ = file2.Close()
+	}(repoFileCreate)
 
 	err = tmpl.Execute(repoFileCreate, repo)
 	if err != nil {

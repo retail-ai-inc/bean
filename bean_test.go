@@ -173,7 +173,9 @@ func TestBean_ServeAt(t *testing.T) {
 				if err != nil {
 					return false
 				}
-				defer resp.Body.Close()
+				defer func() {
+					_ = resp.Body.Close()
+				}()
 				return resp.StatusCode == http.StatusOK
 			}
 
@@ -212,7 +214,9 @@ func TestBean_ServeAt(t *testing.T) {
 					close(sleepRlt)
 					return
 				}
-				defer resp.Body.Close()
+				defer func() {
+					_ = resp.Body.Close()
+				}()
 				_, _ = io.ReadAll(resp.Body)
 				sleepRlt <- result{nil, resp.StatusCode == http.StatusOK}
 				close(sleepRlt)
@@ -270,7 +274,9 @@ func getFreePort(t *testing.T) int {
 		if ln, lnErr := net.ListenTCP("tcp", addr); lnErr != nil {
 			t.Fatalf("failed to listen on tcp address: %v", lnErr)
 		} else {
-			defer ln.Close()
+			defer func() {
+				_ = ln.Close()
+			}()
 			return ln.Addr().(*net.TCPAddr).Port
 		}
 	}

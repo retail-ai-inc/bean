@@ -59,7 +59,7 @@ func IsTagExist(tag, key string, s interface{}) (bool, error) {
 
 	if rt.Kind() != reflect.Struct {
 
-		return false, errors.New("Bad type")
+		return false, errors.New("bad type")
 	}
 
 	for i := 0; i < rt.NumField(); i++ {

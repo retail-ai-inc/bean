@@ -95,7 +95,7 @@ func SetupConfigWithFixture[T any](configPath string, custom *T) error {
 	}
 	initialized, ok := TestCfg.Fixture.(*T)
 	if !ok {
-		return fmt.Errorf("Failed to assert type of custom fixture")
+		return fmt.Errorf("failed to assert type of custom fixture")
 	}
 	*custom = *initialized
 
