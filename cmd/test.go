@@ -612,7 +612,12 @@ func outputReportHTML(repo *report, outputPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create HTML file: %w", err)
 	}
-	defer file.Close()
+
+	defer func(f *os.File) {
+		if err := f.Close(); err != nil {
+			log.Printf("failed to close HTML file: %v", err)
+		}
+	}(file)
 
 	type tmplData struct {
 		Project        string

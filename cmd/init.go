@@ -222,7 +222,10 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 		if err != nil {
 			return err
 		}
-		defer file.Close()
+
+		defer func(f *os.File) {
+			_ = f.Close()
+		}(file)
 
 		// Parse the template and write to the files.
 		fileTemplate := template.Must(temp, err)

@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"runtime"
 	"strings"
@@ -135,7 +136,11 @@ func docker(cmd *cobra.Command, args []string) {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	defer dockerFileCreate.Close()
+	defer func(f *os.File) {
+		if err := f.Close(); err != nil {
+			log.Printf("Failed to close dockerfile:%v", err)
+		}
+	}(dockerFileCreate)
 
 	err = tmpl.Execute(dockerFileCreate, dockerFile)
 	if err != nil {
@@ -181,7 +186,11 @@ func docker(cmd *cobra.Command, args []string) {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	defer dockerComposeFileCreate.Close()
+	defer func(f *os.File) {
+		if err := f.Close(); err != nil {
+			log.Printf("Failed to close docker-compose.yml:%v", err)
+		}
+	}(dockerFileCreate)
 
 	err = tmpl.Execute(dockerComposeFileCreate, dockerComposeFile)
 	if err != nil {
