@@ -29,7 +29,7 @@ require (
 	go.mongodb.org/mongo-driver v1.17.3
 	golang.org/x/sync v0.15.0
 	golang.org/x/tools v0.34.0
-	google.golang.org/grpc v1.71.0
+	google.golang.org/grpc v1.73.0
 	gorm.io/datatypes v1.2.5
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/gorm v1.25.12
@@ -84,6 +84,6 @@ require (
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
-	google.golang.org/protobuf v1.36.5 // indirect
+	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
