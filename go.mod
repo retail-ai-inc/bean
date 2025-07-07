@@ -31,8 +31,8 @@ require (
 	golang.org/x/tools v0.34.0
 	google.golang.org/grpc v1.73.0
 	gorm.io/datatypes v1.2.5
-	gorm.io/driver/mysql v1.5.7
-	gorm.io/gorm v1.25.12
+	gorm.io/driver/mysql v1.6.0
+	gorm.io/gorm v1.30.0
 )
 
 require (
