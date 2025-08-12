@@ -38,6 +38,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/color"
+	errorstack "github.com/pkg/errors"
 	"github.com/valyala/fasttemplate"
 )
 
@@ -287,16 +288,22 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 				}
 				return 0, nil
 			}); tmplErr != nil {
-				return errors.Join(hdlrErr, tmplErr)
+				return errorstack.WithStack(errors.Join(hdlrErr, tmplErr))
 			}
 
 			if config.Output == nil {
 				_, err = c.Logger().Output().Write(buf.Bytes())
-				return errors.Join(hdlrErr, err)
+				if err != nil {
+					return errorstack.WithStack(errors.Join(hdlrErr, err))
+				}
+				return hdlrErr
 			}
 			_, err = config.Output.Write(buf.Bytes())
-			return errors.Join(hdlrErr, err)
+			if err != nil {
+				return errorstack.WithStack(errors.Join(hdlrErr, err))
+			}
 
+			return hdlrErr
 		}
 	}
 }
@@ -412,7 +419,7 @@ func maskSensitiveInfo(reqBody []byte, maskedParams []string) ([]byte, error) {
 		return reqBody, nil
 	}
 
-	var unmarshaledRequest = make(map[string]interface{})
+	unmarshaledRequest := make(map[string]interface{})
 	err := json.Unmarshal(reqBody, &unmarshaledRequest)
 	if err != nil {
 		return reqBody, err
