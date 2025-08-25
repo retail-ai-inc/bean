@@ -77,6 +77,7 @@ func createHttpClient(withRetry bool) *resty.Client {
 type RespBody struct {
 	ErrorCode string                 `json:"errorCode,omitempty"`
 	Data      map[string]interface{} `json:"data,omitempty"`
+	ErrorMsg  string                 `json:"errorMsg,omitempty"`
 }
 
 func UnmarshalRespBody(t *testing.T, respBody []byte) RespBody {
