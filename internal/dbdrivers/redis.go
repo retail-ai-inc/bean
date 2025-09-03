@@ -101,11 +101,11 @@ func InitRedisMasterConn(config RedisConfig) (*RedisDBConn, []func() error, erro
 	if masterCfg != nil {
 
 		var (
-			masterRedisDB = &RedisDBConn{}
-			close         func() error
-			err           error
+			close func() error
+			err   error
 		)
 
+		masterRedisDB = &RedisDBConn{}
 		masterRedisDB.Primary, masterRedisDB.Name, close, err = connectRedisDB(
 			masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
 			config.Maxretries, config.PoolSize, config.MinIdleConnections, config.DialTimeout,
