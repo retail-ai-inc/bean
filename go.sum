@@ -19,10 +19,10 @@ github.com/fsnotify/fsnotify v1.8.0 h1:dAwr6QBTBZIkG8roQaJjGof0pp0EeF+tNV7YBP3F/
 github.com/fsnotify/fsnotify v1.8.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/gabriel-vasile/mimetype v1.4.8 h1:FfZ3gj38NjllZIeJAmMhr+qKL8Wu+nOoI3GqacKw1NM=
 github.com/gabriel-vasile/mimetype v1.4.8/go.mod h1:ByKUIKGjh1ODkGM1asKUbQZOLGrPjydw3hYPU2YU9t8=
-github.com/getsentry/sentry-go v0.35.1 h1:iopow6UVLE2aXu46xKVIs8Z9D/YZkJrHkgozrxa+tOQ=
-github.com/getsentry/sentry-go v0.35.1/go.mod h1:C55omcY9ChRQIUcVcGcs+Zdy4ZpQGvNJ7JYHIoSWOtE=
-github.com/getsentry/sentry-go/echo v0.35.1 h1:MIhSUyo7cpCdcw0/lIeAw5fukrDt3x9G7qbiyjbVllI=
-github.com/getsentry/sentry-go/echo v0.35.1/go.mod h1:IjdEzgvwlP2/7A32tWk75UmSUsBqvKFdpkN6WhB1e6M=
+github.com/getsentry/sentry-go v0.35.3 h1:u5IJaEqZyPdWqe/hKlBKBBnMTSxB/HenCqF3QLabeds=
+github.com/getsentry/sentry-go v0.35.3/go.mod h1:mdL49ixwT2yi57k5eh7mpnDyPybixPzlzEJFu0Z76QA=
+github.com/getsentry/sentry-go/echo v0.35.3 h1:aJ0e4kGuH7T1ggAd3LOYwAyQV0bq37AX36vNPr6JYnM=
+github.com/getsentry/sentry-go/echo v0.35.3/go.mod h1:zQn5wNGqJUwIlA6z/pi7CFeXiUGrWkzue28C0Mfbz/Q=
 github.com/go-errors/errors v1.4.2 h1:J6MZopCL4uSllY1OfXM374weqZFFItUbrImctkmUxIA=
 github.com/go-errors/errors v1.4.2/go.mod h1:sIVyrIiJhuEF+Pj9Ebtd6P/rEYROXFi3BopGUQ5a5Og=
 github.com/go-playground/assert/v2 v2.2.0 h1:JvknZsQTYeFEAhQwI4qEt9cyV5ONwRHC+lYKSsYSR8s=
