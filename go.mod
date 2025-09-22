@@ -29,7 +29,7 @@ require (
 	go.mongodb.org/mongo-driver v1.17.4
 	golang.org/x/sync v0.17.0
 	golang.org/x/tools v0.36.0
-	google.golang.org/grpc v1.75.0
+	google.golang.org/grpc v1.75.1
 	gorm.io/datatypes v1.2.6
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.0
