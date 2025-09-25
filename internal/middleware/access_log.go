@@ -35,6 +35,8 @@ import (
 	"sync"
 	"time"
 
+	berror "github.com/retail-ai-inc/bean/v2/error"
+
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/color"
@@ -105,6 +107,20 @@ var (
 	}
 )
 
+func logErrorInDump(hdlrErr error, resBody *bytes.Buffer, writer *bodyDumpResponseWriter) {
+	var ae *berror.APIError
+	if errors.As(hdlrErr, &ae) && resBody.Len() == 0 {
+		// helps capture the APIError in dump logs.
+		errorResp := berror.ErrorResp{
+			ErrorCode: ae.GlobalErrCode,
+			ErrorMsg:  ae.Error(),
+		}
+		errorJSON, _ := json.Marshal(errorResp)
+		resBody.Write(errorJSON)          // Write to logger's buffer
+		writer.Status = ae.HTTPStatusCode // Set status for logging
+	}
+}
+
 // AccessLoggerWithConfig returns a Logger middleware with config.
 func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 	// Defaults
@@ -167,6 +183,10 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 			res := c.Response()
 			start := time.Now()
 			hdlrErr := next(c)
+			if hdlrErr != nil {
+				logErrorInDump(hdlrErr, resBody, writer)
+			}
+
 			stop := time.Now()
 			buf := config.pool.Get().(*bytes.Buffer)
 			buf.Reset()
