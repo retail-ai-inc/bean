@@ -67,19 +67,17 @@ func APIErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 		return false, nil
 	}
 
-	if ae.HTTPStatusCode > 404 {
-		// Send error event to sentry if configured.
-		if viper.GetBool("sentry.on") {
-			c.Logger().Error(ae)
-
-			if hub := sentryecho.GetHubFromContext(c); hub != nil {
-				hub.CaptureException(ae)
-			}
-		} else {
-			c.Logger().Errorf("%+v", ae)
+	// Log HTTP errors (status >= 404) to Sentry if enabled, else log stack trace locally.
+	// 404 threshold prevents bloating Sentry with minor errors.
+	if ae.HTTPStatusCode >= 404 && viper.GetBool("sentry.on") {
+		// Sends stack to Sentry without logging to
+		// avoid duplication, as error is already handled explicitly.
+		if hub := sentryecho.GetHubFromContext(c); hub != nil {
+			hub.CaptureException(ae)
 		}
 	} else {
-		c.Logger().Error(ae)
+		// logs the stack trace for all errors when sentry is disabled.
+		c.Logger().Errorf("%+v", ae)
 	}
 
 	err := c.JSON(ae.HTTPStatusCode, ErrorResp{
