@@ -107,7 +107,7 @@ var (
 	}
 )
 
-func logErrorInDump(hdlrErr error, resBody *bytes.Buffer, writer *bodyDumpResponseWriter) error {
+func logErrorInDump(hdlrErr error, resBody *bytes.Buffer, writer *bodyDumpResponseWriter) {
 	var ae *berror.APIError
 	if errors.As(hdlrErr, &ae) && resBody.Len() == 0 {
 		// helps capture the APIError in dump logs.
@@ -119,7 +119,6 @@ func logErrorInDump(hdlrErr error, resBody *bytes.Buffer, writer *bodyDumpRespon
 		resBody.Write(errorJSON)          // Write to logger's buffer
 		writer.Status = ae.HTTPStatusCode // Set status for logging
 	}
-	return nil
 }
 
 // AccessLoggerWithConfig returns a Logger middleware with config.
