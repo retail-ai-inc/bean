@@ -25,6 +25,7 @@ package dbdrivers
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/retail-ai-inc/bean/v2/aes"
@@ -106,16 +107,21 @@ func InitMysqlTenantConns(config SQLConfig, master *gorm.DB, tenantAlterDbHostPa
 }
 
 // GetAllTenantCfgs return all Tenant data from master db.
+// Prevent multiple calls
+var tts []*TenantConnections
+
 func GetAllTenantCfgs(db *gorm.DB) ([]*TenantConnections, error) {
 
+	if len(tts) > 0 {
+		return tts, nil
+	}
 	var tt []*TenantConnections
-
 	err := db.Table("TenantConnections").Find(&tt).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all tenant connections: %w", err)
 	}
-
 	// TODO: save the config in memory
+	tts = slices.Clone(tt)
 
 	return tt, nil
 }
