@@ -74,6 +74,9 @@ type (
 		// RequestHeader is a slice of HTTP request header parameters which user wants to log.
 		RequestHeader []string
 
+		// ResponseHeader is a slice of HTTP response header parameters which user wants to log.
+		ResponseHeader []string
+
 		accessLogTemplate *fasttemplate.Template
 		bodyDumpTemplate  *fasttemplate.Template
 		colorer           *color.Color
@@ -95,7 +98,7 @@ var (
 	bodyDumpFormat = `{"time":"${time_rfc3339_nano}","level":"DUMP","id":"${id}","uri":"${uri}","status":${status},` +
 		`"error":"${error}","latency":${latency},"latency_human":"${latency_human}",` +
 		`"bytes_in":${bytes_in},"request_body":${request_body},` +
-		`"bytes_out":${bytes_out},"response_body":${response_body},"request_header":${req_header}}` + "\n"
+		`"bytes_out":${bytes_out},"response_body":${response_body},"request_header":${req_header},"response_header":${res_header}}` + "\n"
 
 	// DefaultLoggerConfig is the default Logger middleware config.
 	DefaultLoggerConfig = LoggerConfig{
@@ -288,6 +291,21 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 						reqHeaderByte, err := json.Marshal(reqHeader)
 						if err == nil {
 							return buf.Write(reqHeaderByte)
+						}
+					}
+					return buf.WriteString(`null`)
+				case "res_header":
+					if len(config.ResponseHeader) > 0 {
+						resHeader := make(map[string]interface{})
+						for _, param := range config.ResponseHeader {
+							v := c.Response().Header().Get(param)
+							if v != "" {
+								resHeader[param] = v
+							}
+						}
+						resHeaderByte, err := json.Marshal(resHeader)
+						if err == nil {
+							return buf.Write(resHeaderByte)
 						}
 					}
 					return buf.WriteString(`null`)

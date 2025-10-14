@@ -24,6 +24,7 @@ type Config struct {
 		Path              string
 		BodyDumpMaskParam []string
 		ReqHeaderParam    []string
+		ResHeaderParam    []string
 		SkipEndpoints     []string
 	}
 	Prometheus struct {
@@ -147,7 +148,6 @@ type Sentry struct {
 
 // LoadConfig parses a given config file into global Bean variable.
 func LoadConfig(filename string) (*Config, error) {
-
 	ext := filepath.Ext(filename)
 	if ext == "" {
 		return nil, fmt.Errorf("file extension is missing in the filename")
