@@ -34,6 +34,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -102,7 +103,6 @@ var TenantAlterDbHostParam string
 var NetHttpFastTransporter *http.Transport
 
 func New() *Bean {
-
 	if config.Bean == nil {
 		log.Fatal("config is not loaded")
 	}
@@ -199,7 +199,6 @@ func New() *Bean {
 }
 
 func NewEcho() (*echo.Echo, func() error) {
-
 	if config.Bean == nil {
 		log.Fatal("config is not loaded")
 	}
@@ -266,9 +265,10 @@ func NewEcho() (*echo.Echo, func() error) {
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if config.Bean.AccessLog.On {
 		accessLogConfig := middleware.LoggerConfig{
-			Skipper:       regex.InitAccessLogPathSkipper(config.Bean.AccessLog.SkipEndpoints),
-			BodyDump:      config.Bean.AccessLog.BodyDump,
-			RequestHeader: config.Bean.AccessLog.ReqHeaderParam,
+			Skipper:        regex.InitAccessLogPathSkipper(config.Bean.AccessLog.SkipEndpoints),
+			BodyDump:       config.Bean.AccessLog.BodyDump,
+			RequestHeader:  config.Bean.AccessLog.ReqHeaderParam,
+			ResponseHeader: config.Bean.AccessLog.ResHeaderParam,
 		}
 
 		if config.Bean.AccessLog.Path != "" {
@@ -344,7 +344,11 @@ func NewEcho() (*echo.Echo, func() error) {
 
 	// IMPORTANT: Request related middleware.
 	// Set the `X-Request-ID` header field if it doesn't exist.
+	// Whether to skip it depends on whether the `AccessLog.ReqHeaderParam`` parameter contains `X-Request-Id`.
 	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
+		Skipper: func(c echo.Context) bool {
+			return !slices.Contains(config.Bean.AccessLog.ReqHeaderParam, echo.HeaderXRequestID)
+		},
 		Generator:        uuid.NewString,
 		RequestIDHandler: middleware.RequestIDHandler,
 		TargetHeader:     echo.HeaderXRequestID,
@@ -507,7 +511,6 @@ func (b *Bean) UseValidation(validateFuncs ...validator.ValidatorFunc) {
 
 func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
 	return func(err error, c echo.Context) {
-
 		if c.Response().Committed {
 			return
 		}
@@ -609,7 +612,6 @@ func (b *Bean) InitDB() error {
 
 // ShutdownAll closes all the server and database related resources.
 func (b *Bean) ShutdownAll() error {
-
 	var err error
 
 	// Close the server related resources first.
@@ -664,7 +666,6 @@ func (b *Bean) CleanupDB() error {
 }
 
 func closer(closers []func() error) func() error {
-
 	return func() error {
 		if len(closers) == 0 {
 			return nil
@@ -692,14 +693,14 @@ func closer(closers []func() error) func() error {
 func openFile(path string) (*os.File, error) {
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
-			if err := os.MkdirAll(filepath.Dir(path), 0764); err != nil {
+			if err := os.MkdirAll(filepath.Dir(path), 0o764); err != nil {
 				return nil, err
 			}
 		} else {
 			return nil, err
 		}
 	}
-	return os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0664)
+	return os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o664)
 }
 
 // ContextTimeout return custom context timeout middleware

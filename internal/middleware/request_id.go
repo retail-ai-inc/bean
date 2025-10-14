@@ -6,6 +6,10 @@ import (
 )
 
 var RequestIDHandler = func(c echo.Context, requestID string) {
+	// Set the request ID in the request header if not set.
+	if v := c.Request().Header.Get(echo.HeaderXRequestID); v == "" {
+		c.Request().Header.Set(echo.HeaderXRequestID, requestID)
+	}
 
 	// Set the request ID in the echo context if not set.
 	if v, ok := c.Get(echo.HeaderXRequestID).(string); !ok || v == "" {
