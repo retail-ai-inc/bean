@@ -344,8 +344,8 @@ func NewEcho() (*echo.Echo, func() error) {
 
 	// IMPORTANT: Request related middleware.
 	// Set the `X-Request-ID` header field if it doesn't exist.
-	// Whether to skip it depends on whether the `AccessLog.ReqHeaderParam`` parameter contains `X-Request-Id`.
 	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
+		// Whether to skip it depends on whether the `AccessLog.ReqHeaderParam` parameter contains `X-Request-Id`.
 		Skipper: func(c echo.Context) bool {
 			return !slices.Contains(config.Bean.AccessLog.ReqHeaderParam, echo.HeaderXRequestID)
 		},
