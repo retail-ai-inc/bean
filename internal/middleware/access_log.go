@@ -454,7 +454,12 @@ func (w *bodyDumpResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 func maskSensitiveInfo(reqBody []byte, maskedParams []string) ([]byte, error) {
 	if len(maskedParams) == 0 {
-		return reqBody, nil
+		var buf bytes.Buffer
+		err := json.Compact(&buf, reqBody)
+		if err != nil {
+			return reqBody, nil
+		}
+		return buf.Bytes(), nil
 	}
 
 	unmarshaledRequest := make(map[string]interface{})
