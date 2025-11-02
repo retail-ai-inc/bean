@@ -6,7 +6,7 @@ toolchain go1.24.1
 
 require (
 	github.com/alphadose/haxmap v1.4.1
-	github.com/getsentry/sentry-go v0.36.1
+	github.com/getsentry/sentry-go v0.36.2
 	github.com/getsentry/sentry-go/echo v0.36.1
 	github.com/go-playground/validator/v10 v10.28.0
 	github.com/go-redis/redis/v8 v8.11.5
