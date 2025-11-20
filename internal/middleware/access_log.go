@@ -26,7 +26,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -35,12 +34,9 @@ import (
 	"sync"
 	"time"
 
-	berror "github.com/retail-ai-inc/bean/v2/error"
-
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/color"
-	errorstack "github.com/pkg/errors"
 	"github.com/valyala/fasttemplate"
 )
 
@@ -110,20 +106,6 @@ var (
 	}
 )
 
-func logErrorInDump(hdlrErr error, resBody *bytes.Buffer, writer *bodyDumpResponseWriter) {
-	var ae *berror.APIError
-	if errors.As(hdlrErr, &ae) && resBody.Len() == 0 {
-		// helps capture the APIError in dump logs.
-		errorResp := berror.ErrorResp{
-			ErrorCode: ae.GlobalErrCode,
-			ErrorMsg:  ae.Error(),
-		}
-		errorJSON, _ := json.Marshal(errorResp)
-		resBody.Write(errorJSON)          // Write to logger's buffer
-		writer.Status = ae.HTTPStatusCode // Set status for logging
-	}
-}
-
 // AccessLoggerWithConfig returns a Logger middleware with config.
 func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 	// Defaults
@@ -185,17 +167,15 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 			req := c.Request()
 			res := c.Response()
 			start := time.Now()
-			hdlrErr := next(c)
-			if hdlrErr != nil {
-				logErrorInDump(hdlrErr, resBody, writer)
+			if err = next(c); err != nil {
+				c.Error(err)
 			}
-
 			stop := time.Now()
 			buf := config.pool.Get().(*bytes.Buffer)
 			buf.Reset()
 			defer config.pool.Put(buf)
 
-			if _, tmplErr := config.bodyDumpTemplate.ExecuteFunc(buf, func(w io.Writer, tag string) (int, error) {
+			if _, err = config.bodyDumpTemplate.ExecuteFunc(buf, func(w io.Writer, tag string) (int, error) {
 				switch tag {
 				case "time_unix":
 					return buf.WriteString(strconv.FormatInt(time.Now().Unix(), 10))
@@ -325,23 +305,17 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 					}
 				}
 				return 0, nil
-			}); tmplErr != nil {
-				return errorstack.WithStack(errors.Join(hdlrErr, tmplErr))
+			}); err != nil {
+				return
 			}
 
 			if config.Output == nil {
 				_, err = c.Logger().Output().Write(buf.Bytes())
-				if err != nil {
-					return errorstack.WithStack(errors.Join(hdlrErr, err))
-				}
-				return hdlrErr
+				return
 			}
 			_, err = config.Output.Write(buf.Bytes())
-			if err != nil {
-				return errorstack.WithStack(errors.Join(hdlrErr, err))
-			}
+			return
 
-			return hdlrErr
 		}
 	}
 }
