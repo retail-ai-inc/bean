@@ -124,6 +124,7 @@ type Config struct {
 				XFrameOptions         string
 				HstsMaxAge            int
 				ContentSecurityPolicy string
+				ReferrerPolicy        string
 			}
 		}
 	}

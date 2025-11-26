@@ -256,6 +256,7 @@ func NewEcho() (*echo.Echo, func() error) {
 		XFrameOptions:         config.Bean.Security.HTTP.Header.XFrameOptions,         // The X-Frame-Options header value to be set with a custom value.
 		HSTSMaxAge:            config.Bean.Security.HTTP.Header.HstsMaxAge,            // HSTS header is only included when the connection is HTTPS.
 		ContentSecurityPolicy: config.Bean.Security.HTTP.Header.ContentSecurityPolicy, // Allows the Content-Security-Policy header value to be set with a custom value.
+		ReferrerPolicy:        config.Bean.Security.HTTP.Header.ReferrerPolicy,        // To determine how your service share information about the source page (referrer URL) when users click on links or visit new pages. Optional. Default value "".
 	}))
 
 	// Return `405 Method Not Allowed` if a wrong HTTP method been called for an API route.
