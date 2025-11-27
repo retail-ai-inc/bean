@@ -6,13 +6,13 @@ GOLANGCI_LINT_VERSION=v2.2.1
 all: lint test build
 
 build:
-	go build ./cmd/bean
+	go build -buildvcs=false ./cmd/bean
 
 build-race: ## build with race detactor
-	go build -race ./cmd/bean
+	go build -buildvcs=false -race ./cmd/bean
 
 build-slim: ## build without symbol and DWARF table, smaller binary but no debugging and profiling ability
-	go build -ldflags="-s -w" ./cmd/bean
+	go build -buildvcs=false -ldflags="-s -w" ./cmd/bean
 
 install: ## install the binary to $GOPATH/bin
 	go install ./cmd/bean
