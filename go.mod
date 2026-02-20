@@ -38,7 +38,7 @@ require (
 replace github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 => github.com/sourcegraph/conc v0.3.0
 
 require (
-	filippo.io/edwards25519 v1.1.0 // indirect
+	filippo.io/edwards25519 v1.1.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
