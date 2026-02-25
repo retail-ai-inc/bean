@@ -136,14 +136,14 @@ func (l *GcpLogger) Log(entry Entry) {
 
 	b, _ := json.Marshal(m)
 
-	// console output
-	fmt.Println(string(b))
-
-	// file output
 	if l.file != nil {
+		// file output
 		if _, err := l.file.Write(append(b, '\n')); err != nil {
 			fmt.Println("failed to write log file:", err)
 		}
+	} else {
+		// console output
+		fmt.Println(string(b))
 	}
 }
 
