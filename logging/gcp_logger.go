@@ -16,6 +16,7 @@ import (
 type GcpLogger struct {
 	ProjectID string
 	Options   *GcpLogOptions
+	file      *os.File
 }
 
 type GcpLogOptions struct {
@@ -31,14 +32,35 @@ var DefaultGcpLogOptions = &GcpLogOptions{
 	RemoveEscapes: false,
 }
 
-func NewGcpLogger(projectID string, opts *GcpLogOptions) *GcpLogger {
+func NewGcpLogger(projectID string, opts *GcpLogOptions) (*GcpLogger, error) {
 	if opts == nil {
 		opts = DefaultGcpLogOptions
 	}
-	return &GcpLogger{
+
+	l := &GcpLogger{
 		ProjectID: projectID,
 		Options:   opts,
 	}
+
+	if opts.LogFile != "" {
+		dir := filepath.Dir(opts.LogFile)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("create log dir: %w", err)
+		}
+
+		f, err := os.OpenFile(
+			opts.LogFile,
+			os.O_APPEND|os.O_CREATE|os.O_WRONLY,
+			0644,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("open log file: %w", err)
+		}
+
+		l.file = f
+	}
+
+	return l, nil
 }
 
 func (l *GcpLogger) AppendTrace(ctx context.Context, buf *bytes.Buffer) {
@@ -118,26 +140,10 @@ func (l *GcpLogger) Log(entry Entry) {
 	fmt.Println(string(b))
 
 	// file output
-	if l.Options.LogFile != "" {
-		dir := filepath.Dir(l.Options.LogFile)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			fmt.Println("failed to create log directory:", err)
-			return
+	if l.file != nil {
+		if _, err := l.file.Write(append(b, '\n')); err != nil {
+			fmt.Println("failed to write log file:", err)
 		}
-
-		f, err := os.OpenFile(
-			l.Options.LogFile,
-			os.O_APPEND|os.O_CREATE|os.O_WRONLY,
-			0644,
-		)
-		if err != nil {
-			fmt.Println("failed to open log file:", err)
-			return
-		}
-		defer f.Close()
-
-		f.Write(b)
-		f.Write([]byte("\n"))
 	}
 }
 
@@ -165,6 +171,13 @@ func maskJSON(data []byte, masked []string) []byte {
 		return data
 	}
 	return b
+}
+
+func (l *GcpLogger) Close() error {
+	if l.file == nil {
+		return nil
+	}
+	return l.file.Close()
 }
 
 func maskValue(v interface{}, masked map[string]struct{}) {
