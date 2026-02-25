@@ -71,11 +71,12 @@ func (l *GcpLogger) Log(entry Entry) {
 	}
 
 	// ----- GCP trace format -----
-	if entry.TraceID != "" && l.ProjectID != "" {
+	if entry.Context != nil && l.ProjectID != "" {
+		traceId := getSentryTraceID(entry.Context)
 		m["logging.googleapis.com/trace"] =
 			fmt.Sprintf("projects/%s/traces/%s",
 				l.ProjectID,
-				entry.TraceID,
+				traceId,
 			)
 	}
 
@@ -93,9 +94,10 @@ func (l *GcpLogger) Log(entry Entry) {
 	m["httpRequest"] = httpReq
 
 	if l.Options.DumpBody {
+		respBody, _ := readBody(entry.ResponseBody, l.Options.RemoveEscapes)
+
 		reqBody := maskJSON(entry.RequestBody, l.Options.MaskedFields)
-		respBody := maskJSON(entry.ResponseBody, l.Options.MaskedFields)
-		respBody, _ = readBody(respBody, l.Options.RemoveEscapes)
+		respBody = maskJSON(respBody, l.Options.MaskedFields)
 
 		if len(reqBody) > 0 {
 			m["requestBody"] = jsonOrNull(reqBody)
@@ -151,22 +153,45 @@ func maskJSON(data []byte, masked []string) []byte {
 		return data
 	}
 
-	var obj map[string]interface{}
+	var obj interface{}
 	if err := json.Unmarshal(data, &obj); err != nil {
 		return data
 	}
 
-	for _, k := range masked {
-		if _, ok := obj[k]; ok {
-			obj[k] = "****"
-		}
-	}
+	maskValue(obj, toSet(masked))
 
 	b, err := json.Marshal(obj)
 	if err != nil {
 		return data
 	}
 	return b
+}
+
+func maskValue(v interface{}, masked map[string]struct{}) {
+	switch val := v.(type) {
+
+	case map[string]interface{}:
+		for k, vv := range val {
+			if _, ok := masked[k]; ok {
+				val[k] = "****"
+				continue
+			}
+			maskValue(vv, masked)
+		}
+
+	case []interface{}:
+		for _, item := range val {
+			maskValue(item, masked)
+		}
+	}
+}
+
+func toSet(arr []string) map[string]struct{} {
+	m := make(map[string]struct{}, len(arr))
+	for _, v := range arr {
+		m[v] = struct{}{}
+	}
+	return m
 }
 
 // restoreEscapedJSON recursively unquotes escaped JSON strings (for response)
