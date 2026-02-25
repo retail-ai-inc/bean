@@ -25,6 +25,18 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [Bean Config](#bean-config)
   - [TenantAlterDbHostParam](#tenantalterdbhostparam)
     - [Sample Project](#sample-project)
+  - [HTTPLoggingTransport](#httploggingtransport)
+    - [Overview](#overview)
+    - [Features](#features)
+    - [How It Works](#how-it-works)
+    - [Usage](#usage)
+        - [Create a Logger](#create-a-logger)
+        - [Field Description](#field-description)
+        - [Create the Logging Transport](#create-the-logging-transport)
+        - [Use with http.Client](#use-with-httpclient)
+        - [Use with Resty](#use-with-resty)
+    - [Logged Fields](#logged-fields)
+    - [Severity Rules](#severity-rules)
 
 ## How to use
 
