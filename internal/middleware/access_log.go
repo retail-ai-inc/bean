@@ -37,6 +37,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/color"
+	"github.com/retail-ai-inc/bean/v2/logging"
 	"github.com/valyala/fasttemplate"
 )
 
@@ -73,6 +74,8 @@ type (
 		// ResponseHeader is a slice of HTTP response header parameters which user wants to log.
 		ResponseHeader []string
 
+		Logger logging.Logger
+
 		accessLogTemplate *fasttemplate.Template
 		bodyDumpTemplate  *fasttemplate.Template
 		colorer           *color.Color
@@ -87,14 +90,36 @@ type (
 )
 
 var (
-	accessLogFormat = `{"time":"${time_rfc3339_nano}","level":"ACCESS","id":"${id}","remote_ip":"${remote_ip}",` +
-		`"host":"${host}","method":"${method}","uri":"${uri}","user_agent":"${user_agent}",` +
-		`"X-Forwarded-For":"${header:X-Forwarded-For}","bytes_in":${bytes_in},"request_header":${req_header}}` + "\n"
+	accessLogFormat = `{
+	  "time": "${time_rfc3339_nano}",
+	  "level": "ACCESS",
+	  "id": "${id}",
+	  "remote_ip": "${remote_ip}",
+	  "host": "${host}",
+	  "method": "${method}",
+	  "uri": "${uri}",
+	  "user_agent": "${user_agent}",
+	  "X-Forwarded-For": "${header:X-Forwarded-For}",
+	  "bytes_in": ${bytes_in},
+	  "request_header": ${req_header}
+	}`
 
-	bodyDumpFormat = `{"time":"${time_rfc3339_nano}","level":"DUMP","id":"${id}","uri":"${uri}","status":${status},` +
-		`"error":"${error}","latency":${latency},"latency_human":"${latency_human}",` +
-		`"bytes_in":${bytes_in},"request_body":${request_body},` +
-		`"bytes_out":${bytes_out},"response_body":${response_body},"request_header":${req_header},"response_header":${res_header}}` + "\n"
+	bodyDumpFormat = `{
+	  "time":"${time_rfc3339_nano}",
+	  "level":"DUMP",
+	  "id":"${id}",
+	  "uri":"${uri}",
+	  "status":${status},
+	  "error":"${error}",
+	  "latency":${latency},
+	  "latency_human":"${latency_human}",
+	  "bytes_in":${bytes_in},
+	  "bytes_out":${bytes_out},
+	  "request_body":${request_body},
+	  "response_body":${response_body},
+	  "request_header":${req_header},
+	  "response_header":${res_header}
+	}`
 
 	// DefaultLoggerConfig is the default Logger middleware config.
 	DefaultLoggerConfig = LoggerConfig{
@@ -309,6 +334,11 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 				return
 			}
 
+			// Append trace (platform-specific)
+			config.Logger.AppendTrace(c.Request().Context(), buf)
+
+			buf.WriteByte('\n')
+
 			if config.Output == nil {
 				_, err = c.Logger().Output().Write(buf.Bytes())
 				return
@@ -401,6 +431,14 @@ func (config LoggerConfig) logAccess(c echo.Context) (err error) {
 		return
 	}
 
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err == nil {
+		buf.Reset()
+		b, _ := json.Marshal(m)
+		buf.Write(b)
+	}
+	buf.WriteByte('\n')
+
 	if config.Output == nil {
 		_, err = c.Logger().Output().Write(buf.Bytes())
 		return
@@ -436,18 +474,18 @@ func maskSensitiveInfo(reqBody []byte, maskedParams []string) ([]byte, error) {
 		return buf.Bytes(), nil
 	}
 
-	unmarshaledRequest := make(map[string]interface{})
-	err := json.Unmarshal(reqBody, &unmarshaledRequest)
+	unmarshalledRequest := make(map[string]interface{})
+	err := json.Unmarshal(reqBody, &unmarshalledRequest)
 	if err != nil {
 		return reqBody, err
 	}
 
 	for _, maskedParam := range maskedParams {
-		if _, ok := unmarshaledRequest[maskedParam]; ok {
-			unmarshaledRequest[maskedParam] = "****"
+		if _, ok := unmarshalledRequest[maskedParam]; ok {
+			unmarshalledRequest[maskedParam] = "****"
 		}
 	}
-	maskedRequestBody, _ := json.Marshal(unmarshaledRequest)
+	maskedRequestBody, _ := json.Marshal(unmarshalledRequest)
 
 	return maskedRequestBody, nil
 }

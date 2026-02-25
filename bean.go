@@ -270,6 +270,7 @@ func NewEcho() (*echo.Echo, func() error) {
 			BodyDump:       config.Bean.AccessLog.BodyDump,
 			RequestHeader:  config.Bean.AccessLog.ReqHeaderParam,
 			ResponseHeader: config.Bean.AccessLog.ResHeaderParam,
+			Logger:         config.Bean.AccessLog.Logger,
 		}
 
 		if config.Bean.AccessLog.Path != "" {
