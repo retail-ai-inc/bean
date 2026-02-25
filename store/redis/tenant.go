@@ -25,6 +25,7 @@ package redis
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -115,77 +116,110 @@ func (t *tenantCache) KeyExists(c context.Context, tenantID uint64, key string) 
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return false, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].KeyExists(c, key)
+	return client.KeyExists(c, key)
 }
 
 func (t *tenantCache) Keys(c context.Context, tenantID uint64, pattern string) ([]string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return nil, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		pattern = t.prefix + t.sep + pattern
 	}
 
-	return t.clients[tenantID].Keys(c, pattern)
+	return client.Keys(c, pattern)
 }
 
 func (t *tenantCache) TTL(c context.Context, tenantID uint64, key string) (time.Duration, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return time.Duration(0), fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].TTL(c, key)
+	return client.TTL(c, key)
 }
 
 func (t *tenantCache) SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return fmt.Errorf("tenantID:%d not found", tenantID)
+	}
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].Set(c, key, data, ttl)
+	return client.Set(c, key, data, ttl)
 }
 
 func (t *tenantCache) GetString(c context.Context, tenantID uint64, key string) (string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return "", fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].GetString(c, key)
+	return client.GetString(c, key)
 }
 
 func (t *tenantCache) SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].SetJSON(c, key, data, ttl)
+	return client.SetJSON(c, key, data, ttl)
 }
 
 func (t *tenantCache) GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return false, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	jsonStr, err := t.clients[tenantID].GetString(c, key)
+	jsonStr, err := client.GetString(c, key)
 	if err != nil {
 		return false, err // This `err` is actually returning stack trace.
 	} else if jsonStr == "" {
@@ -203,6 +237,10 @@ func (t *tenantCache) MSetJSON(c context.Context, tenantID uint64, keys []string
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return fmt.Errorf("tenantID:%d not found", tenantID)
+	}
 	ln := len(keys)
 	if ln != len(data) {
 		return errors.New("key and data length mismatch")
@@ -216,7 +254,7 @@ func (t *tenantCache) MSetJSON(c context.Context, tenantID uint64, keys []string
 		values = append(values, key, data[i])
 	}
 
-	err := t.clients[tenantID].MSetWithTTL(c, ttl, values)
+	err := client.MSetWithTTL(c, ttl, values)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -228,6 +266,11 @@ func (t *tenantCache) MGetJSON(c context.Context, tenantID uint64, dst interface
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	pks := make([]string, 0, len(keys))
 	if t.prefix != "" {
 		for _, key := range keys {
@@ -238,7 +281,7 @@ func (t *tenantCache) MGetJSON(c context.Context, tenantID uint64, dst interface
 		pks = keys
 	}
 
-	values, err := t.clients[tenantID].MGet(c, pks...)
+	values, err := client.MGet(c, pks...)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -264,7 +307,10 @@ func (t *tenantCache) MGetJSON(c context.Context, tenantID uint64, dst interface
 func (t *tenantCache) MGet(c context.Context, tenantID uint64, keys ...string) ([]interface{}, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
-
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return nil, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
 	pks := make([]string, 0, len(keys))
 
 	if t.prefix != "" {
@@ -276,7 +322,7 @@ func (t *tenantCache) MGet(c context.Context, tenantID uint64, keys ...string) (
 		pks = keys
 	}
 
-	return t.clients[tenantID].MGet(c, pks...)
+	return client.MGet(c, pks...)
 }
 
 // HSet accepts args in following formats:
@@ -287,49 +333,73 @@ func (t *tenantCache) HSet(c context.Context, tenantID uint64, key string, args 
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].HSet(c, key, args...)
+	return client.HSet(c, key, args...)
 }
 
 func (t *tenantCache) HGet(c context.Context, tenantID uint64, key, field string) (string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return "", fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].HGet(c, key, field)
+	return client.HGet(c, key, field)
 }
 
 func (t *tenantCache) HMGet(c context.Context, tenantID uint64, key string, fields ...string) ([]interface{}, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return nil, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].HMGet(c, key, fields...)
+	return client.HMGet(c, key, fields...)
 }
 
 func (t *tenantCache) HGetAll(c context.Context, tenantID uint64, key string) (map[string]string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return nil, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].HGetAll(c, key)
+	return client.HGetAll(c, key)
 }
 
 func (t *tenantCache) HGets(c context.Context, tenantID uint64, keysWithFields map[string]string) (map[string]string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
+
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return nil, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
 
 	var pksWithFields = make(map[string]string, len(keysWithFields))
 	if t.prefix != "" {
@@ -341,100 +411,142 @@ func (t *tenantCache) HGets(c context.Context, tenantID uint64, keysWithFields m
 		pksWithFields = keysWithFields
 	}
 
-	return t.clients[tenantID].HGets(c, pksWithFields)
+	return client.HGets(c, pksWithFields)
 }
 
 func (t *tenantCache) RPush(c context.Context, tenantID uint64, key string, valueList []string) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].RPush(c, key, valueList)
+	return client.RPush(c, key, valueList)
 }
 
 func (t *tenantCache) LRange(c context.Context, tenantID uint64, key string, start, stop int64) ([]string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return nil, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].GetLRange(c, key, start, stop)
+	return client.GetLRange(c, key, start, stop)
 }
 
 func (t *tenantCache) SAdd(c context.Context, tenantID uint64, key string, elements interface{}) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return fmt.Errorf("tenantID:%d not found", tenantID)
+	}
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].SAdd(c, key, elements)
+	return client.SAdd(c, key, elements)
 }
 
 func (t *tenantCache) SRem(c context.Context, tenantID uint64, key string, elements interface{}) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return fmt.Errorf("tenantID:%d not found", tenantID)
+	}
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].SRem(c, key, elements)
+	return client.SRem(c, key, elements)
 }
 
 func (t *tenantCache) SMembers(c context.Context, tenantID uint64, key string) ([]string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return nil, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].SMembers(c, key)
+	return client.SMembers(c, key)
 }
 
 func (t *tenantCache) SRandMemberN(c context.Context, tenantID uint64, key string, count int64) ([]string, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return nil, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].SRandMemberN(c, key, count)
+	return client.SRandMemberN(c, key, count)
 }
 
 func (t *tenantCache) SIsMember(c context.Context, tenantID uint64, key string, element interface{}) (bool, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return false, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].SIsMember(c, key, element)
+	return client.SIsMember(c, key, element)
 }
 
 func (t *tenantCache) IncrementValue(c context.Context, tenantID uint64, key string) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].IncrementValue(c, key)
+	return client.IncrementValue(c, key)
 }
 
 func (t *tenantCache) DelKey(c context.Context, tenantID uint64, keys ...string) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
+
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return fmt.Errorf("tenantID:%d not found", tenantID)
+	}
 
 	pks := make([]string, len(keys))
 
@@ -446,72 +558,100 @@ func (t *tenantCache) DelKey(c context.Context, tenantID uint64, keys ...string)
 		pks = keys
 	}
 
-	return t.clients[tenantID].DelKey(c, pks...)
+	return client.DelKey(c, pks...)
 }
 
 func (t *tenantCache) Expire(c context.Context, tenantID uint64, key string, ttl time.Duration) error {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return fmt.Errorf("tenantID:%d not found", tenantID)
+	}
 	if t.prefix != "" {
 		key = t.prefix + t.sep + key
 	}
 
-	return t.clients[tenantID].ExpireKey(c, key, ttl)
+	return client.ExpireKey(c, key, ttl)
 }
 
 func (t *tenantCache) Pipeline(tenantID uint64) redis.Pipeliner {
-	return t.clients[tenantID].Pipeline()
+
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return nil
+	}
+	return client.Pipeline()
 }
 
 func (t *tenantCache) Pipelined(c context.Context, tenantID uint64, fn func(redis.Pipeliner) error) ([]redis.Cmder, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
-	return t.clients[tenantID].Pipelined(c, fn)
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return nil, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+	return client.Pipelined(c, fn)
 }
 
 func (t *tenantCache) Eval(c context.Context, tenantID uint64, script string, keys []string, args ...interface{}) (interface{}, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return nil, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		pks := make([]string, len(keys))
 		for i, key := range keys {
 			pks[i] = t.prefix + t.sep + key
 		}
-		return t.clients[tenantID].Eval(c, script, pks, args...)
+		return client.Eval(c, script, pks, args...)
 	}
 
-	return t.clients[tenantID].Eval(c, script, keys, args...)
+	return client.Eval(c, script, keys, args...)
 }
 
 func (t *tenantCache) EvalSha(c context.Context, tenantID uint64, sha1 string, keys []string, args ...interface{}) (interface{}, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return nil, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		pks := make([]string, len(keys))
 		for i, key := range keys {
 			pks[i] = t.prefix + t.sep + key
 		}
-		return t.clients[tenantID].EvalSha(c, sha1, pks, args...)
+		return client.EvalSha(c, sha1, pks, args...)
 	}
 
-	return t.clients[tenantID].EvalSha(c, sha1, keys, args...)
+	return client.EvalSha(c, sha1, keys, args...)
 }
 
 func (t *tenantCache) Run(c context.Context, tenantID uint64, script *redis.Script, keys []string, args ...interface{}) (interface{}, error) {
 	c, finish := trace.StartSpan(c, t.operation)
 	defer finish()
 
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return nil, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+
 	if t.prefix != "" {
 		pks := make([]string, len(keys))
 		for i, key := range keys {
 			pks[i] = t.prefix + t.sep + key
 		}
-		return t.clients[tenantID].Run(c, script, pks, args...)
+		return client.Run(c, script, pks, args...)
 	}
 
-	return t.clients[tenantID].Run(c, script, keys, args...)
+	return client.Run(c, script, keys, args...)
 }
