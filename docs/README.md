@@ -364,3 +364,122 @@ cloudfunction/VM using the usual `host` ip.
 
 A CRUD project that you can refer to understand how bean works with service repository pattern.
 <https://github.com/RohitChaurasia97/movie_tracker>
+
+## HTTPLoggingTransport
+
+### Overview
+
+`HTTPLoggingTransport` is a custom `http.RoundTripper` implementation that logs outbound HTTP requests and responses.
+
+It is designed for:
+
+* Third-party API integrations
+* ERP / POS external calls
+* Debugging remote service failures
+* Centralized structured logging
+
+It works with:
+
+* `net/http`
+* `http.Client`
+* Resty (or any client supporting `http.RoundTripper`)
+
+### Features
+
+* Logs HTTP method and full URL
+* Captures response status code
+* Measures request latency
+* Records request and response bodies
+* Automatically marks failed calls as `ERROR`
+* Preserves original request and response bodies
+
+### How It Works
+
+`HTTPLoggingTransport` wraps an existing `http.RoundTripper` (defaulting to `http.DefaultTransport`) and intercepts:
+
+* The outgoing request
+* The incoming response
+* Any error returned by the transport
+
+It reads the request and response bodies, logs them, and then restores the body so downstream consumers can still read it.
+
+### Usage
+
+#### Create a Logger
+
+You must provide an implementation of `logging.Logger`:
+
+```go
+logger, err := logging.NewGcpLogger(
+    "your-project-id",
+    &logging.GcpLogOptions{
+        LogType:       "third-party-api", // logical category of the log
+        LogFile:       "",                // empty = stdout (recommended for containers)
+        DumpBody:      true,              // log request/response body
+        MaskedFields:  []string{"password", "token", "secret"},
+        RemoveEscapes: true,              // remove JSON escape characters
+    },
+)
+if err != nil {
+    panic(err)
+}
+```
+
+#### Create the Logging Transport
+
+```go
+transport := transport.NewHTTPLoggingTransport(
+    nil, // use http.DefaultTransport
+    logger,
+)
+```
+
+#### Use with http.Client
+
+```go
+client := &http.Client{
+    Transport: transport,
+    Timeout:   10 * time.Second,
+}
+
+resp, err := client.Get("https://api.example.com/data")
+```
+
+All outgoing requests will now be logged.
+
+#### Use with Resty
+
+```go
+client := resty.New()
+
+client.SetTransport(
+    transport.NewHTTPLoggingTransport(
+        nil,
+        logger,
+    ),
+)
+```
+
+All Resty requests will be logged automatically.
+
+### Logged Fields
+
+Each request generates a `logging.Entry` containing:
+
+* `Timestamp`
+* `Severity` (INFO or ERROR)
+* `Method`
+* `URL`
+* `Status`
+* `Latency`
+* `Error`
+* `RequestBody`
+* `ResponseBody`
+* `Context`
+
+### Severity Rules
+
+Severity is automatically set to:
+
+* `INFO` when the request succeeds
+* `ERROR` when the transport returns an error
