@@ -1,5 +1,5 @@
 package http
 
-type Options struct {
+type LoggingOptions struct {
 	DumpBody bool
 }

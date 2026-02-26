@@ -507,17 +507,17 @@ It captures:
 ### Example
 
 ```go
-client := &http.Client{
-    Transport: httptransport.NewTransport(
-        http.DefaultTransport,
-        logger,
-        httptransport.Options{
-            DumpBody: true,
-        },
-    ),
-}
+client = resty.New()
 
-resp, err := client.Get("https://example.com")
+transport := httptransport.NewLoggingTransport(
+	nil, 
+	gcpLogger,
+    httptransport.LoggingOptions{
+        DumpBody: true,
+    },
+)
+
+client.SetTransport(transport)
 ```
 
 ### Notes

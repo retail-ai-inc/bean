@@ -9,29 +9,29 @@ import (
 	"time"
 )
 
-type Transport struct {
+type LoggingTransport struct {
 	Base   http.RoundTripper
 	Logger *logging.Logger
-	Opt    Options
+	Opt    LoggingOptions
 }
 
-func NewTransport(
+func NewLoggingTransport(
 	base http.RoundTripper,
 	logger *logging.Logger,
-	opt Options,
+	opt LoggingOptions,
 ) http.RoundTripper {
 	if base == nil {
 		base = http.DefaultTransport
 	}
 
-	return &Transport{
+	return &LoggingTransport{
 		Base:   base,
 		Logger: logger,
 		Opt:    opt,
 	}
 }
 
-func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 
 	var reqBody []byte
