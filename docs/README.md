@@ -365,21 +365,6 @@ Bean configs default values are picked from the `env.json` file, but can be upda
 
 </details>
 
-## TenantAlterDbHostParam
-
-The `TenantAlterDbHostParam` is helful in multitenant scenarios when we need to run some
-cloudfunction or cron and you cannot connect your memorystore/SQL/mongo server from
-cloudfunction/VM using the usual `host` ip.
-
-  ```sh
-  bean.TenantAlterDbHostParam = "gcpHost"
-  ```
-
-### Sample Project
-
-A CRUD project that you can refer to understand how bean works with service repository pattern.
-<https://github.com/RohitChaurasia97/movie_tracker>
-
 ## Logging Module
 
 The `logging` module provides a structured, pipeline-based logging system designed for extensibility and cloud-native environments.
@@ -525,3 +510,18 @@ client.SetTransport(transport)
 * When `DumpBody` is enabled, request and response bodies are logged as `json.RawMessage`.
 * Body dumping increases memory usage and should be used cautiously in production.
 * Fully compatible with logging processors (masking, escape removal, etc.) and sinks (GCP, stdout).
+
+## TenantAlterDbHostParam
+
+The `TenantAlterDbHostParam` is helful in multitenant scenarios when we need to run some
+cloudfunction or cron and you cannot connect your memorystore/SQL/mongo server from
+cloudfunction/VM using the usual `host` ip.
+
+  ```sh
+  bean.TenantAlterDbHostParam = "gcpHost"
+  ```
+
+### Sample Project
+
+A CRUD project that you can refer to understand how bean works with service repository pattern.
+<https://github.com/RohitChaurasia97/movie_tracker>
