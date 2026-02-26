@@ -7,14 +7,12 @@ import (
 )
 
 type Logger struct {
-	resource       types.Resource
 	traceExtractor TraceExtractor
 	pipeline       *Pipeline
 }
 
-func New(resource types.Resource, extractor TraceExtractor, pipeline *Pipeline) *Logger {
+func New(extractor TraceExtractor, pipeline *Pipeline) *Logger {
 	return &Logger{
-		resource:       resource,
 		traceExtractor: extractor,
 		pipeline:       pipeline,
 	}
@@ -35,7 +33,6 @@ func (l *Logger) log(ctx context.Context, severity types.Severity, level string,
 		Level:     level,
 		Fields:    fields,
 		Trace:     l.traceExtractor.Extract(ctx),
-		Resource:  l.resource,
 	}
 
 	l.pipeline.Process(entry)

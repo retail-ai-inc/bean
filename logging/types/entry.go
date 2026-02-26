@@ -10,5 +10,4 @@ type Entry struct {
 	Level     string
 	Fields    map[string]any
 	Trace     Trace
-	Resource  Resource
 }
