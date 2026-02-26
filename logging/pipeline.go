@@ -19,5 +19,8 @@ func (p *Pipeline) Process(entry types.Entry) {
 		entry = processor.Process(entry)
 	}
 
-	p.sink.Write(entry)
+	err := p.sink.Write(entry)
+	if err != nil {
+		return
+	}
 }
