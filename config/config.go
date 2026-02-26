@@ -27,7 +27,7 @@ type Config struct {
 		ReqHeaderParam    []string
 		ResHeaderParam    []string
 		SkipEndpoints     []string
-		Logger            logging.Logger
+		Logger            *logging.Logger
 	}
 	Prometheus struct {
 		On            bool

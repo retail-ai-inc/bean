@@ -273,16 +273,6 @@ func NewEcho() (*echo.Echo, func() error) {
 			Logger:         config.Bean.AccessLog.Logger,
 		}
 
-		if config.Bean.AccessLog.Path != "" {
-			if file, err := openFile(config.Bean.AccessLog.Path); err != nil {
-				e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
-			} else {
-				accessLogConfig.Output = file
-			}
-		}
-		if len(config.Bean.AccessLog.BodyDumpMaskParam) > 0 {
-			accessLogConfig.MaskedParameters = config.Bean.AccessLog.BodyDumpMaskParam
-		}
 		accessLogger := middleware.AccessLoggerWithConfig(accessLogConfig)
 		e.Use(accessLogger)
 	}

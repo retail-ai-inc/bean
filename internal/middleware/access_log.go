@@ -1,25 +1,3 @@
-// MIT License
-
-// Copyright (c) The RAI Authors
-
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package middleware
 
 import (
@@ -29,422 +7,186 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strconv"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/labstack/gommon/color"
+
 	"github.com/retail-ai-inc/bean/v2/logging"
-	"github.com/valyala/fasttemplate"
 )
 
-type (
-	// LoggerConfig defines the config for Logger middleware.
-	LoggerConfig struct {
-		// Skipper defines a function to skip middleware.
-		Skipper middleware.Skipper
+type LoggerConfig struct {
+	Skipper        middleware.Skipper
+	BodyDump       bool
+	RequestHeader  []string
+	ResponseHeader []string
+	Logger         *logging.Logger
+}
 
-		// Optional. Default value DefaultLoggerConfig.AccessLogFormat.
-		AccessLogFormat string `yaml:"format"`
+type bodyDumpResponseWriter struct {
+	io.Writer
+	http.ResponseWriter
+	Status int
+}
 
-		// Optional. Default value DefaultLoggerConfig.BodyDumpFormat.
-		BodyDumpFormat string `yaml:"format"`
+var DefaultLoggerConfig = LoggerConfig{
+	Skipper: middleware.DefaultSkipper,
+}
 
-		// Optional. Default value DefaultLoggerConfig.CustomTimeFormat.
-		CustomTimeFormat string `yaml:"custom_time_format"`
-
-		// Output is a writer where logs in JSON format are written.
-		// Optional. Default value os.Stdout.
-		Output io.Writer
-
-		// BodyDump is an option to control the log also print the request and response body.
-		// Optional. Default value false.
-		BodyDump bool
-
-		// MaskedParameters is a slice of parameters for which the user wants to mask the value in logs.
-		// Optional. Default value [].
-		MaskedParameters []string
-
-		// RequestHeader is a slice of HTTP request header parameters which user wants to log.
-		RequestHeader []string
-
-		// ResponseHeader is a slice of HTTP response header parameters which user wants to log.
-		ResponseHeader []string
-
-		Logger logging.Logger
-
-		accessLogTemplate *fasttemplate.Template
-		bodyDumpTemplate  *fasttemplate.Template
-		colorer           *color.Color
-		pool              *sync.Pool
-	}
-
-	bodyDumpResponseWriter struct {
-		io.Writer
-		http.ResponseWriter
-		Status int
-	}
-)
-
-var (
-	accessLogFormat = `{
-	  "time": "${time_rfc3339_nano}",
-	  "level": "ACCESS",
-	  "id": "${id}",
-	  "remote_ip": "${remote_ip}",
-	  "host": "${host}",
-	  "method": "${method}",
-	  "uri": "${uri}",
-	  "user_agent": "${user_agent}",
-	  "X-Forwarded-For": "${header:X-Forwarded-For}",
-	  "bytes_in": ${bytes_in},
-	  "request_header": ${req_header}
-	}`
-
-	bodyDumpFormat = `{
-	  "time":"${time_rfc3339_nano}",
-	  "level":"DUMP",
-	  "id":"${id}",
-	  "uri":"${uri}",
-	  "status":${status},
-	  "error":"${error}",
-	  "latency":${latency},
-	  "latency_human":"${latency_human}",
-	  "bytes_in":${bytes_in},
-	  "bytes_out":${bytes_out},
-	  "request_body":${request_body},
-	  "response_body":${response_body},
-	  "request_header":${req_header},
-	  "response_header":${res_header}
-	}`
-
-	// DefaultLoggerConfig is the default Logger middleware config.
-	DefaultLoggerConfig = LoggerConfig{
-		Skipper:          middleware.DefaultSkipper,
-		AccessLogFormat:  accessLogFormat,
-		BodyDumpFormat:   bodyDumpFormat,
-		CustomTimeFormat: "2006-01-02 15:04:05.00000",
-		colorer:          color.New(),
-	}
-)
-
-// AccessLoggerWithConfig returns a Logger middleware with config.
 func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
-	// Defaults
 	if config.Skipper == nil {
 		config.Skipper = DefaultLoggerConfig.Skipper
-	}
-	if config.AccessLogFormat == "" {
-		config.AccessLogFormat = DefaultLoggerConfig.AccessLogFormat
-	}
-	if config.BodyDumpFormat == "" {
-		config.BodyDumpFormat = DefaultLoggerConfig.BodyDumpFormat
-	}
-	if config.Output == nil {
-		config.Output = DefaultLoggerConfig.Output
-	}
-
-	config.accessLogTemplate = fasttemplate.New(config.AccessLogFormat, "${", "}")
-	config.bodyDumpTemplate = fasttemplate.New(config.BodyDumpFormat, "${", "}")
-	config.colorer = color.New()
-	config.colorer.SetOutput(config.Output)
-	config.pool = &sync.Pool{
-		New: func() interface{} {
-			return bytes.NewBuffer(make([]byte, 256))
-		},
 	}
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
-			// Skip the logging if skipper is configured via `skipEndpoints` parameter in env.json.
 			if config.Skipper(c) {
 				return next(c)
 			}
 
-			// Logging into the access log before processing the request.
-			if err = config.logAccess(c); err != nil {
-				return
-			}
-
-			// Skip the body dumper log if `bodyDump == false` means when the body dumper is off.
-			if !config.BodyDump {
+			if config.Logger == nil {
 				return next(c)
 			}
 
-			// IMPORTANT: Get a copy of the request body for body dumper.
-			reqBody := []byte{}
-			if c.Request().Body != nil { // Read
-				reqBody, _ = io.ReadAll(c.Request().Body)
-			}
-			c.Request().Body = io.NopCloser(bytes.NewBuffer(reqBody)) // Reset
-
-			// IMPORTANT: Create a multiWriter writes to both response
-			// and the local body dumper buffer. (`resBody` variable below)
-			resBody := new(bytes.Buffer)
-			mw := io.MultiWriter(c.Response().Writer, resBody)
-			writer := &bodyDumpResponseWriter{Writer: mw, ResponseWriter: c.Response().Writer}
-			c.Response().Writer = writer
-
-			// Process the request and dump the body with extra information.
 			req := c.Request()
 			res := c.Response()
+
 			start := time.Now()
+
+			// Access Log (before)
+			logAccess(config, c)
+
+			// ---- Body Dump handling ----
+			var reqBody []byte
+			if config.BodyDump && req.Body != nil {
+				reqBody, _ = io.ReadAll(req.Body)
+				req.Body = io.NopCloser(bytes.NewBuffer(reqBody))
+			}
+
+			var resBody *bytes.Buffer
+			var writer *bodyDumpResponseWriter
+
+			if config.BodyDump {
+				resBody = new(bytes.Buffer)
+				mw := io.MultiWriter(res.Writer, resBody)
+				writer = &bodyDumpResponseWriter{
+					Writer:         mw,
+					ResponseWriter: res.Writer,
+				}
+				res.Writer = writer
+			}
+
+			// ---- Execute handler ----
 			if err = next(c); err != nil {
 				c.Error(err)
 			}
+
 			stop := time.Now()
-			buf := config.pool.Get().(*bytes.Buffer)
-			buf.Reset()
-			defer config.pool.Put(buf)
 
-			if _, err = config.bodyDumpTemplate.ExecuteFunc(buf, func(w io.Writer, tag string) (int, error) {
-				switch tag {
-				case "time_unix":
-					return buf.WriteString(strconv.FormatInt(time.Now().Unix(), 10))
-				case "time_unix_nano":
-					return buf.WriteString(strconv.FormatInt(time.Now().UnixNano(), 10))
-				case "time_rfc3339":
-					return buf.WriteString(time.Now().Format(time.RFC3339))
-				case "time_rfc3339_nano":
-					return buf.WriteString(time.Now().Format(time.RFC3339Nano))
-				case "time_custom":
-					return buf.WriteString(time.Now().Format(config.CustomTimeFormat))
-				case "id":
-					id := req.Header.Get(echo.HeaderXRequestID)
-					if id == "" {
-						id = res.Header().Get(echo.HeaderXRequestID)
-					}
-					return buf.WriteString(id)
-				case "remote_ip":
-					return buf.WriteString(c.RealIP())
-				case "host":
-					return buf.WriteString(req.Host)
-				case "uri":
-					return buf.WriteString(req.RequestURI)
-				case "method":
-					return buf.WriteString(req.Method)
-				case "path":
-					p := req.URL.Path
-					if p == "" {
-						p = "/"
-					}
-					return buf.WriteString(p)
-				case "protocol":
-					return buf.WriteString(req.Proto)
-				case "referer":
-					return buf.WriteString(req.Referer())
-				case "user_agent":
-					return buf.WriteString(req.UserAgent())
-				case "status":
-					n := writer.Status
-					s := config.colorer.Green(n)
-					switch {
-					case n >= 500:
-						s = config.colorer.Red(n)
-					case n >= 400:
-						s = config.colorer.Yellow(n)
-					case n >= 300:
-						s = config.colorer.Cyan(n)
-					}
-					return buf.WriteString(s)
-				case "error":
-					if err != nil {
-						// Error may contain invalid JSON e.g. `"`
-						b, _ := json.Marshal(err.Error())
-						b = b[1 : len(b)-1]
-						return buf.Write(b)
-					}
-				case "latency":
-					l := stop.Sub(start)
-					return buf.WriteString(strconv.FormatInt(int64(l), 10))
-				case "latency_human":
-					return buf.WriteString(stop.Sub(start).String())
-				case "bytes_in":
-					cl := req.Header.Get(echo.HeaderContentLength)
-					if cl == "" {
-						cl = "0"
-					}
-					return buf.WriteString(cl)
-				case "bytes_out":
-					return buf.WriteString(strconv.FormatInt(res.Size, 10))
-				case "request_body":
-					if len(reqBody) > 0 {
-						reqBody, err = maskSensitiveInfo(reqBody, config.MaskedParameters)
-						if err == nil {
-							return buf.Write(reqBody)
-						}
-					}
-					return buf.WriteString(`null`)
-				case "response_body":
-					res_body := strings.TrimSuffix(resBody.String(), "\n")
-					if res_body != "" {
-						return buf.WriteString(res_body)
-					}
-					return buf.WriteString(`null`)
-				case "req_header":
-					if len(config.RequestHeader) > 0 {
-						reqHeader := make(map[string]interface{})
-						for _, param := range config.RequestHeader {
-							v := c.Request().Header.Get(param)
-							if v != "" {
-								reqHeader[param] = v
-							}
-						}
-						reqHeaderByte, err := json.Marshal(reqHeader)
-						if err == nil {
-							return buf.Write(reqHeaderByte)
-						}
-					}
-					return buf.WriteString(`null`)
-				case "res_header":
-					if len(config.ResponseHeader) > 0 {
-						resHeader := make(map[string]interface{})
-						for _, param := range config.ResponseHeader {
-							v := c.Response().Header().Get(param)
-							if v != "" {
-								resHeader[param] = v
-							}
-						}
-						resHeaderByte, err := json.Marshal(resHeader)
-						if err == nil {
-							return buf.Write(resHeaderByte)
-						}
-					}
-					return buf.WriteString(`null`)
-				default:
-					switch {
-					case strings.HasPrefix(tag, "header:"):
-						return buf.Write([]byte(c.Request().Header.Get(tag[7:])))
-					case strings.HasPrefix(tag, "query:"):
-						return buf.Write([]byte(c.QueryParam(tag[6:])))
-					case strings.HasPrefix(tag, "form:"):
-						return buf.Write([]byte(c.FormValue(tag[5:])))
-					case strings.HasPrefix(tag, "cookie:"):
-						cookie, err := c.Cookie(tag[7:])
-						if err == nil {
-							return buf.Write([]byte(cookie.Value))
-						}
-					}
-				}
-				return 0, nil
-			}); err != nil {
-				return
+			// ---- Body Dump Log (after) ----
+			if config.BodyDump {
+				logBodyDump(config, c, reqBody, resBody, writer, start, stop, err)
 			}
 
-			// Append trace (platform-specific)
-			config.Logger.AppendTrace(c.Request().Context(), buf)
-
-			buf.WriteByte('\n')
-
-			if config.Output == nil {
-				_, err = c.Logger().Output().Write(buf.Bytes())
-				return
-			}
-			_, err = config.Output.Write(buf.Bytes())
 			return
-
 		}
 	}
 }
 
-func (config LoggerConfig) logAccess(c echo.Context) (err error) {
+func logAccess(config LoggerConfig, c echo.Context) {
 	req := c.Request()
-	buf := config.pool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer config.pool.Put(buf)
-	if _, err = config.accessLogTemplate.ExecuteFunc(buf, func(w io.Writer, tag string) (int, error) {
-		switch tag {
-		case "time_unix":
-			return buf.WriteString(strconv.FormatInt(time.Now().Unix(), 10))
-		case "time_unix_nano":
-			return buf.WriteString(strconv.FormatInt(time.Now().UnixNano(), 10))
-		case "time_rfc3339":
-			return buf.WriteString(time.Now().Format(time.RFC3339))
-		case "time_rfc3339_nano":
-			return buf.WriteString(time.Now().Format(time.RFC3339Nano))
-		case "time_custom":
-			return buf.WriteString(time.Now().Format(config.CustomTimeFormat))
-		case "id":
-			id := req.Header.Get(echo.HeaderXRequestID)
-			return buf.WriteString(id)
-		case "remote_ip":
-			return buf.WriteString(c.RealIP())
-		case "host":
-			return buf.WriteString(req.Host)
-		case "uri":
-			return buf.WriteString(req.RequestURI)
-		case "method":
-			return buf.WriteString(req.Method)
-		case "path":
-			p := req.URL.Path
-			if p == "" {
-				p = "/"
-			}
-			return buf.WriteString(p)
-		case "protocol":
-			return buf.WriteString(req.Proto)
-		case "referer":
-			return buf.WriteString(req.Referer())
-		case "user_agent":
-			return buf.WriteString(req.UserAgent())
-		case "bytes_in":
-			cl := req.Header.Get(echo.HeaderContentLength)
-			if cl == "" {
-				cl = "0"
-			}
-			return buf.WriteString(cl)
-		case "req_header":
-			if len(config.RequestHeader) > 0 {
-				reqHeader := make(map[string]interface{})
-				for _, param := range config.RequestHeader {
-					v := c.Request().Header.Get(param)
-					if v != "" {
-						reqHeader[param] = v
-					}
-				}
-				reqHeaderByte, err := json.Marshal(reqHeader)
-				if err == nil {
-					return buf.Write(reqHeaderByte)
-				}
-			}
-			return buf.WriteString(`null`)
-		default:
-			switch {
-			case strings.HasPrefix(tag, "header:"):
-				return buf.Write([]byte(c.Request().Header.Get(tag[7:])))
-			case strings.HasPrefix(tag, "query:"):
-				return buf.Write([]byte(c.QueryParam(tag[6:])))
-			case strings.HasPrefix(tag, "form:"):
-				return buf.Write([]byte(c.FormValue(tag[5:])))
-			case strings.HasPrefix(tag, "cookie:"):
-				cookie, err := c.Cookie(tag[7:])
-				if err == nil {
-					return buf.Write([]byte(cookie.Value))
-				}
+
+	fields := map[string]any{
+		"id":              req.Header.Get(echo.HeaderXRequestID),
+		"remote_ip":       c.RealIP(),
+		"host":            req.Host,
+		"method":          req.Method,
+		"uri":             req.RequestURI,
+		"user_agent":      req.UserAgent(),
+		"bytes_in":        req.Header.Get(echo.HeaderContentLength),
+		"X-Forwarded-For": req.Header.Get("X-Forwarded-For"),
+	}
+
+	if len(config.RequestHeader) > 0 {
+		reqHeader := make(map[string]any)
+		for _, h := range config.RequestHeader {
+			if v := req.Header.Get(h); v != "" {
+				reqHeader[h] = v
 			}
 		}
-		return 0, nil
-	}); err != nil {
-		return
+		fields["request_header"] = reqHeader
 	}
 
-	var m map[string]any
-	if err := json.Unmarshal(buf.Bytes(), &m); err == nil {
-		buf.Reset()
-		b, _ := json.Marshal(m)
-		buf.Write(b)
-	}
-	buf.WriteByte('\n')
+	config.Logger.Info(
+		req.Context(),
+		"ACCESS",
+		fields,
+	)
+}
 
-	if config.Output == nil {
-		_, err = c.Logger().Output().Write(buf.Bytes())
-		return
+func logBodyDump(
+	config LoggerConfig,
+	c echo.Context,
+	reqBody []byte,
+	resBody *bytes.Buffer,
+	writer *bodyDumpResponseWriter,
+	start, stop time.Time,
+	handlerErr error,
+) {
+	req := c.Request()
+	res := c.Response()
+
+	fields := map[string]any{
+		"id":            req.Header.Get(echo.HeaderXRequestID),
+		"uri":           req.RequestURI,
+		"status":        writer.Status,
+		"latency":       int64(stop.Sub(start)),
+		"latency_human": stop.Sub(start).String(),
+		"bytes_in":      req.Header.Get(echo.HeaderContentLength),
+		"bytes_out":     res.Size,
 	}
-	_, err = config.Output.Write(buf.Bytes())
-	return
+
+	if handlerErr != nil {
+		fields["error"] = handlerErr.Error()
+	}
+
+	// ---- structured request body ----
+	if len(reqBody) > 0 {
+		fields["request_body"] = json.RawMessage(reqBody)
+	}
+
+	// ---- structured response body ----
+	if resBody != nil && resBody.Len() > 0 {
+		fields["response_body"] = json.RawMessage(resBody.Bytes())
+	}
+
+	// ---- request headers ----
+	if len(config.RequestHeader) > 0 {
+		reqHeader := make(map[string]any)
+		for _, h := range config.RequestHeader {
+			if v := req.Header.Get(h); v != "" {
+				reqHeader[h] = v
+			}
+		}
+		fields["request_header"] = reqHeader
+	}
+
+	// ---- response headers ----
+	if len(config.ResponseHeader) > 0 {
+		resHeader := make(map[string]any)
+		for _, h := range config.ResponseHeader {
+			if v := res.Header().Get(h); v != "" {
+				resHeader[h] = v
+			}
+		}
+		fields["response_header"] = resHeader
+	}
+
+	config.Logger.Info(
+		req.Context(),
+		"DUMP",
+		fields,
+	)
 }
 
 func (w *bodyDumpResponseWriter) WriteHeader(code int) {
@@ -457,35 +199,11 @@ func (w *bodyDumpResponseWriter) Write(b []byte) (int, error) {
 }
 
 func (w *bodyDumpResponseWriter) Flush() {
-	w.ResponseWriter.(http.Flusher).Flush()
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func (w *bodyDumpResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return w.ResponseWriter.(http.Hijacker).Hijack()
-}
-
-func maskSensitiveInfo(reqBody []byte, maskedParams []string) ([]byte, error) {
-	if len(maskedParams) == 0 {
-		var buf bytes.Buffer
-		err := json.Compact(&buf, reqBody)
-		if err != nil {
-			return reqBody, nil
-		}
-		return buf.Bytes(), nil
-	}
-
-	unmarshalledRequest := make(map[string]interface{})
-	err := json.Unmarshal(reqBody, &unmarshalledRequest)
-	if err != nil {
-		return reqBody, err
-	}
-
-	for _, maskedParam := range maskedParams {
-		if _, ok := unmarshalledRequest[maskedParam]; ok {
-			unmarshalledRequest[maskedParam] = "****"
-		}
-	}
-	maskedRequestBody, _ := json.Marshal(unmarshalledRequest)
-
-	return maskedRequestBody, nil
 }
