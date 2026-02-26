@@ -25,18 +25,21 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [Bean Config](#bean-config)
   - [TenantAlterDbHostParam](#tenantalterdbhostparam)
     - [Sample Project](#sample-project)
-  - [HTTPLoggingTransport](#httploggingtransport)
-    - [Overview](#overview)
+  - [Logging Module](#logging-module)
+    - [Components](#components)
+        - [Logger](#logger)
+        - [Extractors](#extractors)
+        - [Pipeline](#pipeline)
+        - [Processors](#processors)
+        - [Sink](#sink)
     - [Features](#features)
-    - [How It Works](#how-it-works)
-    - [Usage](#usage)
-        - [Create a Logger](#create-a-logger)
-        - [Field Description](#field-description)
-        - [Create the Logging Transport](#create-the-logging-transport)
-        - [Use with http.Client](#use-with-httpclient)
-        - [Use with Resty](#use-with-resty)
-    - [Logged Fields](#logged-fields)
-    - [Severity Rules](#severity-rules)
+    - [Example](#example)
+    - [Core Packages](#core-packages)
+    - [Design Principles](#design-principles)
+  - [HTTP Logging Transport](#http-logging-transport)
+    - [Features](#features-1)
+    - [Example](#example)
+    - [Notes](#notes)  
 
 ## How to use
 
@@ -377,121 +380,148 @@ cloudfunction/VM using the usual `host` ip.
 A CRUD project that you can refer to understand how bean works with service repository pattern.
 <https://github.com/RohitChaurasia97/movie_tracker>
 
-## HTTPLoggingTransport
+## Logging Module
 
-### Overview
+The `logging` module provides a structured, pipeline-based logging system designed for extensibility and cloud-native environments.
 
-`HTTPLoggingTransport` is a custom `http.RoundTripper` implementation that logs outbound HTTP requests and responses.
+It follows a composable architecture:
 
-It is designed for:
+```text
+Logger → Extractors → Pipeline → Processors → Sink
+```
 
-* Third-party API integrations
-* ERP / POS external calls
-* Debugging remote service failures
-* Centralized structured logging
+### Components
 
-It works with:
+#### Logger
+Application entry point (`Info`, `Error`, etc.).
+Creates structured log entries and triggers the processing pipeline.
 
-* `net/http`
-* `http.Client`
-* Resty (or any client supporting `http.RoundTripper`)
+#### Extractors
+Extract contextual metadata from `context.Context`.
+Typical use cases:
+
+* Trace ID injection
+* Span ID propagation
+* Sentry trace extraction
+* Request-scoped metadata enrichment
+
+Extractors run before processors and enrich the log entry.
+
+#### Pipeline
+Coordinates the full log processing flow.
+
+#### Processors
+Transform or modify log entries before output.
+Examples:
+
+* Mask sensitive fields
+* Remove JSON escape characters
+* Normalize field structures
+
+Processors are composable and ordered.
+
+#### Sink
+Final output destination.
+Examples:
+
+* GCP Logging
+* Stdout
 
 ### Features
 
-* Logs HTTP method and full URL
-* Captures response status code
-* Measures request latency
-* Records request and response bodies
-* Automatically marks failed calls as `ERROR`
-* Preserves original request and response bodies
+* Structured (map-based) logging
+* Context-aware trace extraction
+* Processor pipeline architecture
+* Pluggable sinks
+* JSON-first design
+* Type-safe handling
+* Cloud-ready (GCP-compatible)
 
-### How It Works
-
-`HTTPLoggingTransport` wraps an existing `http.RoundTripper` (defaulting to `http.DefaultTransport`) and intercepts:
-
-* The outgoing request
-* The incoming response
-* Any error returned by the transport
-
-It reads the request and response bodies, logs them, and then restores the body so downstream consumers can still read it.
-
-### Usage
-
-#### Create a Logger
-
-You must provide an implementation of `logging.Logger`:
+### Example
 
 ```go
-logger, err := logging.NewGcpLogger(
-    "your-project-id",
-    &logging.GcpLogOptions{
-        LogType:       "third-party-api", // logical category of the log
-        LogFile:       "",                // empty = stdout (recommended for containers)
-        DumpBody:      true,              // log request/response body
-        MaskedFields:  []string{"password", "token", "secret"},
-        RemoveEscapes: true,              // remove JSON escape characters
+sentryExtractor := extractors.NewSentryExtractor()
+gcpSink, _ := sinks.NewGcpSink(
+    sinks.Options{
+        ProjectID:  "",
+        LogType:    "",
+        OutputFile: "",
     },
 )
-if err != nil {
-    panic(err)
-}
-```
-
-#### Create the Logging Transport
-
-```go
-transport := transport.NewHTTPLoggingTransport(
-    nil, // use http.DefaultTransport
-    logger,
+pipeline := logging.NewPipeline(
+    gcpSink,
+    processors.NewMaskProcessor([]string{"password"}),
+    processors.NewRemoveEscapeProcessor(),
 )
+
+logger := logging.New(
+    sentryExtractor,
+    pipeline,
+)
+
+logger.Info(ctx, "outbound_http", map[string]any{
+    "http": map[string]any{
+        "method": "GET",
+        "url":    "https://example.com",
+    },
+})
 ```
 
-#### Use with http.Client
+### Core Packages
+
+* `logging/types` — Core log structures (`Entry`, `Severity`, etc.)
+* `logging/extractors` — Context metadata extraction
+* `logging/processors` — Log transformation components
+* `logging/sinks` — Output implementations
+* `logging/pipeline` — Processing orchestration
+
+### Design Principles
+
+* Separation of concerns (extraction / transformation / output)
+* No template-based string formatting
+* Composable processing stages
+* Minimal framework coupling
+* Extensible without modifying core logic
+
+## HTTP Logging Transport
+
+`transport/http` provides a custom `http.RoundTripper` that logs outbound HTTP requests using the structured `logging.Logger`.
+
+It captures:
+
+* HTTP method
+* Request URL
+* Response status
+* Latency (ms)
+* Optional request/response body
+* Error information
+
+### Features
+
+* Decorator pattern over `http.RoundTripper`
+* Structured logging (pipeline-compatible)
+* Optional body dumping via `Options.DumpBody`
+* Safe body re-wrapping using `io.NopCloser`
+* Emits event name: `"outbound_http"`
+
+### Example
 
 ```go
 client := &http.Client{
-    Transport: transport,
-    Timeout:   10 * time.Second,
+    Transport: httptransport.NewTransport(
+        http.DefaultTransport,
+        logger,
+        httptransport.Options{
+            DumpBody: true,
+        },
+    ),
 }
 
-resp, err := client.Get("https://api.example.com/data")
+resp, err := client.Get("https://example.com")
 ```
 
-All outgoing requests will now be logged.
+### Notes
 
-#### Use with Resty
-
-```go
-client := resty.New()
-
-client.SetTransport(
-    transport.NewHTTPLoggingTransport(
-        nil,
-        logger,
-    ),
-)
-```
-
-All Resty requests will be logged automatically.
-
-### Logged Fields
-
-Each request generates a `logging.Entry` containing:
-
-* `Timestamp`
-* `Severity` (INFO or ERROR)
-* `Method`
-* `URL`
-* `Status`
-* `Latency`
-* `Error`
-* `RequestBody`
-* `ResponseBody`
-* `Context`
-
-### Severity Rules
-
-Severity is automatically set to:
-
-* `INFO` when the request succeeds
-* `ERROR` when the transport returns an error
+* When `DumpBody` is enabled, request and response bodies are logged as `json.RawMessage`.
+* Body dumping increases memory usage and should be used cautiously in production.
+* Fully compatible with logging processors (masking, escape removal, etc.) and sinks (GCP, stdout).
