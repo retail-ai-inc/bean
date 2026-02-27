@@ -35,23 +35,15 @@ func NewLoggingTransport(
 }
 
 func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	start := time.Now()
-
-	var reqBody []byte
-	if t.Opt.DumpBody && req.Body != nil {
-		reqBody, _ = io.ReadAll(req.Body)
-		req.Body = io.NopCloser(bytes.NewBuffer(reqBody))
+	fields := map[string]any{
+		"method": req.Method,
+		"url":    req.URL.String(),
 	}
 
-	resp, err := t.Base.RoundTrip(req)
-	latency := time.Since(start)
-
-	fields := map[string]any{
-		"http": map[string]any{
-			"method":     req.Method,
-			"url":        req.URL.String(),
-			"latency_ms": latency.Milliseconds(),
-		},
+	if t.Opt.DumpBody && req != nil && req.Body != nil {
+		reqBody, _ := io.ReadAll(req.Body)
+		req.Body = io.NopCloser(bytes.NewBuffer(reqBody))
+		fields["request_body"] = string(reqBody)
 	}
 
 	if len(t.Opt.AllowedHeaders) > 0 {
@@ -61,15 +53,16 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 				reqHeader[h] = v
 			}
 		}
-		fields["http"].(map[string]any)["request_header"] = reqHeader
+		fields["request_header"] = reqHeader
 	}
+
+	start := time.Now()
+	resp, err := t.Base.RoundTrip(req)
+
+	fields["latency_ms"] = time.Since(start).Milliseconds()
 
 	if resp != nil {
-		fields["http"].(map[string]any)["status"] = resp.StatusCode
-	}
-
-	if t.Opt.DumpBody && len(reqBody) > 0 {
-		fields["request_body"] = string(reqBody)
+		fields["status"] = resp.StatusCode
 	}
 
 	if t.Opt.DumpBody && resp != nil && resp.Body != nil {
