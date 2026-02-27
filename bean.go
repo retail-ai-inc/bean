@@ -263,20 +263,6 @@ func NewEcho() (*echo.Echo, func() error) {
 	// Return `404 Not Found` if a wrong API route been called.
 	e.Use(middleware.MethodNotAllowedAndRouteNotFound())
 
-	// IMPORTANT: Configure access log and body dumper. (can be turn off)
-	if config.Bean.AccessLog.On {
-		accessLogConfig := middleware.LoggerConfig{
-			Skipper:        regex.InitAccessLogPathSkipper(config.Bean.AccessLog.SkipEndpoints),
-			BodyDump:       config.Bean.AccessLog.BodyDump,
-			RequestHeader:  config.Bean.AccessLog.ReqHeaderParam,
-			ResponseHeader: config.Bean.AccessLog.ResHeaderParam,
-			Logger:         config.Bean.AccessLog.Logger,
-		}
-
-		accessLogger := middleware.AccessLoggerWithConfig(accessLogConfig)
-		e.Use(accessLogger)
-	}
-
 	// Add context timeout.
 	// If no timeout is set or timeout=0, skip adding the timeout middleware.
 	timeoutDur := config.Bean.HTTP.Timeout
@@ -326,6 +312,20 @@ func NewEcho() (*echo.Echo, func() error) {
 		}
 	}
 	closes = append(closes, flushSentry)
+
+	// IMPORTANT: Configure access log and body dumper. (can be turn off)
+	if config.Bean.AccessLog.On {
+		accessLogConfig := middleware.LoggerConfig{
+			Skipper:        regex.InitAccessLogPathSkipper(config.Bean.AccessLog.SkipEndpoints),
+			BodyDump:       config.Bean.AccessLog.BodyDump,
+			RequestHeader:  config.Bean.AccessLog.ReqHeaderParam,
+			ResponseHeader: config.Bean.AccessLog.ResHeaderParam,
+			Logger:         config.Bean.AccessLog.Logger,
+		}
+
+		accessLogger := middleware.AccessLoggerWithConfig(accessLogConfig)
+		e.Use(accessLogger)
+	}
 
 	// Some pre-build middleware initialization.
 	e.Pre(echomiddleware.RemoveTrailingSlash())
