@@ -64,13 +64,13 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		fields["http"].(map[string]any)["request_header"] = reqHeader
 	}
 
-	if err != nil {
-		fields["error"] = err.Error()
-		t.Logger.Error(req.Context(), "outbound_http", fields)
-		return resp, err
+	if resp != nil {
+		fields["http"].(map[string]any)["status"] = resp.StatusCode
 	}
 
-	fields["http"].(map[string]any)["status"] = resp.StatusCode
+	if t.Opt.DumpBody && len(reqBody) > 0 {
+		fields["request_body"] = string(reqBody)
+	}
 
 	if t.Opt.DumpBody && resp != nil && resp.Body != nil {
 		limited := io.LimitReader(resp.Body, t.Opt.MaxBodySize)
@@ -78,8 +78,13 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		respBody, _ := io.ReadAll(io.TeeReader(limited, buf))
 		resp.Body = io.NopCloser(io.MultiReader(buf, resp.Body))
 
-		fields["request_body"] = string(reqBody)
 		fields["response_body"] = string(respBody)
+	}
+
+	if err != nil {
+		fields["error"] = err.Error()
+		t.Logger.Error(req.Context(), "outbound_http", fields)
+		return resp, err
 	}
 
 	t.Logger.Info(req.Context(), "outbound_http", fields)
