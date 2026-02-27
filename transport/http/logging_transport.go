@@ -2,7 +2,6 @@ package http
 
 import (
 	"bytes"
-	"encoding/json"
 	"github.com/retail-ai-inc/bean/v2/logging"
 	"io"
 	"net/http"
@@ -22,6 +21,10 @@ func NewLoggingTransport(
 ) http.RoundTripper {
 	if base == nil {
 		base = http.DefaultTransport
+	}
+
+	if opt.MaxBodySize == 0 {
+		opt.MaxBodySize = 64 * 1024
 	}
 
 	return &LoggingTransport{
@@ -51,6 +54,16 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		},
 	}
 
+	if len(t.Opt.AllowedHeaders) > 0 {
+		reqHeader := make(map[string]any)
+		for _, h := range t.Opt.AllowedHeaders {
+			if v := req.Header.Get(h); v != "" {
+				reqHeader[h] = v
+			}
+		}
+		fields["http"].(map[string]any)["request_header"] = reqHeader
+	}
+
 	if err != nil {
 		fields["error"] = err.Error()
 		t.Logger.Error(req.Context(), "outbound_http", fields)
@@ -60,11 +73,13 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	fields["http"].(map[string]any)["status"] = resp.StatusCode
 
 	if t.Opt.DumpBody && resp != nil && resp.Body != nil {
-		respBody, _ := io.ReadAll(resp.Body)
-		resp.Body = io.NopCloser(bytes.NewBuffer(respBody))
+		limited := io.LimitReader(resp.Body, t.Opt.MaxBodySize)
+		buf := &bytes.Buffer{}
+		respBody, _ := io.ReadAll(io.TeeReader(limited, buf))
+		resp.Body = io.NopCloser(io.MultiReader(buf, resp.Body))
 
-		fields["request_body"] = json.RawMessage(reqBody)
-		fields["response_body"] = json.RawMessage(respBody)
+		fields["request_body"] = string(reqBody)
+		fields["response_body"] = string(respBody)
 	}
 
 	t.Logger.Info(req.Context(), "outbound_http", fields)

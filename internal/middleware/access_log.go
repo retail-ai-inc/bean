@@ -25,7 +25,6 @@ package middleware
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -173,12 +172,12 @@ func logBodyDump(
 
 	// ---- structured request body ----
 	if len(reqBody) > 0 {
-		fields["request_body"] = json.RawMessage(reqBody)
+		fields["request_body"] = string(reqBody)
 	}
 
 	// ---- structured response body ----
 	if resBody != nil && resBody.Len() > 0 {
-		fields["response_body"] = json.RawMessage(resBody.Bytes())
+		fields["response_body"] = string(resBody.Bytes())
 	}
 
 	// ---- request headers ----
