@@ -499,6 +499,8 @@ transport := httptransport.NewLoggingTransport(
 	gcpLogger,
     httptransport.LoggingOptions{
         DumpBody: true,
+		MaxBodySize: 64*1024,
+		AllowedHeaders: []string{"Authorization"},
     },
 )
 
