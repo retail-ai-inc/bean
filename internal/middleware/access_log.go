@@ -177,7 +177,7 @@ func logBodyDump(
 
 	// ---- structured response body ----
 	if resBody != nil && resBody.Len() > 0 {
-		fields["response_body"] = string(resBody.Bytes())
+		fields["response_body"] = resBody.String()
 	}
 
 	// ---- request headers ----
