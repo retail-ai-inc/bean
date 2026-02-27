@@ -119,14 +119,13 @@ func logAccess(config LoggerConfig, c echo.Context) {
 	req := c.Request()
 
 	fields := map[string]any{
-		"id":              req.Header.Get(echo.HeaderXRequestID),
-		"remote_ip":       c.RealIP(),
-		"host":            req.Host,
-		"method":          req.Method,
-		"uri":             req.RequestURI,
-		"user_agent":      req.UserAgent(),
-		"bytes_in":        req.Header.Get(echo.HeaderContentLength),
-		"X-Forwarded-For": req.Header.Get("X-Forwarded-For"),
+		"id":         req.Header.Get(echo.HeaderXRequestID),
+		"remote_ip":  c.RealIP(),
+		"host":       req.Host,
+		"method":     req.Method,
+		"uri":        req.RequestURI,
+		"user_agent": req.UserAgent(),
+		"bytes_in":   req.Header.Get(echo.HeaderContentLength),
 	}
 
 	if len(config.RequestHeader) > 0 {
