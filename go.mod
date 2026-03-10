@@ -1,8 +1,6 @@
 module github.com/retail-ai-inc/bean/v2
 
-go 1.24.0
-
-toolchain go1.24.1
+go 1.25.0
 
 require (
 	github.com/alphadose/haxmap v1.4.1
@@ -27,7 +25,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/valyala/fasttemplate v1.2.2
 	go.mongodb.org/mongo-driver v1.17.9
-	golang.org/x/sync v0.19.0
+	golang.org/x/sync v0.20.0
 	golang.org/x/tools v0.42.0
 	google.golang.org/grpc v1.79.1
 	gorm.io/datatypes v1.2.7
