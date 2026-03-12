@@ -25,6 +25,21 @@ A web framework written in GO on-top of `echo` to ease your application developm
   - [Bean Config](#bean-config)
   - [TenantAlterDbHostParam](#tenantalterdbhostparam)
     - [Sample Project](#sample-project)
+  - [Logging Module](#logging-module)
+    - [Components](#components)
+        - [Logger](#logger)
+        - [Extractors](#extractors)
+        - [Pipeline](#pipeline)
+        - [Processors](#processors)
+        - [Sink](#sink)
+    - [Features](#features)
+    - [Example](#example)
+    - [Core Packages](#core-packages)
+    - [Design Principles](#design-principles)
+  - [HTTP Logging Transport](#http-logging-transport)
+    - [Features](#features-1)
+    - [Example](#example)
+    - [Notes](#notes)  
 
 ## How to use
 
@@ -349,6 +364,154 @@ Bean configs default values are picked from the `env.json` file, but can be upda
   - `Subsystem`: represents the subsystem name for the Prometheus metrics. The default value is `echo` if empty.
 
 </details>
+
+## Logging Module
+
+The `logging` module provides a structured, pipeline-based logging system designed for extensibility and cloud-native environments.
+
+It follows a composable architecture:
+
+```text
+Logger → Extractors → Pipeline → Processors → Sink
+```
+
+### Components
+
+#### Logger
+Application entry point (`Info`, `Error`, etc.).
+Creates structured log entries and triggers the processing pipeline.
+
+#### Extractors
+Extract contextual metadata from `context.Context`.
+Typical use cases:
+
+* Trace ID injection
+* Span ID propagation
+* Sentry trace extraction
+* Request-scoped metadata enrichment
+
+Extractors run before processors and enrich the log entry.
+
+#### Pipeline
+Coordinates the full log processing flow.
+
+#### Processors
+Transform or modify log entries before output.
+Examples:
+
+* Mask sensitive fields
+* Remove JSON escape characters
+* Normalize field structures
+
+Processors are composable and ordered.
+
+#### Sink
+Final output destination.
+Examples:
+
+* GCP Logging
+* Stdout
+
+### Features
+
+* Structured (map-based) logging
+* Context-aware trace extraction
+* Processor pipeline architecture
+* Pluggable sinks
+* JSON-first design
+* Type-safe handling
+* Cloud-ready (GCP-compatible)
+
+### Example
+
+```go
+sentryExtractor := extractors.NewSentryExtractor()
+gcpSink, _ := sinks.NewGcpSink(
+    sinks.Options{
+        ProjectID:  "",
+        LogType:    "",
+        OutputFile: "",
+    },
+)
+pipeline := logging.NewPipeline(
+    gcpSink,
+    processors.NewMaskProcessor([]string{"password"}),
+    processors.NewRemoveEscapeProcessor(),
+)
+
+logger := logging.New(
+    sentryExtractor,
+    pipeline,
+)
+
+logger.Info(ctx, "outbound_http", map[string]any{
+    "http": map[string]any{
+        "method": "GET",
+        "url":    "https://example.com",
+    },
+})
+```
+
+### Core Packages
+
+* `logging/types` — Core log structures (`Entry`, `Severity`, etc.)
+* `logging/extractors` — Context metadata extraction
+* `logging/processors` — Log transformation components
+* `logging/sinks` — Output implementations
+* `logging/pipeline` — Processing orchestration
+
+### Design Principles
+
+* Separation of concerns (extraction / transformation / output)
+* No template-based string formatting
+* Composable processing stages
+* Minimal framework coupling
+* Extensible without modifying core logic
+
+## HTTP Logging Transport
+
+`transport/http` provides a custom `http.RoundTripper` that logs outbound HTTP requests using the structured `logging.Logger`.
+
+It captures:
+
+* HTTP method
+* Request URL
+* Response status
+* Latency (ms)
+* Optional request/response body
+* Error information
+
+### Features
+
+* Decorator pattern over `http.RoundTripper`
+* Structured logging (pipeline-compatible)
+* Optional body dumping via `Options.DumpBody`
+* Safe body re-wrapping using `io.NopCloser`
+* Emits event name: `"outbound_http"`
+
+### Example
+
+```go
+client = resty.New()
+
+transport := httptransport.NewLoggingTransport(
+	nil, 
+	gcpLogger,
+    httptransport.LoggingOptions{
+        DumpBody: true,
+		MaxBodySize: 64*1024,
+		AllowedHeaders: []string{"Authorization"},
+    },
+)
+
+client.SetTransport(transport)
+```
+
+### Notes
+
+* When `DumpBody` is enabled, request and response bodies are logged as `json.RawMessage`.
+* Body dumping increases memory usage and should be used cautiously in production.
+* Fully compatible with logging processors (masking, escape removal, etc.) and sinks (GCP, stdout).
 
 ## TenantAlterDbHostParam
 
