@@ -235,7 +235,7 @@ func NewEcho() (*echo.Echo, func() error) {
 	e.Logger.SetLevel(elog.DEBUG)
 
 	// Initialize `BeanLogger` global variable using `e.Logger`.
-	blog.Set(e.Logger)
+	_ = blog.Init(e.Logger)
 
 	// Adds a `Server` header to the response.
 	e.Use(middleware.ServerHeader(config.Bean.ProjectName, helpers.CurrVersion()))
@@ -320,7 +320,7 @@ func NewEcho() (*echo.Echo, func() error) {
 			BodyDump:       config.Bean.AccessLog.BodyDump,
 			RequestHeader:  config.Bean.AccessLog.ReqHeaderParam,
 			ResponseHeader: config.Bean.AccessLog.ResHeaderParam,
-			Logger:         config.Bean.AccessLog.Logger,
+			Logger:         blog.Logger(),
 		}
 
 		accessLogger := middleware.AccessLoggerWithConfig(accessLogConfig)

@@ -1,10 +1,12 @@
-package processors
+package log
 
 import (
 	"encoding/json"
-
-	"github.com/retail-ai-inc/bean/v2/logging/types"
 )
+
+type Processor interface {
+	Process(entry Entry) Entry
+}
 
 type MaskProcessor struct {
 	fields map[string]struct{}
@@ -18,7 +20,7 @@ func NewMaskProcessor(fields []string) *MaskProcessor {
 	return &MaskProcessor{fields: fm}
 }
 
-func (p *MaskProcessor) Process(entry types.Entry) types.Entry {
+func (p *MaskProcessor) Process(entry Entry) Entry {
 	if entry.Fields == nil {
 		return entry
 	}

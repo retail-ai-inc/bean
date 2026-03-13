@@ -2,21 +2,22 @@ package http
 
 import (
 	"bytes"
-	"github.com/retail-ai-inc/bean/v2/logging"
 	"io"
 	"net/http"
 	"time"
+
+	blog "github.com/retail-ai-inc/bean/v2/log"
 )
 
 type LoggingTransport struct {
-	Base   http.RoundTripper
-	Logger *logging.Logger
-	Opt    LoggingOptions
+	base   http.RoundTripper
+	logger blog.BeanLogger
+	opt    LoggingOptions
 }
 
 func NewLoggingTransport(
 	base http.RoundTripper,
-	logger *logging.Logger,
+	logger blog.BeanLogger,
 	opt LoggingOptions,
 ) http.RoundTripper {
 	if base == nil {
@@ -28,9 +29,9 @@ func NewLoggingTransport(
 	}
 
 	return &LoggingTransport{
-		Base:   base,
-		Logger: logger,
-		Opt:    opt,
+		base:   base,
+		logger: logger,
+		opt:    opt,
 	}
 }
 
@@ -40,15 +41,19 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		"url":    req.URL.String(),
 	}
 
-	if t.Opt.DumpBody && req != nil && req.Body != nil {
+	if t.opt.DumpBody && req != nil && req.Body != nil {
 		reqBody, _ := io.ReadAll(req.Body)
 		req.Body = io.NopCloser(bytes.NewBuffer(reqBody))
 		fields["request_body"] = string(reqBody)
 	}
 
-	if len(t.Opt.AllowedHeaders) > 0 {
+	if t.opt.LogType != "" {
+		fields["type"] = t.opt.LogType
+	}
+
+	if len(t.opt.AllowedHeaders) > 0 {
 		reqHeader := make(map[string]any)
-		for _, h := range t.Opt.AllowedHeaders {
+		for _, h := range t.opt.AllowedHeaders {
 			if v := req.Header.Get(h); v != "" {
 				reqHeader[h] = v
 			}
@@ -57,7 +62,7 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	}
 
 	start := time.Now()
-	resp, err := t.Base.RoundTrip(req)
+	resp, err := t.base.RoundTrip(req)
 
 	fields["latency_ms"] = time.Since(start).Milliseconds()
 
@@ -65,8 +70,8 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		fields["status"] = resp.StatusCode
 	}
 
-	if t.Opt.DumpBody && resp != nil && resp.Body != nil {
-		limited := io.LimitReader(resp.Body, t.Opt.MaxBodySize)
+	if t.opt.DumpBody && resp != nil && resp.Body != nil {
+		limited := io.LimitReader(resp.Body, t.opt.MaxBodySize)
 		buf := &bytes.Buffer{}
 		respBody, _ := io.ReadAll(io.TeeReader(limited, buf))
 		resp.Body = io.NopCloser(io.MultiReader(buf, resp.Body))
@@ -76,11 +81,11 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 
 	if err != nil {
 		fields["error"] = err.Error()
-		t.Logger.Error(req.Context(), "outbound_http", fields)
+		t.logger.TraceError(req.Context(), "outbound_http", fields)
 		return resp, err
 	}
 
-	t.Logger.Info(req.Context(), "outbound_http", fields)
+	t.logger.TraceInfo(req.Context(), "outbound_http", fields)
 
 	return resp, nil
 }

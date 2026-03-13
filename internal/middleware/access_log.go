@@ -34,7 +34,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
-	"github.com/retail-ai-inc/bean/v2/logging"
+	"github.com/retail-ai-inc/bean/v2/log"
 )
 
 type LoggerConfig struct {
@@ -42,7 +42,7 @@ type LoggerConfig struct {
 	BodyDump       bool
 	RequestHeader  []string
 	ResponseHeader []string
-	Logger         *logging.Logger
+	Logger         log.BeanLogger
 }
 
 type bodyDumpResponseWriter struct {

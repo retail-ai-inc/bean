@@ -7,7 +7,6 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/retail-ai-inc/bean/v2/internal/dbdrivers"
-	"github.com/retail-ai-inc/bean/v2/logging"
 	"github.com/spf13/viper"
 )
 
@@ -27,7 +26,6 @@ type Config struct {
 		ReqHeaderParam    []string
 		ResHeaderParam    []string
 		SkipEndpoints     []string
-		Logger            *logging.Logger
 	}
 	Prometheus struct {
 		On            bool
@@ -140,6 +138,7 @@ type Config struct {
 
 type Sentry struct {
 	On                  bool
+	ProjectID           string
 	Debug               bool
 	Dsn                 string
 	Timeout             time.Duration
