@@ -27,19 +27,19 @@ A web framework written in GO on-top of `echo` to ease your application developm
     - [Sample Project](#sample-project)
   - [Logging Module](#logging-module)
     - [Components](#components)
-        - [Logger](#logger)
-        - [Extractors](#extractors)
-        - [Pipeline](#pipeline)
-        - [Processors](#processors)
-        - [Sink](#sink)
+      - [Logger](#logger)
+      - [Extractors](#extractors)
+      - [Pipeline](#pipeline)
+      - [Processors](#processors)
+      - [Sink](#sink)
     - [Features](#features)
     - [Example](#example)
-    - [Core Packages](#core-packages)
+    - [Core Package](#core-package)
     - [Design Principles](#design-principles)
   - [HTTP Logging Transport](#http-logging-transport)
     - [Features](#features-1)
     - [Example](#example)
-    - [Notes](#notes)  
+    - [Notes](#notes)
 
 ## How to use
 
@@ -80,7 +80,7 @@ make build
 
 ## Service-Repository Pattern
 
-Bean is using service repository pattern for any database, file or external transaction. The `repository` provides a collection of interfaces to access data stored in a database, file system or external service. Data is returned in the form of `structs` or `interface`. The main idea to use `Repository Pattern` is to create a bridge between *models* and *handlers*. Here is a simple pictorial map to understand the service-repository pattern in a simple manner:
+Bean is using service repository pattern for any database, file or external transaction. The `repository` provides a collection of interfaces to access data stored in a database, file system or external service. Data is returned in the form of `structs` or `interface`. The main idea to use `Repository Pattern` is to create a bridge between _models_ and _handlers_. Here is a simple pictorial map to understand the service-repository pattern in a simple manner:
 
 ![Service_Repository_Pattern](static/service_repository_pattern.png)
 
@@ -155,9 +155,9 @@ The logger can be used in any of the layers `handler`, `service`, `repository`.
 
 Example:-
 
-  ```sh
-  log.Logger().Debugf("This is a debug message for request %s", c.Request().URL.Path)
-  ```
+```sh
+log.Logger().Debugf("This is a debug message for request %s", c.Request().URL.Path)
+```
 
 ## Built-In testing
 
@@ -320,22 +320,22 @@ Please refer to the [`helpers` package](helpers/) in this codebase or [go doc](h
 
 Bean provides the [`config.Config`](https://pkg.go.dev/github.com/retail-ai-inc/bean/v2/config#Config) struct to enable the user to tweak the configuration of their consumer project as per their requirement .
 Bean configs default values are picked from the `env.json` file, but can be updated during runtime as well.
- <https://pkg.go.dev/github.com/retail-ai-inc/bean#Config>
+<https://pkg.go.dev/github.com/retail-ai-inc/bean#Config>
 
 <details>
   <summary>config.Config</summary>
 
-  Some of the configurable parameters are:
+Some of the configurable parameters are:
 
 - `Environment`: represents the environment in which the project is running (e.g. development, production, etc.)
 
 - `DebugLogPath`: represents the path of the debug log file.
 
 - `Secret`: represents a secret string key used for encryption and decryption in the project.
- Example Usecase:- while encoding/decoding JWTs.
+  Example Usecase:- while encoding/decoding JWTs.
 
 - `HTTP`: represents a custom wrapper to deal with HTTP/HTTPS requests.
- The wrapper provides by default some common features but also some exclusive features like:-
+  The wrapper provides by default some common features but also some exclusive features like:-
   - `BodyLimit`: Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
 
   - `IsHttpsRedirect`: A boolean that represents whether to redirect HTTP requests to HTTPS or not.
@@ -346,7 +346,7 @@ Bean configs default values are picked from the `env.json` file, but can be upda
     Example:- `["DELETE","GET","POST","PUT"]`
 
   - `SSL`: used when web server uses HTTPS for communication.
-   The SSL struct contains the following parameters:-
+    The SSL struct contains the following parameters:-
     - `On`: A boolean that represents whether SSL is enabled or not.
 
     - `CertFile`: represents the path of the certificate file.
@@ -356,7 +356,7 @@ Bean configs default values are picked from the `env.json` file, but can be upda
     - `MinTLSVersion`: represents the minimum TLS version required.
 
 - `Prometheus`: represents the configuration for the Prometheus metrics.
- The Prometheus struct contains the following parameters:-
+  The Prometheus struct contains the following parameters:-
   - `On`: A boolean that represents whether Prometheus is enabled or not.
 
   - `SkipEndpoints`: represents the endpoints/paths to skip from Prometheus metrics.
@@ -367,7 +367,7 @@ Bean configs default values are picked from the `env.json` file, but can be upda
 
 ## Logging Module
 
-The `logging` module provides a structured, pipeline-based logging system designed for extensibility and cloud-native environments.
+The `log` package (`github.com/retail-ai-inc/bean/v2/log`) provides a structured, pipeline-based logging system designed for extensibility and cloud-native environments.
 
 It follows a composable architecture:
 
@@ -378,140 +378,145 @@ Logger → Extractors → Pipeline → Processors → Sink
 ### Components
 
 #### Logger
-Application entry point (`Info`, `Error`, etc.).
-Creates structured log entries and triggers the processing pipeline.
+
+Application entry point. The public interface is `BeanLogger`, which extends `echo.Logger` and adds:
+
+- `TraceInfo(ctx context.Context, level string, fields map[string]any)` — structured info-level log with trace context
+- `TraceError(ctx context.Context, level string, fields map[string]any)` — structured error-level log with trace context
+
+The logger builds an `Entry` (timestamp, severity, level, fields, trace), runs it through the pipeline, then writes to the sink.
 
 #### Extractors
-Extract contextual metadata from `context.Context`.
-Typical use cases:
 
-* Trace ID injection
-* Span ID propagation
-* Sentry trace extraction
-* Request-scoped metadata enrichment
+Extract contextual metadata from `context.Context` into the log `Entry.Trace`. Implement the `TraceExtractor` interface:
 
-Extractors run before processors and enrich the log entry.
+- `Extract(ctx context.Context) Trace`
+
+The package provides `NewSentryExtractor()` to fill `TraceID` and `SpanID` from Sentry's span context. Extractors run when each log entry is created, before the pipeline.
 
 #### Pipeline
-Coordinates the full log processing flow.
+
+`Pipeline` runs a list of processors in order, then writes the result to a `Sink`. Created with `NewPipeline(sink Sink, processors ...Processor)`.
 
 #### Processors
-Transform or modify log entries before output.
-Examples:
 
-* Mask sensitive fields
-* Remove JSON escape characters
-* Normalize field structures
+Transform or modify log entries before output. Implement the `Processor` interface (`Process(entry Entry) Entry`). Built-in processors:
 
-Processors are composable and ordered.
+- **MaskProcessor** — `NewMaskProcessor(fields []string)` masks sensitive field values (e.g. `"password"`).
+- **RemoveEscapeProcessor** — `NewRemoveEscapeProcessor()` parses and unescapes JSON strings in fields so nested structures are logged as objects rather than escaped strings.
+
+Processors are composable and applied in pipeline order.
 
 #### Sink
-Final output destination.
-Examples:
 
-* GCP Logging
-* Stdout
+Final output destination. Implement the `Sink` interface (`Write(entry Entry) error`). The package provides `NewSink(writer io.Writer, projectID string)` which writes JSON lines (GCP-compatible: timestamp, severity, level, fields, optional `logging.googleapis.com/trace`).
 
 ### Features
 
-* Structured (map-based) logging
-* Context-aware trace extraction
-* Processor pipeline architecture
-* Pluggable sinks
-* JSON-first design
-* Type-safe handling
-* Cloud-ready (GCP-compatible)
+- Structured (map-based) logging
+- Context-aware trace extraction (e.g. Sentry)
+- Processor pipeline (mask, remove escape)
+- Pluggable sink (e.g. stdout, any `io.Writer`)
+- JSON-first design
+- Cloud-ready (GCP trace format)
 
 ### Example
 
+Typical usage: initialize once with Echo’s logger, then call `TraceInfo` / `TraceError`:
+
 ```go
-sentryExtractor := extractors.NewSentryExtractor()
-gcpSink, _ := sinks.NewGcpSink(
-    sinks.Options{
-        ProjectID:  "",
-        LogType:    "",
-        OutputFile: "",
-    },
-)
-pipeline := logging.NewPipeline(
-    gcpSink,
-    processors.NewMaskProcessor([]string{"password"}),
-    processors.NewRemoveEscapeProcessor(),
+import (
+    "github.com/labstack/echo/v4"
+    "github.com/retail-ai-inc/bean/v2/log"
 )
 
-logger := logging.New(
-    sentryExtractor,
-    pipeline,
-)
+// At startup (e.g. after loading config)
+e := echo.New()
+blogger := log.Init(e.Logger) // uses config.Bean.Sentry.ProjectID and default mask fields
 
-logger.Info(ctx, "outbound_http", map[string]any{
+// In handlers or services
+blogger.TraceInfo(ctx, "outbound_http", map[string]any{
     "http": map[string]any{
         "method": "GET",
         "url":    "https://example.com",
     },
 })
+blogger.TraceError(ctx, "payment_failed", map[string]any{"error": err.Error()})
 ```
 
-### Core Packages
+Custom logger (e.g. different project ID or mask fields):
 
-* `logging/types` — Core log structures (`Entry`, `Severity`, etc.)
-* `logging/extractors` — Context metadata extraction
-* `logging/processors` — Log transformation components
-* `logging/sinks` — Output implementations
-* `logging/pipeline` — Processing orchestration
+```go
+blogger, err := log.NewLogger(
+    e.Logger,
+    log.WithProjectID("my-gcp-project"),
+    log.WithMaskFields([]string{"password", "token"}),
+)
+// Use blogger as BeanLogger
+```
+
+Internally, `NewLogger` builds: Sentry extractor → Pipeline(MaskProcessor, RemoveEscapeProcessor) → Sink(echo.Logger.Output(), projectID).
+
+### Core Package
+
+- **`log`** (`github.com/retail-ai-inc/bean/v2/log`) — Types: `Entry`, `Severity`, `Trace`, `BeanLogger`. Constructors: `NewLogger`, `NewSink`, `NewPipeline`, `NewMaskProcessor`, `NewRemoveEscapeProcessor`, `NewSentryExtractor`. Global init: `Init`, `Logger`.
 
 ### Design Principles
 
-* Separation of concerns (extraction / transformation / output)
-* No template-based string formatting
-* Composable processing stages
-* Minimal framework coupling
-* Extensible without modifying core logic
+- Separation of concerns (extraction → transformation → output)
+- Composable processing stages
+- Minimal framework coupling (Echo logger + optional Sentry)
+- Extensible via custom processors and sinks
 
 ## HTTP Logging Transport
 
-`transport/http` provides a custom `http.RoundTripper` that logs outbound HTTP requests using the structured `logging.Logger`.
+The `transport/http` package provides a custom `http.RoundTripper` that logs outbound HTTP requests using the structured `log.BeanLogger`.
 
 It captures:
 
-* HTTP method
-* Request URL
-* Response status
-* Latency (ms)
-* Optional request/response body
-* Error information
+- HTTP method and URL
+- Response status and latency (ms)
+- Optional request/response body (when `DumpBody` is true)
+- Error message on failure
+- Optional request headers (via `AllowedHeaders`)
 
 ### Features
 
-* Decorator pattern over `http.RoundTripper`
-* Structured logging (pipeline-compatible)
-* Optional body dumping via `Options.DumpBody`
-* Safe body re-wrapping using `io.NopCloser`
-* Emits event name: `"outbound_http"`
+- Wraps any `http.RoundTripper` (nil uses `http.DefaultTransport`)
+- Logs via `BeanLogger.TraceInfo` (success) or `TraceError` (failure) with level `"outbound_http"`
+- Optional body dumping via `LoggingOptions.DumpBody`; `MaxBodySize` caps response body size (default 64KB)
+- Safe body re-read with `io.NopCloser` so the request can still be sent
+- Compatible with the log pipeline (masking, escape removal, sink)
 
 ### Example
 
 ```go
-client = resty.New()
+import (
+    "github.com/retail-ai-inc/bean/v2/log"
+    "github.com/retail-ai-inc/bean/v2/transport/http"
+)
 
-transport := httptransport.NewLoggingTransport(
-	nil, 
-	gcpLogger,
-    httptransport.LoggingOptions{
-        DumpBody: true,
-		MaxBodySize: 64*1024,
-		AllowedHeaders: []string{"Authorization"},
+// logger is a log.BeanLogger (e.g. from log.Init(e.Logger) or log.NewLogger(...))
+transport := http.NewLoggingTransport(
+    nil, // base RoundTripper; nil = http.DefaultTransport
+    logger,
+    http.LoggingOptions{
+        DumpBody:       true,
+        MaxBodySize:    64 * 1024,
+        AllowedHeaders: []string{"Authorization"},
+        LogType:        "my-service",
     },
 )
 
+client := resty.New()
 client.SetTransport(transport)
 ```
 
 ### Notes
 
-* When `DumpBody` is enabled, request and response bodies are logged as `json.RawMessage`.
-* Body dumping increases memory usage and should be used cautiously in production.
-* Fully compatible with logging processors (masking, escape removal, etc.) and sinks (GCP, stdout).
+- When `DumpBody` is enabled, request and response bodies are included in the log fields and go through the log pipeline (e.g. masking, escape removal).
+- Body dumping increases memory use; use cautiously in production.
+- `LogType` is written into the log fields as `"type"` for filtering in GCP or other backends.
 
 ## TenantAlterDbHostParam
 
@@ -519,9 +524,9 @@ The `TenantAlterDbHostParam` is helful in multitenant scenarios when we need to 
 cloudfunction or cron and you cannot connect your memorystore/SQL/mongo server from
 cloudfunction/VM using the usual `host` ip.
 
-  ```sh
-  bean.TenantAlterDbHostParam = "gcpHost"
-  ```
+```sh
+bean.TenantAlterDbHostParam = "gcpHost"
+```
 
 ### Sample Project
 
