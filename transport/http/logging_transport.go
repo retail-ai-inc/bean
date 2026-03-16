@@ -13,13 +13,13 @@ import (
 
 type LoggingTransport struct {
 	base   http.RoundTripper
-	logger blog.BeanLogger
+	logger blog.AccessLogger
 	opt    LoggingOptions
 }
 
 func NewLoggingTransport(
 	base http.RoundTripper,
-	logger blog.BeanLogger,
+	logger blog.AccessLogger,
 	opt LoggingOptions,
 ) http.RoundTripper {
 	if base == nil {

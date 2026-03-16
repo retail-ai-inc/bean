@@ -42,7 +42,7 @@ type LoggerConfig struct {
 	BodyDump       bool
 	RequestHeader  []string
 	ResponseHeader []string
-	Logger         log.BeanLogger
+	Logger         log.AccessLogger
 }
 
 type bodyDumpResponseWriter struct {
