@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/labstack/echo/v4"
+	bctx "github.com/retail-ai-inc/bean/v2/context"
 	blog "github.com/retail-ai-inc/bean/v2/log"
 )
 
@@ -51,17 +53,21 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		fields["type"] = t.opt.LogType
 	}
 
-	if len(t.opt.AllowedHeaders) > 0 {
-		reqHeader := make(map[string]any)
-		for _, h := range t.opt.AllowedHeaders {
-			if v := req.Header.Get(h); v != "" {
-				reqHeader[h] = v
-			}
+	reqHeader := make(map[string]any)
+	if requestID, ok := bctx.GetRequestID(req.Context()); ok {
+		reqHeader[echo.HeaderXRequestID] = requestID
+	}
+	for _, h := range t.opt.AllowedHeaders {
+		if v := req.Header.Get(h); v != "" {
+			reqHeader[h] = v
 		}
+	}
+	if len(reqHeader) > 0 {
 		fields["request_header"] = reqHeader
 	}
 
 	start := time.Now()
+
 	resp, err := t.base.RoundTrip(req)
 
 	fields["latency_ms"] = time.Since(start).Milliseconds()
