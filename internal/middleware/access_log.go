@@ -138,7 +138,7 @@ func logAccess(config LoggerConfig, c echo.Context) {
 		fields["request_header"] = reqHeader
 	}
 
-	config.Logger.Info(
+	config.Logger.TraceInfo(
 		req.Context(),
 		"ACCESS",
 		fields,
@@ -173,12 +173,12 @@ func logBodyDump(
 
 	// ---- structured request body ----
 	if len(reqBody) > 0 {
-		fields["request_body"] = string(reqBody)
+		fields["request_body"] = reqBody
 	}
 
 	// ---- structured response body ----
 	if resBody != nil && resBody.Len() > 0 {
-		fields["response_body"] = resBody.String()
+		fields["response_body"] = resBody.Bytes()
 	}
 
 	// ---- request headers ----
@@ -203,7 +203,7 @@ func logBodyDump(
 		fields["response_header"] = resHeader
 	}
 
-	config.Logger.Info(
+	config.Logger.TraceInfo(
 		req.Context(),
 		"DUMP",
 		fields,

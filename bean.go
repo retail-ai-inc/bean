@@ -33,7 +33,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -226,7 +225,7 @@ func NewEcho() (*echo.Echo, func() error) {
 
 	// IMPORTANT: Configure debug log.
 	if config.Bean.DebugLogPath != "" {
-		if file, err := openFile(config.Bean.DebugLogPath); err != nil {
+		if file, err := helpers.OpenFile(config.Bean.DebugLogPath); err != nil {
 			e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
 		} else {
 			e.Logger.SetOutput(file)
@@ -679,20 +678,6 @@ func closer(closers []func() error) func() error {
 
 		return nil
 	}
-}
-
-// openFile opens and return the file, if doesn't exist, create it, or append to the file with the directory.
-func openFile(path string) (*os.File, error) {
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			if err := os.MkdirAll(filepath.Dir(path), 0o764); err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
-	}
-	return os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o664)
 }
 
 // ContextTimeout return custom context timeout middleware

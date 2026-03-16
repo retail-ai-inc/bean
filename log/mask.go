@@ -17,6 +17,7 @@ func NewMaskProcessor(fields []string) *MaskProcessor {
 	for _, f := range fields {
 		fm[f] = struct{}{}
 	}
+
 	return &MaskProcessor{fields: fm}
 }
 
@@ -38,7 +39,7 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 	case map[string]interface{}:
 		for k, vv := range v {
 			if _, ok := p.fields[k]; ok {
-				v[k] = "***"
+				v[k] = "****"
 			} else {
 				v[k] = p.maskValue(vv)
 			}
@@ -51,15 +52,15 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 		}
 		return v
 
-	case json.RawMessage:
+	case json.RawMessage, []byte:
 		var decoded interface{}
-		if err := json.Unmarshal(v, &decoded); err != nil {
-			return v
+		if err := json.Unmarshal(v.([]byte), &decoded); err != nil {
+			return string(v.([]byte))
 		}
 		masked := p.maskValue(decoded)
 		b, err := json.Marshal(masked)
 		if err != nil {
-			return v
+			return string(v.([]byte))
 		}
 		return json.RawMessage(b)
 

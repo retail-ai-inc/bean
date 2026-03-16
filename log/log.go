@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/v2/config"
+	"github.com/retail-ai-inc/bean/v2/helpers"
 )
 
 type Severity string
@@ -21,6 +22,10 @@ const (
 
 type BeanLogger interface {
 	echo.Logger
+	AccessLogger
+}
+
+type AccessLogger interface {
 	TraceInfo(ctx context.Context, level string, fields map[string]any)
 	TraceError(ctx context.Context, level string, fields map[string]any)
 }
@@ -45,8 +50,9 @@ type logger struct {
 }
 
 type Config struct {
-	projectID  string
-	maskFields []string
+	projectID     string
+	accessLogPath string
+	maskFields    []string
 }
 
 type LoggerOptions func(*Config)
@@ -54,6 +60,12 @@ type LoggerOptions func(*Config)
 func WithProjectID(projectID string) LoggerOptions {
 	return func(c *Config) {
 		c.projectID = projectID
+	}
+}
+
+func WithAccessLogPath(accessLogPath string) LoggerOptions {
+	return func(c *Config) {
+		c.accessLogPath = accessLogPath
 	}
 }
 
@@ -73,7 +85,16 @@ func NewLogger(elogger echo.Logger, options ...LoggerOptions) (*logger, error) {
 		option(config)
 	}
 
-	sink, err := NewSink(elogger.Output(), config.projectID)
+	output := elogger.Output()
+	if config.accessLogPath != "" {
+		file, err := helpers.OpenFile(config.accessLogPath)
+		if err != nil {
+			return nil, err
+		}
+		output = file
+	}
+
+	sink, err := NewSink(output, config.projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +138,11 @@ var (
 func Init(logger echo.Logger) BeanLogger {
 	once.Do(func() {
 		var err error
-		blogger, err = NewLogger(logger, WithProjectID(config.Bean.Sentry.ProjectID))
+		blogger, err = NewLogger(logger,
+			WithProjectID(config.Bean.Sentry.ProjectID),
+			WithMaskFields(config.Bean.AccessLog.BodyDumpMaskParam),
+			WithAccessLogPath(config.Bean.AccessLog.Path),
+		)
 		if err != nil {
 			panic(err)
 		}

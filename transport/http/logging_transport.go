@@ -44,7 +44,7 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	if t.opt.DumpBody && req != nil && req.Body != nil {
 		reqBody, _ := io.ReadAll(req.Body)
 		req.Body = io.NopCloser(bytes.NewBuffer(reqBody))
-		fields["request_body"] = string(reqBody)
+		fields["request_body"] = reqBody
 	}
 
 	if t.opt.LogType != "" {
@@ -76,7 +76,7 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		respBody, _ := io.ReadAll(io.TeeReader(limited, buf))
 		resp.Body = io.NopCloser(io.MultiReader(buf, resp.Body))
 
-		fields["response_body"] = string(respBody)
+		fields["response_body"] = respBody
 	}
 
 	if err != nil {
