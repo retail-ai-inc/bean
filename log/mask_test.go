@@ -225,6 +225,53 @@ func TestMaskProcessor_Process(t *testing.T) {
 			wantFieldsMasked: true,
 		},
 		{
+			name:         "mask_json_byte_slice_value",
+			fieldsToMask: []string{"secret_key"},
+			args: args{
+				entry: Entry{
+					Fields: map[string]interface{}{
+						"credentials": []byte(`{"secret_key":"private_secret_456","config":{"secret_key":"nested_secret_789"}}`),
+					},
+				},
+			},
+			wantFieldsMasked: true,
+		},
+		{
+			name:         "preserve_plain_string_value",
+			fieldsToMask: []string{"password"},
+			args: args{
+				entry: Entry{
+					Fields: map[string]interface{}{
+						"message": "hello world",
+					},
+				},
+			},
+			want: Entry{
+				Fields: map[string]interface{}{
+					"message": "hello world",
+				},
+			},
+			wantFieldsMasked: false,
+		},
+		{
+			name:         "mask_json_string_value",
+			fieldsToMask: []string{"secret_key"},
+			args: args{
+				entry: Entry{
+					Fields: map[string]interface{}{
+						// A JSON object stored as a string (common in logs).
+						"credentials": `{"api_key":"public_key_123","secret_key":"private_secret_456","config":{"secret_key":"nested_secret_789"}}`,
+					},
+				},
+			},
+			want: Entry{
+				Fields: map[string]interface{}{
+					"credentials": `{"api_key":"public_key_123","config":{"secret_key":"****"},"secret_key":"****"}`,
+				},
+			},
+			wantFieldsMasked: true,
+		},
+		{
 			name:         "handle_mixed_data_types",
 			fieldsToMask: []string{"password", "token"},
 			args: args{
@@ -287,16 +334,17 @@ func TestMaskProcessor_Process(t *testing.T) {
 				if tt.want.Fields != nil {
 					assert.Equal(t, tt.want.Fields, got.Fields)
 				} else {
-					// For RawMessage case, we need special handling
-					if credentials, ok := got.Fields["credentials"].(json.RawMessage); ok {
-						var parsed map[string]interface{}
-						err := json.Unmarshal(credentials, &parsed)
-						require.NoError(t, err)
-						assert.Equal(t, "****", parsed["secret_key"])
+					// For RawMessage/[]byte(JSON) cases, we need special handling and MUST assert type.
+					raw, ok := got.Fields["credentials"].(json.RawMessage)
+					require.True(t, ok, "credentials should be json.RawMessage after masking")
 
-						if config, ok := parsed["config"].(map[string]interface{}); ok {
-							assert.Equal(t, "****", config["secret_key"])
-						}
+					var parsed map[string]interface{}
+					err := json.Unmarshal(raw, &parsed)
+					require.NoError(t, err)
+					assert.Equal(t, "****", parsed["secret_key"])
+
+					if config, ok := parsed["config"].(map[string]interface{}); ok {
+						assert.Equal(t, "****", config["secret_key"])
 					}
 				}
 			} else {
@@ -370,6 +418,6 @@ func TestMaskProcessor_maskValue_EdgeCases(t *testing.T) {
 		result := processor.Process(entry)
 
 		// Should return the original malformed JSON
-		assert.Equal(t, string(malformedJSON), result.Fields["data"])
+		assert.Equal(t, malformedJSON, result.Fields["data"])
 	})
 }

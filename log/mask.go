@@ -44,37 +44,55 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 				v[k] = p.maskValue(vv)
 			}
 		}
-		return v
 
+		return v
 	case []interface{}:
 		for i, vv := range v {
 			v[i] = p.maskValue(vv)
 		}
-		return v
 
+		return v
+	case string:
+		var decoded interface{}
+		if err := json.Unmarshal([]byte(v), &decoded); err != nil {
+			return v
+		}
+		masked := p.maskValue(decoded)
+		b, err := json.Marshal(masked)
+		if err != nil {
+			return v
+		}
+
+		return string(b)
 	case json.RawMessage:
-		var decoded interface{}
-		if err := json.Unmarshal(v, &decoded); err != nil {
-			return string(v)
+		b, ok := p.maskJSONBytes([]byte(v))
+		if !ok {
+			return v
 		}
-		masked := p.maskValue(decoded)
-		b, err := json.Marshal(masked)
-		if err != nil {
-			return string(v)
-		}
-		return b
+
+		return json.RawMessage(b)
 	case []byte:
-		var decoded interface{}
-		if err := json.Unmarshal(v, &decoded); err != nil {
+		b, ok := p.maskJSONBytes(v)
+		if !ok {
 			return string(v)
 		}
-		masked := p.maskValue(decoded)
-		b, err := json.Marshal(masked)
-		if err != nil {
-			return string(v)
-		}
-		return b
+
+		return json.RawMessage(b)
 	default:
 		return v
 	}
+}
+
+// maskJSONBytes decodes JSON bytes, masks recursively, and re-encodes to JSON.
+func (p *MaskProcessor) maskJSONBytes(in []byte) ([]byte, bool) {
+	var decoded interface{}
+	if err := json.Unmarshal(in, &decoded); err != nil {
+		return nil, false
+	}
+	masked := p.maskValue(decoded)
+	out, err := json.Marshal(masked)
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }

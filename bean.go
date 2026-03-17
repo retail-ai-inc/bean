@@ -312,6 +312,18 @@ func NewEcho() (*echo.Echo, func() error) {
 	}
 	closes = append(closes, flushSentry)
 
+	// IMPORTANT: Request related middleware.
+	// Set the `X-Request-ID` header field if it doesn't exist.
+	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
+		// Whether to skip it depends on whether the `AccessLog.ReqHeaderParam` parameter contains `X-Request-Id`.
+		Skipper: func(c echo.Context) bool {
+			return !slices.Contains(config.Bean.AccessLog.ReqHeaderParam, echo.HeaderXRequestID)
+		},
+		Generator:        uuid.NewString,
+		RequestIDHandler: middleware.RequestIDHandler,
+		TargetHeader:     echo.HeaderXRequestID,
+	}))
+
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if config.Bean.AccessLog.On {
 		accessLogConfig := middleware.LoggerConfig{
@@ -332,18 +344,6 @@ func NewEcho() (*echo.Echo, func() error) {
 		e.Pre(echomiddleware.HTTPSRedirect())
 	}
 	e.Use(echomiddleware.Recover())
-
-	// IMPORTANT: Request related middleware.
-	// Set the `X-Request-ID` header field if it doesn't exist.
-	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
-		// Whether to skip it depends on whether the `AccessLog.ReqHeaderParam` parameter contains `X-Request-Id`.
-		Skipper: func(c echo.Context) bool {
-			return !slices.Contains(config.Bean.AccessLog.ReqHeaderParam, echo.HeaderXRequestID)
-		},
-		Generator:        uuid.NewString,
-		RequestIDHandler: middleware.RequestIDHandler,
-		TargetHeader:     echo.HeaderXRequestID,
-	}))
 
 	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
 	// This will help us to integrate `bean's` health into `k8s`.

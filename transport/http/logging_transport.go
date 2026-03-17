@@ -55,7 +55,7 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	if t.opt.DumpBody && req != nil && req.Body != nil {
 		reqBody, _ := io.ReadAll(req.Body)
 		req.Body = io.NopCloser(bytes.NewBuffer(reqBody))
-		fields["request_body"] = reqBody
+		fields["request_body"] = string(reqBody)
 	}
 
 	if t.opt.LogType != "" {
@@ -64,6 +64,7 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 
 	reqHeader := make(map[string]any)
 	if requestID, ok := bctx.GetRequestID(req.Context()); ok {
+		fields["id"] = requestID
 		reqHeader[echo.HeaderXRequestID] = requestID
 	}
 	for _, h := range t.opt.AllowedReqHeaders {
@@ -102,7 +103,7 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		respBody, _ := io.ReadAll(io.TeeReader(limited, buf))
 		resp.Body = io.NopCloser(io.MultiReader(buf, resp.Body))
 
-		fields["response_body"] = respBody
+		fields["response_body"] = string(respBody)
 	}
 
 	if err != nil {
