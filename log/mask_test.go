@@ -125,9 +125,9 @@ func TestMaskProcessor_Process(t *testing.T) {
 			want: Entry{
 				Fields: map[string]interface{}{
 					"username": "john_doe",
-					"password": "***",
+					"password": "****",
 					"email":    "john@example.com",
-					"token":    "***",
+					"token":    "****",
 				},
 			},
 			wantFieldsMasked: true,
@@ -155,12 +155,12 @@ func TestMaskProcessor_Process(t *testing.T) {
 				Fields: map[string]interface{}{
 					"user": map[string]interface{}{
 						"name":  "John Doe",
-						"ssn":   "***",
+						"ssn":   "****",
 						"phone": "555-1234",
 					},
 					"payment": map[string]interface{}{
 						"method":      "credit",
-						"credit_card": "***",
+						"credit_card": "****",
 						"amount":      100.50,
 					},
 				},
@@ -191,11 +191,11 @@ func TestMaskProcessor_Process(t *testing.T) {
 					"users": []interface{}{
 						map[string]interface{}{
 							"username": "user1",
-							"password": "***",
+							"password": "****",
 						},
 						map[string]interface{}{
 							"username": "user2",
-							"password": "***",
+							"password": "****",
 						},
 					},
 				},
@@ -244,9 +244,9 @@ func TestMaskProcessor_Process(t *testing.T) {
 				Fields: map[string]interface{}{
 					"id":       123,
 					"name":     "Test User",
-					"password": "***",
+					"password": "****",
 					"active":   true,
-					"token":    "***",
+					"token":    "****",
 					"score":    95.5,
 					"nil_val":  nil,
 				},
@@ -292,10 +292,10 @@ func TestMaskProcessor_Process(t *testing.T) {
 						var parsed map[string]interface{}
 						err := json.Unmarshal(credentials, &parsed)
 						require.NoError(t, err)
-						assert.Equal(t, "***", parsed["secret_key"])
+						assert.Equal(t, "****", parsed["secret_key"])
 
 						if config, ok := parsed["config"].(map[string]interface{}); ok {
-							assert.Equal(t, "***", config["secret_key"])
+							assert.Equal(t, "****", config["secret_key"])
 						}
 					}
 				}
@@ -332,7 +332,7 @@ func TestMaskProcessor_Process_PreserveMetadata(t *testing.T) {
 	assert.Equal(t, Error, result.Severity)
 	assert.Equal(t, "error", result.Level)
 	assert.Equal(t, trace, result.Trace)
-	assert.Equal(t, "***", result.Fields["password"])
+	assert.Equal(t, "****", result.Fields["password"])
 	assert.Equal(t, "test message", result.Fields["message"])
 }
 

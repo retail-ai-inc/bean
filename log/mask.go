@@ -52,18 +52,28 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 		}
 		return v
 
-	case json.RawMessage, []byte:
+	case json.RawMessage:
 		var decoded interface{}
-		if err := json.Unmarshal(v.([]byte), &decoded); err != nil {
-			return string(v.([]byte))
+		if err := json.Unmarshal(v, &decoded); err != nil {
+			return string(v)
 		}
 		masked := p.maskValue(decoded)
 		b, err := json.Marshal(masked)
 		if err != nil {
-			return string(v.([]byte))
+			return string(v)
 		}
-		return json.RawMessage(b)
-
+		return b
+	case []byte:
+		var decoded interface{}
+		if err := json.Unmarshal(v, &decoded); err != nil {
+			return string(v)
+		}
+		masked := p.maskValue(decoded)
+		b, err := json.Marshal(masked)
+		if err != nil {
+			return string(v)
+		}
+		return b
 	default:
 		return v
 	}
