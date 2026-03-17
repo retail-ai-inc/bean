@@ -370,6 +370,6 @@ func TestMaskProcessor_maskValue_EdgeCases(t *testing.T) {
 		result := processor.Process(entry)
 
 		// Should return the original malformed JSON
-		assert.Equal(t, malformedJSON, result.Fields["data"])
+		assert.Equal(t, string(malformedJSON), result.Fields["data"])
 	})
 }
