@@ -33,7 +33,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -226,7 +225,7 @@ func NewEcho() (*echo.Echo, func() error) {
 
 	// IMPORTANT: Configure debug log.
 	if config.Bean.DebugLogPath != "" {
-		if file, err := openFile(config.Bean.DebugLogPath); err != nil {
+		if file, err := helpers.OpenFile(config.Bean.DebugLogPath); err != nil {
 			e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
 		} else {
 			e.Logger.SetOutput(file)
@@ -235,7 +234,7 @@ func NewEcho() (*echo.Echo, func() error) {
 	e.Logger.SetLevel(elog.DEBUG)
 
 	// Initialize `BeanLogger` global variable using `e.Logger`.
-	blog.Set(e.Logger)
+	_ = blog.Init(e.Logger)
 
 	// Adds a `Server` header to the response.
 	e.Use(middleware.ServerHeader(config.Bean.ProjectName, helpers.CurrVersion()))
@@ -313,6 +312,18 @@ func NewEcho() (*echo.Echo, func() error) {
 	}
 	closes = append(closes, flushSentry)
 
+	// IMPORTANT: Request related middleware.
+	// Set the `X-Request-ID` header field if it doesn't exist.
+	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
+		// Whether to skip it depends on whether the `AccessLog.ReqHeaderParam` parameter contains `X-Request-Id`.
+		Skipper: func(c echo.Context) bool {
+			return !slices.Contains(config.Bean.AccessLog.ReqHeaderParam, echo.HeaderXRequestID)
+		},
+		Generator:        uuid.NewString,
+		RequestIDHandler: middleware.RequestIDHandler,
+		TargetHeader:     echo.HeaderXRequestID,
+	}))
+
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if config.Bean.AccessLog.On {
 		accessLogConfig := middleware.LoggerConfig{
@@ -320,7 +331,7 @@ func NewEcho() (*echo.Echo, func() error) {
 			BodyDump:       config.Bean.AccessLog.BodyDump,
 			RequestHeader:  config.Bean.AccessLog.ReqHeaderParam,
 			ResponseHeader: config.Bean.AccessLog.ResHeaderParam,
-			Logger:         config.Bean.AccessLog.Logger,
+			Logger:         blog.Logger(),
 		}
 
 		accessLogger := middleware.AccessLoggerWithConfig(accessLogConfig)
@@ -333,18 +344,6 @@ func NewEcho() (*echo.Echo, func() error) {
 		e.Pre(echomiddleware.HTTPSRedirect())
 	}
 	e.Use(echomiddleware.Recover())
-
-	// IMPORTANT: Request related middleware.
-	// Set the `X-Request-ID` header field if it doesn't exist.
-	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
-		// Whether to skip it depends on whether the `AccessLog.ReqHeaderParam` parameter contains `X-Request-Id`.
-		Skipper: func(c echo.Context) bool {
-			return !slices.Contains(config.Bean.AccessLog.ReqHeaderParam, echo.HeaderXRequestID)
-		},
-		Generator:        uuid.NewString,
-		RequestIDHandler: middleware.RequestIDHandler,
-		TargetHeader:     echo.HeaderXRequestID,
-	}))
 
 	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
 	// This will help us to integrate `bean's` health into `k8s`.
@@ -679,20 +678,6 @@ func closer(closers []func() error) func() error {
 
 		return nil
 	}
-}
-
-// openFile opens and return the file, if doesn't exist, create it, or append to the file with the directory.
-func openFile(path string) (*os.File, error) {
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			if err := os.MkdirAll(filepath.Dir(path), 0o764); err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
-	}
-	return os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o664)
 }
 
 // ContextTimeout return custom context timeout middleware

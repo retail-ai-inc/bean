@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/v2/config"
 	bctx "github.com/retail-ai-inc/bean/v2/context"
 	"github.com/retail-ai-inc/bean/v2/internal/gopool"
@@ -23,7 +24,7 @@ func Test_Execute_Context(t *testing.T) {
 		TracesSampleRate: 0,
 	},
 	}
-	_ = log.New()
+	_ = log.Init(echo.New().Logger)
 
 	task := func(ctx context.Context) error {
 		_, finish := trace.StartSpan(ctx, "test")

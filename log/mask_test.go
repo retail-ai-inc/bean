@@ -1,11 +1,10 @@
-package processors
+package log
 
 import (
 	"encoding/json"
 	"testing"
 	"time"
 
-	"github.com/retail-ai-inc/bean/v2/logging/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -80,33 +79,33 @@ func TestNewMaskProcessor(t *testing.T) {
 
 func TestMaskProcessor_Process(t *testing.T) {
 	type args struct {
-		entry types.Entry
+		entry Entry
 	}
 	tests := []struct {
 		name             string
 		fieldsToMask     []string
 		args             args
-		want             types.Entry
+		want             Entry
 		wantFieldsMasked bool
 	}{
 		{
 			name:         "process_entry_with_nil_fields",
 			fieldsToMask: []string{"password"},
 			args: args{
-				entry: types.Entry{
+				entry: Entry{
 					Timestamp: time.Now(),
-					Severity:  types.Info,
+					Severity:  Info,
 					Level:     "info",
 					Fields:    nil,
-					Trace:     types.Trace{},
+					Trace:     Trace{},
 				},
 			},
-			want: types.Entry{
+			want: Entry{
 				Timestamp: time.Now(),
-				Severity:  types.Info,
+				Severity:  Info,
 				Level:     "info",
 				Fields:    nil,
-				Trace:     types.Trace{},
+				Trace:     Trace{},
 			},
 			wantFieldsMasked: false,
 		},
@@ -114,7 +113,7 @@ func TestMaskProcessor_Process(t *testing.T) {
 			name:         "mask_simple_string_fields",
 			fieldsToMask: []string{"password", "token"},
 			args: args{
-				entry: types.Entry{
+				entry: Entry{
 					Fields: map[string]interface{}{
 						"username": "john_doe",
 						"password": "secret123",
@@ -123,12 +122,12 @@ func TestMaskProcessor_Process(t *testing.T) {
 					},
 				},
 			},
-			want: types.Entry{
+			want: Entry{
 				Fields: map[string]interface{}{
 					"username": "john_doe",
-					"password": "***",
+					"password": "****",
 					"email":    "john@example.com",
-					"token":    "***",
+					"token":    "****",
 				},
 			},
 			wantFieldsMasked: true,
@@ -137,7 +136,7 @@ func TestMaskProcessor_Process(t *testing.T) {
 			name:         "mask_nested_map_fields",
 			fieldsToMask: []string{"ssn", "credit_card"},
 			args: args{
-				entry: types.Entry{
+				entry: Entry{
 					Fields: map[string]interface{}{
 						"user": map[string]interface{}{
 							"name":  "John Doe",
@@ -152,16 +151,16 @@ func TestMaskProcessor_Process(t *testing.T) {
 					},
 				},
 			},
-			want: types.Entry{
+			want: Entry{
 				Fields: map[string]interface{}{
 					"user": map[string]interface{}{
 						"name":  "John Doe",
-						"ssn":   "***",
+						"ssn":   "****",
 						"phone": "555-1234",
 					},
 					"payment": map[string]interface{}{
 						"method":      "credit",
-						"credit_card": "***",
+						"credit_card": "****",
 						"amount":      100.50,
 					},
 				},
@@ -172,7 +171,7 @@ func TestMaskProcessor_Process(t *testing.T) {
 			name:         "mask_array_elements",
 			fieldsToMask: []string{"password"},
 			args: args{
-				entry: types.Entry{
+				entry: Entry{
 					Fields: map[string]interface{}{
 						"users": []interface{}{
 							map[string]interface{}{
@@ -187,16 +186,16 @@ func TestMaskProcessor_Process(t *testing.T) {
 					},
 				},
 			},
-			want: types.Entry{
+			want: Entry{
 				Fields: map[string]interface{}{
 					"users": []interface{}{
 						map[string]interface{}{
 							"username": "user1",
-							"password": "***",
+							"password": "****",
 						},
 						map[string]interface{}{
 							"username": "user2",
-							"password": "***",
+							"password": "****",
 						},
 					},
 				},
@@ -207,7 +206,7 @@ func TestMaskProcessor_Process(t *testing.T) {
 			name:         "mask_json_raw_message_fields",
 			fieldsToMask: []string{"secret_key"},
 			args: args{
-				entry: func() types.Entry {
+				entry: func() Entry {
 					nestedJSON := `{
 						"api_key": "public_key_123",
 						"secret_key": "private_secret_456",
@@ -216,7 +215,7 @@ func TestMaskProcessor_Process(t *testing.T) {
 							"secret_key": "nested_secret_789"
 						}
 					}`
-					return types.Entry{
+					return Entry{
 						Fields: map[string]interface{}{
 							"credentials": json.RawMessage(nestedJSON),
 						},
@@ -226,10 +225,57 @@ func TestMaskProcessor_Process(t *testing.T) {
 			wantFieldsMasked: true,
 		},
 		{
+			name:         "mask_json_byte_slice_value",
+			fieldsToMask: []string{"secret_key"},
+			args: args{
+				entry: Entry{
+					Fields: map[string]interface{}{
+						"credentials": []byte(`{"secret_key":"private_secret_456","config":{"secret_key":"nested_secret_789"}}`),
+					},
+				},
+			},
+			wantFieldsMasked: true,
+		},
+		{
+			name:         "preserve_plain_string_value",
+			fieldsToMask: []string{"password"},
+			args: args{
+				entry: Entry{
+					Fields: map[string]interface{}{
+						"message": "hello world",
+					},
+				},
+			},
+			want: Entry{
+				Fields: map[string]interface{}{
+					"message": "hello world",
+				},
+			},
+			wantFieldsMasked: false,
+		},
+		{
+			name:         "mask_json_string_value",
+			fieldsToMask: []string{"secret_key"},
+			args: args{
+				entry: Entry{
+					Fields: map[string]interface{}{
+						// A JSON object stored as a string (common in logs).
+						"credentials": `{"api_key":"public_key_123","secret_key":"private_secret_456","config":{"secret_key":"nested_secret_789"}}`,
+					},
+				},
+			},
+			want: Entry{
+				Fields: map[string]interface{}{
+					"credentials": `{"api_key":"public_key_123","config":{"secret_key":"****"},"secret_key":"****"}`,
+				},
+			},
+			wantFieldsMasked: true,
+		},
+		{
 			name:         "handle_mixed_data_types",
 			fieldsToMask: []string{"password", "token"},
 			args: args{
-				entry: types.Entry{
+				entry: Entry{
 					Fields: map[string]interface{}{
 						"id":       123,
 						"name":     "Test User",
@@ -241,13 +287,13 @@ func TestMaskProcessor_Process(t *testing.T) {
 					},
 				},
 			},
-			want: types.Entry{
+			want: Entry{
 				Fields: map[string]interface{}{
 					"id":       123,
 					"name":     "Test User",
-					"password": "***",
+					"password": "****",
 					"active":   true,
-					"token":    "***",
+					"token":    "****",
 					"score":    95.5,
 					"nil_val":  nil,
 				},
@@ -258,7 +304,7 @@ func TestMaskProcessor_Process(t *testing.T) {
 			name:         "preserve_non_matching_fields",
 			fieldsToMask: []string{"password", "token"},
 			args: args{
-				entry: types.Entry{
+				entry: Entry{
 					Fields: map[string]interface{}{
 						"username":    "john_doe",
 						"email":       "john@example.com",
@@ -267,7 +313,7 @@ func TestMaskProcessor_Process(t *testing.T) {
 					},
 				},
 			},
-			want: types.Entry{
+			want: Entry{
 				Fields: map[string]interface{}{
 					"username":    "john_doe",
 					"email":       "john@example.com",
@@ -288,16 +334,17 @@ func TestMaskProcessor_Process(t *testing.T) {
 				if tt.want.Fields != nil {
 					assert.Equal(t, tt.want.Fields, got.Fields)
 				} else {
-					// For RawMessage case, we need special handling
-					if credentials, ok := got.Fields["credentials"].(json.RawMessage); ok {
-						var parsed map[string]interface{}
-						err := json.Unmarshal(credentials, &parsed)
-						require.NoError(t, err)
-						assert.Equal(t, "***", parsed["secret_key"])
+					// For RawMessage/[]byte(JSON) cases, we need special handling and MUST assert type.
+					raw, ok := got.Fields["credentials"].(json.RawMessage)
+					require.True(t, ok, "credentials should be json.RawMessage after masking")
 
-						if config, ok := parsed["config"].(map[string]interface{}); ok {
-							assert.Equal(t, "***", config["secret_key"])
-						}
+					var parsed map[string]interface{}
+					err := json.Unmarshal(raw, &parsed)
+					require.NoError(t, err)
+					assert.Equal(t, "****", parsed["secret_key"])
+
+					if config, ok := parsed["config"].(map[string]interface{}); ok {
+						assert.Equal(t, "****", config["secret_key"])
 					}
 				}
 			} else {
@@ -310,15 +357,15 @@ func TestMaskProcessor_Process(t *testing.T) {
 
 func TestMaskProcessor_Process_PreserveMetadata(t *testing.T) {
 	now := time.Now()
-	trace := types.Trace{
+	trace := Trace{
 		TraceID: "trace-123",
 		SpanID:  "span-456",
 	}
 
 	processor := NewMaskProcessor([]string{"password"})
-	entry := types.Entry{
+	entry := Entry{
 		Timestamp: now,
-		Severity:  types.Error,
+		Severity:  Error,
 		Level:     "error",
 		Fields: map[string]interface{}{
 			"password": "secret",
@@ -330,10 +377,10 @@ func TestMaskProcessor_Process_PreserveMetadata(t *testing.T) {
 	result := processor.Process(entry)
 
 	assert.Equal(t, now, result.Timestamp)
-	assert.Equal(t, types.Error, result.Severity)
+	assert.Equal(t, Error, result.Severity)
 	assert.Equal(t, "error", result.Level)
 	assert.Equal(t, trace, result.Trace)
-	assert.Equal(t, "***", result.Fields["password"])
+	assert.Equal(t, "****", result.Fields["password"])
 	assert.Equal(t, "test message", result.Fields["message"])
 }
 
@@ -349,7 +396,7 @@ func TestMaskProcessor_maskValue_EdgeCases(t *testing.T) {
 		}
 
 		for _, testCase := range testCases {
-			entry := types.Entry{
+			entry := Entry{
 				Fields: map[string]interface{}{
 					"value": testCase,
 				},
@@ -362,7 +409,7 @@ func TestMaskProcessor_maskValue_EdgeCases(t *testing.T) {
 
 	t.Run("handle_malformed_json_raw_message", func(t *testing.T) {
 		malformedJSON := json.RawMessage("{ invalid json }")
-		entry := types.Entry{
+		entry := Entry{
 			Fields: map[string]interface{}{
 				"data": malformedJSON,
 			},
