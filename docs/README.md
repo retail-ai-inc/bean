@@ -470,7 +470,7 @@ Internally, `NewLogger` builds: Sentry extractor → Pipeline(MaskProcessor, Rem
 
 ## HTTP Logging Transport
 
-The `transport/http` package provides a custom `http.RoundTripper` that logs outbound HTTP requests using the structured `log.BeanLogger`.
+The `transport/http` package provides a custom `http.RoundTripper` that logs outbound HTTP requests using the structured logger (`log.AccessLogger`).
 
 It captures:
 
@@ -478,15 +478,26 @@ It captures:
 - Response status and latency (ms)
 - Optional request/response body (when `DumpBody` is true)
 - Error message on failure
-- Optional request headers (via `AllowedHeaders`)
+- Request headers: always includes `X-Request-ID` from context when present; optional extra headers via `AllowedReqHeaders`
+- Optional response headers via `AllowedRespHeaders`
+
+### LoggingOptions
+
+| Field                | Description |
+|----------------------|-------------|
+| `DumpBody`           | Include request and response bodies in log fields. |
+| `MaxBodySize`        | Max bytes to read from response body (default 64KB). |
+| `LogType`            | Written as `"type"` in log fields for filtering (e.g. in GCP). |
+| `AllowedReqHeaders`  | Request header names to log. Empty uses `config.Bean.AccessLog.ReqHeaderParam`. |
+| `AllowedRespHeaders` | Response header names to log. Empty uses `config.Bean.AccessLog.ResHeaderParam`. |
 
 ### Features
 
-- Wraps any `http.RoundTripper` (nil uses `http.DefaultTransport`)
-- Logs via `BeanLogger.TraceInfo` (success) or `TraceError` (failure) with level `"outbound_http"`
-- Optional body dumping via `LoggingOptions.DumpBody`; `MaxBodySize` caps response body size (default 64KB)
-- Safe body re-read with `io.NopCloser` so the request can still be sent
-- Compatible with the log pipeline (masking, escape removal, sink)
+- Wraps any `http.RoundTripper` (nil uses `http.DefaultTransport`).
+- Logs via `AccessLogger.TraceInfo` (success) or `TraceError` (failure) with level `"OUTBOUND_API"`.
+- Optional body dumping via `LoggingOptions.DumpBody`; `MaxBodySize` caps response body size (default 64KB).
+- Safe body re-read with `io.NopCloser` so the request can still be sent.
+- Compatible with the log pipeline (masking, sink). Body fields are `[]byte`; in JSON output they appear as base64 unless the pipeline or sink converts them.
 
 ### Example
 
@@ -496,15 +507,16 @@ import (
     "github.com/retail-ai-inc/bean/v2/transport/http"
 )
 
-// logger is a log.BeanLogger (e.g. from log.Init(e.Logger) or log.NewLogger(...))
+// logger is a log.AccessLogger (e.g. from log.Init(e.Logger) or log.Logger())
 transport := http.NewLoggingTransport(
     nil, // base RoundTripper; nil = http.DefaultTransport
     logger,
     http.LoggingOptions{
-        DumpBody:       true,
-        MaxBodySize:    64 * 1024,
-        AllowedHeaders: []string{"Authorization"},
-        LogType:        "my-service",
+        DumpBody:           true,
+        MaxBodySize:        64 * 1024,
+        LogType:            "my-service",
+        AllowedReqHeaders:  []string{"Authorization", "Content-Type"},
+        AllowedRespHeaders: []string{"Content-Type"},
     },
 )
 
@@ -514,9 +526,9 @@ client.SetTransport(transport)
 
 ### Notes
 
-- When `DumpBody` is enabled, request and response bodies are included in the log fields and go through the log pipeline (e.g. masking, escape removal).
+- When `DumpBody` is enabled, request and response bodies are stored as `[]byte`; `encoding/json` encodes them as base64 in the final log line.
 - Body dumping increases memory use; use cautiously in production.
-- `LogType` is written into the log fields as `"type"` for filtering in GCP or other backends.
+- Leave `AllowedReqHeaders` or `AllowedRespHeaders` empty to use the access-log config from `env.json` (`ReqHeaderParam` / `ResHeaderParam`).
 
 ## TenantAlterDbHostParam
 

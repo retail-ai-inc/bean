@@ -139,7 +139,7 @@ func Init(logger echo.Logger) BeanLogger {
 	once.Do(func() {
 		var err error
 		blogger, err = NewLogger(logger,
-			WithProjectID(config.Bean.Sentry.ProjectID),
+			WithProjectID(config.Bean.AccessLog.ProjectID),
 			WithMaskFields(config.Bean.AccessLog.BodyDumpMaskParam),
 			WithAccessLogPath(config.Bean.AccessLog.Path),
 		)

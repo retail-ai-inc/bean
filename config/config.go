@@ -22,6 +22,7 @@ type Config struct {
 		On                bool
 		BodyDump          bool
 		Path              string
+		ProjectID         string
 		BodyDumpMaskParam []string
 		ReqHeaderParam    []string
 		ResHeaderParam    []string
@@ -138,7 +139,6 @@ type Config struct {
 
 type Sentry struct {
 	On                  bool
-	ProjectID           string
 	Debug               bool
 	Dsn                 string
 	Timeout             time.Duration

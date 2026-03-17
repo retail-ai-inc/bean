@@ -1,8 +1,9 @@
 package http
 
 type LoggingOptions struct {
-	DumpBody       bool
-	MaxBodySize    int64
-	AllowedHeaders []string
-	LogType        string
+	DumpBody           bool
+	MaxBodySize        int64
+	LogType            string
+	AllowedReqHeaders  []string
+	AllowedRespHeaders []string
 }

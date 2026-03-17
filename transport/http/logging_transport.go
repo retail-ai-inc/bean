@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/retail-ai-inc/bean/v2/config"
 	bctx "github.com/retail-ai-inc/bean/v2/context"
 	blog "github.com/retail-ai-inc/bean/v2/log"
 )
@@ -28,6 +29,14 @@ func NewLoggingTransport(
 
 	if opt.MaxBodySize == 0 {
 		opt.MaxBodySize = 64 * 1024
+	}
+
+	if len(opt.AllowedReqHeaders) == 0 {
+		opt.AllowedReqHeaders = config.Bean.AccessLog.ReqHeaderParam
+	}
+
+	if len(opt.AllowedRespHeaders) == 0 {
+		opt.AllowedRespHeaders = config.Bean.AccessLog.ResHeaderParam
 	}
 
 	return &LoggingTransport{
@@ -57,11 +66,12 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	if requestID, ok := bctx.GetRequestID(req.Context()); ok {
 		reqHeader[echo.HeaderXRequestID] = requestID
 	}
-	for _, h := range t.opt.AllowedHeaders {
+	for _, h := range t.opt.AllowedReqHeaders {
 		if v := req.Header.Get(h); v != "" {
 			reqHeader[h] = v
 		}
 	}
+
 	if len(reqHeader) > 0 {
 		fields["request_header"] = reqHeader
 	}
@@ -74,6 +84,16 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 
 	if resp != nil {
 		fields["status"] = resp.StatusCode
+		respHeader := make(map[string]any)
+		for _, h := range t.opt.AllowedRespHeaders {
+			if v := resp.Header.Get(h); v != "" {
+				respHeader[h] = v
+			}
+		}
+
+		if len(respHeader) > 0 {
+			fields["response_header"] = respHeader
+		}
 	}
 
 	if t.opt.DumpBody && resp != nil && resp.Body != nil {
@@ -87,11 +107,11 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 
 	if err != nil {
 		fields["error"] = err.Error()
-		t.logger.TraceError(req.Context(), "outbound_http", fields)
+		t.logger.TraceError(req.Context(), "OUTBOUND_API", fields)
 		return resp, err
 	}
 
-	t.logger.TraceInfo(req.Context(), "outbound_http", fields)
+	t.logger.TraceInfo(req.Context(), "OUTBOUND_API", fields)
 
 	return resp, nil
 }
