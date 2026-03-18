@@ -1,10 +1,12 @@
-package processors
+package log
 
 import (
 	"encoding/json"
-
-	"github.com/retail-ai-inc/bean/v2/logging/types"
 )
+
+type Processor interface {
+	Process(entry Entry) Entry
+}
 
 type MaskProcessor struct {
 	fields map[string]struct{}
@@ -15,10 +17,11 @@ func NewMaskProcessor(fields []string) *MaskProcessor {
 	for _, f := range fields {
 		fm[f] = struct{}{}
 	}
+
 	return &MaskProcessor{fields: fm}
 }
 
-func (p *MaskProcessor) Process(entry types.Entry) types.Entry {
+func (p *MaskProcessor) Process(entry Entry) Entry {
 	if entry.Fields == nil {
 		return entry
 	}
@@ -36,22 +39,22 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 	case map[string]interface{}:
 		for k, vv := range v {
 			if _, ok := p.fields[k]; ok {
-				v[k] = "***"
+				v[k] = "****"
 			} else {
 				v[k] = p.maskValue(vv)
 			}
 		}
-		return v
 
+		return v
 	case []interface{}:
 		for i, vv := range v {
 			v[i] = p.maskValue(vv)
 		}
-		return v
 
-	case json.RawMessage:
+		return v
+	case string:
 		var decoded interface{}
-		if err := json.Unmarshal(v, &decoded); err != nil {
+		if err := json.Unmarshal([]byte(v), &decoded); err != nil {
 			return v
 		}
 		masked := p.maskValue(decoded)
@@ -59,9 +62,37 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 		if err != nil {
 			return v
 		}
-		return json.RawMessage(b)
 
+		return string(b)
+	case json.RawMessage:
+		b, ok := p.maskJSONBytes([]byte(v))
+		if !ok {
+			return v
+		}
+
+		return json.RawMessage(b)
+	case []byte:
+		b, ok := p.maskJSONBytes(v)
+		if !ok {
+			return string(v)
+		}
+
+		return json.RawMessage(b)
 	default:
 		return v
 	}
+}
+
+// maskJSONBytes decodes JSON bytes, masks recursively, and re-encodes to JSON.
+func (p *MaskProcessor) maskJSONBytes(in []byte) ([]byte, bool) {
+	var decoded interface{}
+	if err := json.Unmarshal(in, &decoded); err != nil {
+		return nil, false
+	}
+	masked := p.maskValue(decoded)
+	out, err := json.Marshal(masked)
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }

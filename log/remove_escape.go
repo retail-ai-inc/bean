@@ -1,9 +1,7 @@
-package processors
+package log
 
 import (
 	"encoding/json"
-
-	"github.com/retail-ai-inc/bean/v2/logging/types"
 )
 
 type RemoveEscapeProcessor struct{}
@@ -12,7 +10,7 @@ func NewRemoveEscapeProcessor() *RemoveEscapeProcessor {
 	return &RemoveEscapeProcessor{}
 }
 
-func (p *RemoveEscapeProcessor) Process(entry types.Entry) types.Entry {
+func (p *RemoveEscapeProcessor) Process(entry Entry) Entry {
 	if entry.Fields == nil {
 		return entry
 	}

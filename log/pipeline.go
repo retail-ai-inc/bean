@@ -1,6 +1,4 @@
-package logging
-
-import "github.com/retail-ai-inc/bean/v2/logging/types"
+package log
 
 type Pipeline struct {
 	processors []Processor
@@ -14,7 +12,7 @@ func NewPipeline(sink Sink, processors ...Processor) *Pipeline {
 	}
 }
 
-func (p *Pipeline) Process(entry types.Entry) {
+func (p *Pipeline) Process(entry Entry) {
 	for _, processor := range p.processors {
 		entry = processor.Process(entry)
 	}

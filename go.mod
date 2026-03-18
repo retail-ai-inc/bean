@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/alphadose/haxmap v1.4.1
 	github.com/getsentry/sentry-go v0.43.0
-	github.com/getsentry/sentry-go/echo v0.42.0
+	github.com/getsentry/sentry-go/echo v0.43.0
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-resty/resty/v2 v2.17.2
@@ -23,11 +23,10 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
-	github.com/valyala/fasttemplate v1.2.2
 	go.mongodb.org/mongo-driver v1.17.9
 	golang.org/x/sync v0.19.0
 	golang.org/x/tools v0.42.0
-	google.golang.org/grpc v1.79.1
+	google.golang.org/grpc v1.79.2
 	gorm.io/datatypes v1.2.7
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.1
@@ -71,6 +70,7 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.2 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
