@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"strconv"
 	"syscall"
 	"testing"
@@ -98,6 +99,9 @@ func newFakeError(msg string) error {
 }
 
 func TestBean_ServeAt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping TestBean_ServeAt on Windows: process signaling is not supported")
+	}
 	type fields struct {
 		sdTimeout time.Duration
 	}

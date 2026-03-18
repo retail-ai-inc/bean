@@ -7,7 +7,6 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/retail-ai-inc/bean/v2/internal/dbdrivers"
-	"github.com/retail-ai-inc/bean/v2/logging"
 	"github.com/spf13/viper"
 )
 
@@ -23,11 +22,11 @@ type Config struct {
 		On                bool
 		BodyDump          bool
 		Path              string
+		ProjectID         string
 		BodyDumpMaskParam []string
 		ReqHeaderParam    []string
 		ResHeaderParam    []string
 		SkipEndpoints     []string
-		Logger            *logging.Logger
 	}
 	Prometheus struct {
 		On            bool

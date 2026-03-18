@@ -2,21 +2,25 @@ package http
 
 import (
 	"bytes"
-	"github.com/retail-ai-inc/bean/v2/logging"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/labstack/echo/v4"
+	"github.com/retail-ai-inc/bean/v2/config"
+	bctx "github.com/retail-ai-inc/bean/v2/context"
+	blog "github.com/retail-ai-inc/bean/v2/log"
 )
 
 type LoggingTransport struct {
-	Base   http.RoundTripper
-	Logger *logging.Logger
-	Opt    LoggingOptions
+	base   http.RoundTripper
+	logger blog.AccessLogger
+	opt    LoggingOptions
 }
 
 func NewLoggingTransport(
 	base http.RoundTripper,
-	logger *logging.Logger,
+	logger blog.AccessLogger,
 	opt LoggingOptions,
 ) http.RoundTripper {
 	if base == nil {
@@ -27,10 +31,18 @@ func NewLoggingTransport(
 		opt.MaxBodySize = 64 * 1024
 	}
 
+	if len(opt.AllowedReqHeaders) == 0 {
+		opt.AllowedReqHeaders = config.Bean.AccessLog.ReqHeaderParam
+	}
+
+	if len(opt.AllowedRespHeaders) == 0 {
+		opt.AllowedRespHeaders = config.Bean.AccessLog.ResHeaderParam
+	}
+
 	return &LoggingTransport{
-		Base:   base,
-		Logger: logger,
-		Opt:    opt,
+		base:   base,
+		logger: logger,
+		opt:    opt,
 	}
 }
 
@@ -40,33 +52,53 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		"url":    req.URL.String(),
 	}
 
-	if t.Opt.DumpBody && req != nil && req.Body != nil {
+	if t.opt.DumpBody && req != nil && req.Body != nil {
 		reqBody, _ := io.ReadAll(req.Body)
 		req.Body = io.NopCloser(bytes.NewBuffer(reqBody))
 		fields["request_body"] = string(reqBody)
 	}
 
-	if len(t.Opt.AllowedHeaders) > 0 {
-		reqHeader := make(map[string]any)
-		for _, h := range t.Opt.AllowedHeaders {
-			if v := req.Header.Get(h); v != "" {
-				reqHeader[h] = v
-			}
+	if t.opt.LogType != "" {
+		fields["type"] = t.opt.LogType
+	}
+
+	reqHeader := make(map[string]any)
+	if requestID, ok := bctx.GetRequestID(req.Context()); ok {
+		fields["id"] = requestID
+		reqHeader[echo.HeaderXRequestID] = requestID
+	}
+	for _, h := range t.opt.AllowedReqHeaders {
+		if v := req.Header.Get(h); v != "" {
+			reqHeader[h] = v
 		}
+	}
+
+	if len(reqHeader) > 0 {
 		fields["request_header"] = reqHeader
 	}
 
 	start := time.Now()
-	resp, err := t.Base.RoundTrip(req)
+
+	resp, err := t.base.RoundTrip(req)
 
 	fields["latency_ms"] = time.Since(start).Milliseconds()
 
 	if resp != nil {
 		fields["status"] = resp.StatusCode
+		respHeader := make(map[string]any)
+		for _, h := range t.opt.AllowedRespHeaders {
+			if v := resp.Header.Get(h); v != "" {
+				respHeader[h] = v
+			}
+		}
+
+		if len(respHeader) > 0 {
+			fields["response_header"] = respHeader
+		}
 	}
 
-	if t.Opt.DumpBody && resp != nil && resp.Body != nil {
-		limited := io.LimitReader(resp.Body, t.Opt.MaxBodySize)
+	if t.opt.DumpBody && resp != nil && resp.Body != nil {
+		limited := io.LimitReader(resp.Body, t.opt.MaxBodySize)
 		buf := &bytes.Buffer{}
 		respBody, _ := io.ReadAll(io.TeeReader(limited, buf))
 		resp.Body = io.NopCloser(io.MultiReader(buf, resp.Body))
@@ -76,11 +108,11 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 
 	if err != nil {
 		fields["error"] = err.Error()
-		t.Logger.Error(req.Context(), "outbound_http", fields)
+		t.logger.TraceError(req.Context(), "OUTBOUND_API", fields)
 		return resp, err
 	}
 
-	t.Logger.Info(req.Context(), "outbound_http", fields)
+	t.logger.TraceInfo(req.Context(), "OUTBOUND_API", fields)
 
 	return resp, nil
 }
