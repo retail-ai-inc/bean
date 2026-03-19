@@ -50,18 +50,11 @@ type logger struct {
 }
 
 type Config struct {
-	projectID     string
 	accessLogPath string
 	maskFields    []string
 }
 
 type LoggerOptions func(*Config)
-
-func WithProjectID(projectID string) LoggerOptions {
-	return func(c *Config) {
-		c.projectID = projectID
-	}
-}
 
 func WithAccessLogPath(accessLogPath string) LoggerOptions {
 	return func(c *Config) {
@@ -77,7 +70,6 @@ func WithMaskFields(maskFields []string) LoggerOptions {
 
 func NewLogger(elogger echo.Logger, options ...LoggerOptions) (*logger, error) {
 	config := &Config{
-		projectID:  "project-id",
 		maskFields: []string{},
 	}
 
@@ -94,7 +86,7 @@ func NewLogger(elogger echo.Logger, options ...LoggerOptions) (*logger, error) {
 		output = file
 	}
 
-	sink, err := NewSink(output, config.projectID)
+	sink, err := NewSink(output)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +131,6 @@ func Init(logger echo.Logger) BeanLogger {
 	once.Do(func() {
 		var err error
 		blogger, err = NewLogger(logger,
-			WithProjectID(config.Bean.AccessLog.ProjectID),
 			WithMaskFields(config.Bean.AccessLog.BodyDumpMaskParam),
 			WithAccessLogPath(config.Bean.AccessLog.Path),
 		)

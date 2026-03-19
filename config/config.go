@@ -22,7 +22,6 @@ type Config struct {
 		On                bool
 		BodyDump          bool
 		Path              string
-		ProjectID         string
 		BodyDumpMaskParam []string
 		ReqHeaderParam    []string
 		ResHeaderParam    []string
