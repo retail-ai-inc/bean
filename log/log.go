@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,18 +51,12 @@ type logger struct {
 }
 
 type Config struct {
-	projectID     string
-	accessLogPath string
-	maskFields    []string
+	accessLogPath     string
+	maskFields        []string
+	runtimePlatform   string
 }
 
 type LoggerOptions func(*Config)
-
-func WithProjectID(projectID string) LoggerOptions {
-	return func(c *Config) {
-		c.projectID = projectID
-	}
-}
 
 func WithAccessLogPath(accessLogPath string) LoggerOptions {
 	return func(c *Config) {
@@ -75,15 +70,39 @@ func WithMaskFields(maskFields []string) LoggerOptions {
 	}
 }
 
+// WithRuntimePlatform sets the deployment cloud (e.g. gcp, aws). It selects the JSON key
+// used for trace IDs in structured logs and is emitted as runtime_platform on each line.
+func WithRuntimePlatform(platform string) LoggerOptions {
+	return func(c *Config) {
+		c.runtimePlatform = platform
+	}
+}
+
+// tracePayloadKey returns the JSON field name for Sentry/OpenTelemetry trace id in log output.
+func tracePayloadKey(platform string) string {
+	switch strings.ToLower(strings.TrimSpace(platform)) {
+	case "gcp", "google":
+		return "logging.googleapis.com/trace"
+	case "aws", "amazon":
+		// Common for CloudWatch / custom pipelines; X-Ray header correlation is separate.
+		return "trace_id"
+	case "azure", "microsoft":
+		return "trace_id"
+	default:
+		return "trace"
+	}
+}
+
 func NewLogger(elogger echo.Logger, options ...LoggerOptions) (*logger, error) {
 	config := &Config{
-		projectID:  "project-id",
 		maskFields: []string{},
 	}
 
 	for _, option := range options {
 		option(config)
 	}
+
+	payloadTrace := tracePayloadKey(config.runtimePlatform)
 
 	output := elogger.Output()
 	if config.accessLogPath != "" {
@@ -94,7 +113,7 @@ func NewLogger(elogger echo.Logger, options ...LoggerOptions) (*logger, error) {
 		output = file
 	}
 
-	sink, err := NewSink(output, config.projectID)
+	sink, err := NewSink(output, payloadTrace)
 	if err != nil {
 		return nil, err
 	}
@@ -139,9 +158,9 @@ func Init(logger echo.Logger) BeanLogger {
 	once.Do(func() {
 		var err error
 		blogger, err = NewLogger(logger,
-			WithProjectID(config.Bean.AccessLog.ProjectID),
 			WithMaskFields(config.Bean.AccessLog.BodyDumpMaskParam),
 			WithAccessLogPath(config.Bean.AccessLog.Path),
+			WithRuntimePlatform(config.Bean.AccessLog.RuntimePlatform),
 		)
 		if err != nil {
 			panic(err)

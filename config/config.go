@@ -22,7 +22,7 @@ type Config struct {
 		On                bool
 		BodyDump          bool
 		Path              string
-		ProjectID         string
+		RuntimePlatform   string `mapstructure:"runtimePlatform"` // e.g. gcp, aws, azure — see log package / README
 		BodyDumpMaskParam []string
 		ReqHeaderParam    []string
 		ResHeaderParam    []string
