@@ -3,6 +3,7 @@ package log
 import (
 	"encoding/json"
 	"io"
+	"strings"
 	"time"
 )
 
@@ -11,12 +12,14 @@ type Sink interface {
 }
 
 type sink struct {
-	writer    io.Writer
+	writer       io.Writer
+	payloadTrace string
 }
 
-func NewSink(writer io.Writer) (*sink, error) {
+func NewSink(writer io.Writer, payloadTrace string) (*sink, error) {
 	gs := &sink{
-		writer:    writer,
+		writer:       writer,
+		payloadTrace: strings.TrimSpace(payloadTrace),
 	}
 
 	return gs, nil
@@ -34,7 +37,7 @@ func (g *sink) Write(e Entry) error {
 	}
 
 	if e.Trace.TraceID != "" {
-		payload["logging.googleapis.com/trace"] = e.Trace.TraceID
+		payload[g.payloadTrace] = e.Trace.TraceID
 	}
 
 	b, err := json.Marshal(payload)

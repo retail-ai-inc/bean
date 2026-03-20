@@ -141,14 +141,27 @@ Bean has a pre-builtin logging system. If you open the `env.json` file from your
   "on": true,
   "bodyDump": true,
   "path": "",
-  "bodyDumpMaskParam": []
+  "runtimePlatform": "gcp",
+  "bodyDumpMaskParam": ["password", "token"]
 }
 ```
 
-- `on` - Turn on/off the logging system. Default is `true`.
-- `bodyDump` - Log the request-response body in the log file. This is helpful for debugging purpose. Default `true`
-- `path` - Set the log file path. You can set like `logs/console.log`. Empty log path allow bean to log into `stdout`
-- `bodyDumpMaskParam` - For security purpose if you don't wanna `bodyDump` some sensetive request parameter then you can add those as a string into the slice like `["password", "secret"]`. Default is empty.
+- `on` — Turn the access logging middleware on or off. Default is `true`.
+- `bodyDump` — When `true`, the access logger middleware captures the **HTTP request body** and **response body** and writes them to structured logs **after the handler runs** (along with latency and status). The access logger emits an initial `ACCESS` line before the handler and, if `bodyDump` is enabled, a second `DUMP` line with `request_body` / `response_body` fields. This is useful for debugging but increases log volume and I/O; set to `false` in production if you do not need full bodies. Default is `true`.
+- `path` — Log file path for the Bean structured logger output (e.g. `tmp/logs/console.log`). An **empty** string means logs go to **stdout** (Echo logger output).
+- `runtimePlatform` — Deployment / log **runtime** hint for structured logs (string, optional). Common values: `gcp` (Google Cloud), `aws` (Amazon Web Services), `azure` (Microsoft Azure), or leave **empty** for a generic default. It is written on every structured trace log line as `runtime_platform`, and selects which JSON key holds the trace id from Sentry context: `gcp` → `logging.googleapis.com/trace`; `aws` / `azure` → `trace_id`; empty or unknown → `trace`. It does **not** replace cloud SDK configuration elsewhere.
+- `bodyDumpMaskParam` — List of **JSON object keys** whose values should be **masked** in structured log fields before write. These names are passed to `log.Init` → `WithMaskFields` and applied by `MaskProcessor`: matching keys at **any nesting level** in maps / decoded JSON have their values replaced with `****`. Use the same key names as in your API JSON bodies (e.g. `password`, `access_token`). Nested objects are traversed; only **exact key names** are matched (not dot-paths like `user.password`). Default is an empty slice.
+
+**Note:** `bodyDumpMaskParam` affects **structured** `TraceInfo` / `TraceError` payloads (including `request_body` / `response_body` when they contain JSON). It does not change what the middleware reads from the wire; it only redacts values in the logged output.
+
+**Scope of `bodyDumpMaskParam` (where masking applies)**  
+`accessLog.bodyDumpMaskParam` in `env.json` is wired as `log.Init(..., WithMaskFields(config.Bean.AccessLog.BodyDumpMaskParam))`. That installs **MaskProcessor** on the **Bean structured logger** singleton, so the same key list applies to **all** entries produced via that logger’s `TraceInfo` / `TraceError`—not only inbound access logs:
+
+| Area          | Location                                                                                | Typical log content                                                                                                                            |
+| ------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inbound HTTP  | `packages/bean/internal/middleware` (`AccessLoggerWithConfig`)                          | `ACCESS` / `DUMP`: `request_body`, `response_body`, headers map, etc.                                                                          |
+| Outbound HTTP | `packages/bean/transport/http` (`LoggingTransport`)                                     | `OUTBOUND_API`: `request_body`, `response_body` (when the transport’s body dump option is on), `request_header` / `response_header` maps, etc. |
+| Elsewhere     | Any code calling `log.Logger()` (or the same `AccessLogger`) `TraceInfo` / `TraceError` | Same recursive masking on the `fields` map for that entry.                                                                                     |
 
 The logger in bean is an instance of log.Logger interface from the `github.com/labstack/gommon/log` package [compatible with the standard log.Logger interface], there are multiple levels of logging such as `Debug`, `Info`, `Warn`, `Error` and to customize the formatting of the log messages. The logger also supports like `Debugf`, `Infof`, `Warnf`, `Errorf`, `Debugj`, `Infoj`, `Warnj`, `Errorj`.
 The logger can be used in any of the layers `handler`, `service`, `repository`.
@@ -483,12 +496,12 @@ It captures:
 
 ### LoggingOptions
 
-| Field                | Description |
-|----------------------|-------------|
-| `DumpBody`           | Include request and response bodies in log fields. |
-| `MaxBodySize`        | Max bytes to read from response body (default 64KB). |
-| `LogType`            | Written as `"type"` in log fields for filtering (e.g. in GCP). |
-| `AllowedReqHeaders`  | Request header names to log. Empty uses `config.Bean.AccessLog.ReqHeaderParam`. |
+| Field                | Description                                                                      |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `DumpBody`           | Include request and response bodies in log fields.                               |
+| `MaxBodySize`        | Max bytes to read from response body (default 64KB).                             |
+| `LogType`            | Written as `"type"` in log fields for filtering (e.g. in GCP).                   |
+| `AllowedReqHeaders`  | Request header names to log. Empty uses `config.Bean.AccessLog.ReqHeaderParam`.  |
 | `AllowedRespHeaders` | Response header names to log. Empty uses `config.Bean.AccessLog.ResHeaderParam`. |
 
 ### Features
