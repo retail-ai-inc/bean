@@ -13,12 +13,11 @@ func NewPipeline(sink Sink, processors ...Processor) *Pipeline {
 }
 
 func (p *Pipeline) Process(entry Entry) {
-	for _, processor := range p.processors {
-		entry = processor.Process(entry)
+	if entry.Fields != nil {
+		for _, processor := range p.processors {
+			entry = processor.Process(entry)
+		}
 	}
 
-	err := p.sink.Write(entry)
-	if err != nil {
-		return
-	}
+	_ = p.sink.Write(entry)
 }

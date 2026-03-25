@@ -22,7 +22,7 @@ func NewMaskProcessor(fields []string) *MaskProcessor {
 }
 
 func (p *MaskProcessor) Process(entry Entry) Entry {
-	if entry.Fields == nil {
+	if len(p.fields) == 0 || entry.Fields == nil {
 		return entry
 	}
 
@@ -44,15 +44,18 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 				v[k] = p.maskValue(vv)
 			}
 		}
-
 		return v
+
 	case []interface{}:
 		for i, vv := range v {
 			v[i] = p.maskValue(vv)
 		}
-
 		return v
+
 	case string:
+		if !looksLikeJSON(v) {
+			return v
+		}
 		var decoded interface{}
 		if err := json.Unmarshal([]byte(v), &decoded); err != nil {
 			return v
@@ -62,28 +65,27 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 		if err != nil {
 			return v
 		}
-
 		return string(b)
+
 	case json.RawMessage:
 		b, ok := p.maskJSONBytes([]byte(v))
 		if !ok {
 			return v
 		}
-
 		return json.RawMessage(b)
+
 	case []byte:
 		b, ok := p.maskJSONBytes(v)
 		if !ok {
 			return string(v)
 		}
-
 		return json.RawMessage(b)
+
 	default:
 		return v
 	}
 }
 
-// maskJSONBytes decodes JSON bytes, masks recursively, and re-encodes to JSON.
 func (p *MaskProcessor) maskJSONBytes(in []byte) ([]byte, bool) {
 	var decoded interface{}
 	if err := json.Unmarshal(in, &decoded); err != nil {
@@ -95,4 +97,16 @@ func (p *MaskProcessor) maskJSONBytes(in []byte) ([]byte, bool) {
 		return nil, false
 	}
 	return out, true
+}
+
+// looksLikeJSON checks the first byte for JSON structural characters ({, [, ").
+func looksLikeJSON(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	switch s[0] {
+	case '{', '[', '"':
+		return true
+	}
+	return false
 }

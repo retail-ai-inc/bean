@@ -20,9 +20,11 @@ type Config struct {
 	Secret       string
 	AccessLog    struct {
 		On                bool
+		Async             bool 
+		AsyncQueueSize    int 
 		BodyDump          bool
 		Path              string
-		RuntimePlatform   string `mapstructure:"runtimePlatform"` // e.g. gcp, aws, azure — see log package / README
+		RuntimePlatform   string
 		BodyDumpMaskParam []string
 		ReqHeaderParam    []string
 		ResHeaderParam    []string
