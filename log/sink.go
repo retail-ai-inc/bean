@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -156,6 +157,10 @@ func (g *sink) Close(ctx context.Context) error {
 		case <-ctx.Done():
 			drainErr = ctx.Err()
 		}
+	}
+
+	if dropped := g.dropped.Load(); dropped > 0 {
+		fmt.Fprintf(g.out, "{\"severity\":\"WARNING\",\"message\":\"log entries dropped\",\"dropped_count\":%d}\n", dropped)
 	}
 
 	return errors.Join(drainErr, g.out.Close())

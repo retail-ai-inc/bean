@@ -440,7 +440,7 @@ The package provides `NewSentryExtractor()` to fill `TraceID` and `SpanID` from 
 
 #### Pipeline
 
-`Pipeline` runs a list of processors in order, then writes the result to a `Sink`. Created with `NewPipeline(sink Sink, processors ...Processor)`.
+`Pipeline` runs a list of processors in order, then writes the result to a `Sink`. Created with `NewPipeline(sink Sink, processors ...Processor)`. `Process(entry Entry) error` returns the sink write error. `Close(ctx context.Context) error` delegates to the underlying sink if it implements `Close`, enabling graceful shutdown through the pipeline.
 
 #### Processors
 
@@ -453,7 +453,7 @@ Processors are composable and applied in pipeline order.
 
 #### Sink
 
-Final output destination. Implement the `Sink` interface (`Write(entry Entry) error`). The package provides `NewSink(writer io.Writer, projectID string)` which writes JSON lines (GCP-compatible: timestamp, severity, level, fields, optional `logging.googleapis.com/trace`).
+Final output destination. Implement the `Sink` interface (`Write(entry Entry) error`). The package provides `NewSink(out io.WriteCloser, projectID string, cfg SinkConfig)` which writes JSON lines (GCP-compatible: timestamp, severity, level, fields, optional `logging.googleapis.com/trace`). When `SinkConfig.Async` is `true`, writes go through a bounded channel consumed by a single background goroutine, decoupling callers from I/O latency. On close, if any entries were dropped, a JSON warning line with `dropped_count` is emitted before the underlying writer is closed.
 
 ### Features
 

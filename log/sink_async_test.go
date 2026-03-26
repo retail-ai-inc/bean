@@ -3,6 +3,7 @@ package log
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"testing"
 	"time"
@@ -130,6 +131,54 @@ func TestSinkSyncWritesImmediately(t *testing.T) {
 	require.NoError(t, s.Close(context.Background()))
 }
 
+func TestSinkDroppedWarningOnClose(t *testing.T) {
+	var buf bytes.Buffer
+	s, err := NewSink(NopWriteCloser{Writer: &buf}, "trace", SinkConfig{Async: true, QueueSize: 1})
+	require.NoError(t, err)
+
+	for i := 0; i < 1000; i++ {
+		_ = s.Write(Entry{
+			Timestamp: time.Now(),
+			Severity:  Info,
+			Level:     "BURST",
+			Fields:    map[string]any{"n": i},
+		})
+	}
+
+	require.NoError(t, s.Close(context.Background()))
+	require.Greater(t, s.DroppedCount(), uint64(0))
+	assert.Contains(t, buf.String(), "\"message\":\"log entries dropped\"")
+	assert.Contains(t, buf.String(), "\"dropped_count\":")
+}
+
+func TestPipelineProcessReturnsError(t *testing.T) {
+	errSink := &failingSink{err: errors.New("write failed")}
+	pipeline := NewPipeline(errSink)
+
+	err := pipeline.Process(Entry{
+		Timestamp: time.Now(),
+		Severity:  Info,
+		Level:     "TEST",
+	})
+	require.ErrorContains(t, err, "write failed")
+}
+
+type failingSink struct{ err error }
+
+func (f *failingSink) Write(_ Entry) error { return f.err }
+
+func TestPipelineCloseDelegate(t *testing.T) {
+	var buf bytes.Buffer
+	s, err := NewSink(NopWriteCloser{Writer: &buf}, "trace", SinkConfig{Async: true, QueueSize: 8})
+	require.NoError(t, err)
+
+	_ = s.Write(Entry{Timestamp: time.Now(), Severity: Info, Level: "CLOSE_TEST"})
+
+	pipeline := NewPipeline(s)
+	require.NoError(t, pipeline.Close(context.Background()))
+	assert.Contains(t, buf.String(), "\"level\":\"CLOSE_TEST\"")
+}
+
 // ---------------------------------------------------------------------------
 // Benchmarks
 // ---------------------------------------------------------------------------
@@ -202,3 +251,4 @@ func BenchmarkSinkAsyncParallel(b *testing.B) {
 	b.StopTimer()
 	_ = s.Close(context.Background())
 }
+

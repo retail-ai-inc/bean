@@ -1,5 +1,7 @@
 package log
 
+import "context"
+
 type Pipeline struct {
 	processors []Processor
 	sink       Sink
@@ -12,12 +14,19 @@ func NewPipeline(sink Sink, processors ...Processor) *Pipeline {
 	}
 }
 
-func (p *Pipeline) Process(entry Entry) {
+func (p *Pipeline) Process(entry Entry) error {
 	if entry.Fields != nil {
 		for _, processor := range p.processors {
 			entry = processor.Process(entry)
 		}
 	}
 
-	_ = p.sink.Write(entry)
+	return p.sink.Write(entry)
+}
+
+func (p *Pipeline) Close(ctx context.Context) error {
+	if c, ok := p.sink.(interface{ Close(context.Context) error }); ok {
+		return c.Close(ctx)
+	}
+	return nil
 }

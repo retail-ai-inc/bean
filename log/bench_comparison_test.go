@@ -406,7 +406,7 @@ func BenchmarkCmpPipeline_Opt(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pipeline.Process(e)
+		_ = pipeline.Process(e)
 	}
 	b.StopTimer()
 	_ = s.Close(context.Background())

@@ -141,7 +141,7 @@ func (l *logger) TraceError(ctx context.Context, level string, fields map[string
 }
 
 func (l *logger) traceLog(ctx context.Context, severity Severity, level string, fields map[string]any) {
-	l.pipeline.Process(Entry{
+	_ = l.pipeline.Process(Entry{
 		Timestamp: time.Now(),
 		Severity:  severity,
 		Level:     level,
@@ -177,9 +177,7 @@ func Logger() BeanLogger {
 
 func Shutdown(ctx context.Context) error {
 	if l, ok := blogger.(*logger); ok && l != nil && l.pipeline != nil {
-		if c, ok := l.pipeline.sink.(interface{ Close(context.Context) error }); ok {
-			return c.Close(ctx)
-		}
+		return l.pipeline.Close(ctx)
 	}
 	return nil
 }
