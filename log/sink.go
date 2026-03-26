@@ -160,7 +160,7 @@ func (g *sink) Close(ctx context.Context) error {
 	}
 
 	if dropped := g.dropped.Load(); dropped > 0 {
-		fmt.Fprintf(g.out, "{\"severity\":\"WARNING\",\"message\":\"log entries dropped\",\"dropped_count\":%d}\n", dropped)
+		_, _ = fmt.Fprintf(g.out, "{\"severity\":\"WARNING\",\"message\":\"log entries dropped\",\"dropped_count\":%d}\n", dropped)
 	}
 
 	return errors.Join(drainErr, g.out.Close())
