@@ -26,6 +26,9 @@ func (p *RemoveEscapeProcessor) Process(entry Entry) Entry {
 func (p *RemoveEscapeProcessor) removeEscapeValue(val interface{}) interface{} {
 	switch v := val.(type) {
 	case string:
+		if !looksLikeJSON(v) {
+			return v
+		}
 		var decoded interface{}
 		if err := json.Unmarshal([]byte(v), &decoded); err == nil {
 			return p.removeEscapeValue(decoded)

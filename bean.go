@@ -615,6 +615,18 @@ func (b *Bean) ShutdownAll() error {
 		err = errors.Join(err, dbErr)
 	}
 
+	// Flush and stop async access log sink after other resources are closed,
+	// so shutdown-phase logs can still be written.
+	logTimeout := b.Config.HTTP.ShutdownTimeout
+	if logTimeout <= 0 {
+		logTimeout = 5 * time.Second
+	}
+	logCtx, cancel := context.WithTimeout(context.Background(), logTimeout)
+	defer cancel()
+	if logErr := blog.Shutdown(logCtx); logErr != nil {
+		err = errors.Join(err, logErr)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to shutdown: %w", err)
 	}

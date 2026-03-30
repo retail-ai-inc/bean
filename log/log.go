@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -51,42 +52,39 @@ type logger struct {
 }
 
 type Config struct {
-	accessLogPath     string
-	maskFields        []string
-	runtimePlatform   string
+	accessLogPath    string
+	maskFields       []string
+	runtimePlatform  string
+	sinkAsync        bool
+	sinkAsyncQueueSz int
 }
 
 type LoggerOptions func(*Config)
 
 func WithAccessLogPath(accessLogPath string) LoggerOptions {
-	return func(c *Config) {
-		c.accessLogPath = accessLogPath
-	}
+	return func(c *Config) { c.accessLogPath = accessLogPath }
 }
 
 func WithMaskFields(maskFields []string) LoggerOptions {
-	return func(c *Config) {
-		c.maskFields = maskFields
-	}
+	return func(c *Config) { c.maskFields = maskFields }
 }
 
-// WithRuntimePlatform sets the deployment cloud (e.g. gcp, aws). It selects the JSON key
-// used for trace IDs in structured logs and is emitted as runtime_platform on each line.
 func WithRuntimePlatform(platform string) LoggerOptions {
+	return func(c *Config) { c.runtimePlatform = platform }
+}
+
+func WithSinkAsync(async bool, queueSize int) LoggerOptions {
 	return func(c *Config) {
-		c.runtimePlatform = platform
+		c.sinkAsync = async
+		c.sinkAsyncQueueSz = queueSize
 	}
 }
 
-// tracePayloadKey returns the JSON field name for Sentry/OpenTelemetry trace id in log output.
 func tracePayloadKey(platform string) string {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
 	case "gcp", "google":
 		return "logging.googleapis.com/trace"
-	case "aws", "amazon":
-		// Common for CloudWatch / custom pipelines; X-Ray header correlation is separate.
-		return "trace_id"
-	case "azure", "microsoft":
+	case "aws", "amazon", "azure", "microsoft":
 		return "trace_id"
 	default:
 		return "trace"
@@ -94,38 +92,43 @@ func tracePayloadKey(platform string) string {
 }
 
 func NewLogger(elogger echo.Logger, options ...LoggerOptions) (*logger, error) {
-	config := &Config{
-		maskFields: []string{},
-	}
+	cfg := &Config{maskFields: []string{}}
 
 	for _, option := range options {
-		option(config)
+		option(cfg)
 	}
 
-	payloadTrace := tracePayloadKey(config.runtimePlatform)
+	payloadTrace := tracePayloadKey(cfg.runtimePlatform)
 
-	output := elogger.Output()
-	if config.accessLogPath != "" {
-		file, err := helpers.OpenFile(config.accessLogPath)
+	sinkCfg := SinkConfig{
+		Async:     cfg.sinkAsync,
+		QueueSize: cfg.sinkAsyncQueueSz,
+	}
+
+	var out io.WriteCloser = NopWriteCloser{Writer: elogger.Output()}
+	if cfg.accessLogPath != "" {
+		file, err := helpers.OpenFile(cfg.accessLogPath)
 		if err != nil {
 			return nil, err
 		}
-		output = file
+		out = file
 	}
 
-	sink, err := NewSink(output, payloadTrace)
+	s, err := NewSink(out, payloadTrace, sinkCfg)
 	if err != nil {
 		return nil, err
 	}
 
-	sentryExtractor := NewSentryExtractor()
-
-	pipeline := NewPipeline(sink, NewMaskProcessor(config.maskFields), NewRemoveEscapeProcessor())
+	processors := make([]Processor, 0, 2)
+	if len(cfg.maskFields) > 0 {
+		processors = append(processors, NewMaskProcessor(cfg.maskFields))
+	}
+	processors = append(processors, NewRemoveEscapeProcessor())
 
 	return &logger{
 		Logger:         elogger,
-		traceExtractor: sentryExtractor,
-		pipeline:       pipeline,
+		traceExtractor: NewSentryExtractor(),
+		pipeline:       NewPipeline(s, processors...),
 	}, nil
 }
 
@@ -138,15 +141,13 @@ func (l *logger) TraceError(ctx context.Context, level string, fields map[string
 }
 
 func (l *logger) traceLog(ctx context.Context, severity Severity, level string, fields map[string]any) {
-	entry := Entry{
+	_ = l.pipeline.Process(Entry{
 		Timestamp: time.Now(),
 		Severity:  severity,
 		Level:     level,
 		Fields:    fields,
 		Trace:     l.traceExtractor.Extract(ctx),
-	}
-
-	l.pipeline.Process(entry)
+	})
 }
 
 var (
@@ -161,15 +162,22 @@ func Init(logger echo.Logger) BeanLogger {
 			WithMaskFields(config.Bean.AccessLog.BodyDumpMaskParam),
 			WithAccessLogPath(config.Bean.AccessLog.Path),
 			WithRuntimePlatform(config.Bean.AccessLog.RuntimePlatform),
+			WithSinkAsync(config.Bean.AccessLog.Async, config.Bean.AccessLog.AsyncQueueSize),
 		)
 		if err != nil {
 			panic(err)
 		}
 	})
-
 	return blogger
 }
 
 func Logger() BeanLogger {
 	return blogger
+}
+
+func Shutdown(ctx context.Context) error {
+	if l, ok := blogger.(*logger); ok && l != nil && l.pipeline != nil {
+		return l.pipeline.Close(ctx)
+	}
+	return nil
 }
