@@ -24,7 +24,7 @@ type Handlers struct {
 	exampleHdlr handlers.ExampleHandler
 }
 
-func Init(b *bean.Bean) {
+func Init(b *bean.Bean, ignoreInitFlag ...bool) error{
 
 	e := b.Echo
 
@@ -55,4 +55,6 @@ func Init(b *bean.Bean) {
 
 	// Example of using validator.
 	e.POST("/example", hdlrs.exampleHdlr.Validate)
+
+	return nil
 }

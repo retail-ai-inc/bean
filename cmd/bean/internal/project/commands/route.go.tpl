@@ -59,8 +59,10 @@ func routeList(cmd *cobra.Command, args []string) {
 	// Create an empty database dependency.
 	b.DBConn = &bean.DBDeps{}
 
-	// Init different routes.
-	routers.Init(b)
+	// Init different routes. No database connection for route list command
+	if err := routers.Init(b, true); err != nil {
+		log.Fatalf("failed to initialize routes: %v", err)
+	}
 
 	// Consider the allowed methods to display only URI path that's support it.
 	allowedMethod := bean.BeanConfig.HTTP.AllowedMethod
