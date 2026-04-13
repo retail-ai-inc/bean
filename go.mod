@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/alphadose/haxmap v1.4.1
 	github.com/getsentry/sentry-go v0.45.0
-	github.com/getsentry/sentry-go/echo v0.44.1
+	github.com/getsentry/sentry-go/echo v0.45.0
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-resty/resty/v2 v2.17.2
@@ -51,6 +51,7 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/labstack/echo/v5 v5.0.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
