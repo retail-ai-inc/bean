@@ -332,6 +332,22 @@ m.DelMemory("Hello")
 
 The `delKeyAPI` parameter will help you proactively delete your local cache if you cache something from your database like SQL or NOSQL. For example, suppose you cache some access token in your local memory, which resides in your database, to avoid too many connections with your database. In that case, if your access token gets changed from the database, you can trigger the `delKeyAPI` endpoint with the key and `Bearer <authBearerToken>` as the header parameter then `bean` will delete the key from the local cache. Here, you must be careful if you run the `bean` application in a `k8s` container because then you have to trigger the `delKeyAPI` for all your pods separately by IP address from `k8s`.
 
+## Sentry User Effect Analysis
+On Sentry's monitoring platform, you will see the number of users affected by this error and their details.
+
+How to use in the code:
+```go
+import "github.com/retail-ai-inc/bean/v2/trace"
+ctx := trace.SetUser(c.Request().Context(), sentry.User{
+	    ID:        "12345", // such as userID, deviceID, etc.
+	    Email:     "user@example.com",
+	    IPAddress: c.RealIP(),
+	    Username:  "johndoe",
+	    Name:      "John Doe",
+		Data:      map[string]string{"customerID":"1"} // More custom data can be added.
+	})
+```
+
 ## Useful Helper Functions
 
 Please refer to the [`helpers` package](helpers/) in this codebase or [go doc](https://pkg.go.dev/github.com/retail-ai-inc/bean/v2/helpers) for more information.
