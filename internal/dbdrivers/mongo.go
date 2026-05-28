@@ -43,6 +43,7 @@ type MongoConfig struct {
 		Password string
 		Host     string
 		Port     string
+		SSL      SSLConfig
 	}
 	ConnectTimeout        time.Duration
 	MaxConnectionPoolSize uint64
@@ -70,7 +71,7 @@ func InitMongoMasterConn(config MongoConfig, logger echo.Logger) (*mongo.Client,
 		return connectMongoDB(masterCfg.Username, masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
 			config.MaxConnectionPoolSize, config.MinConnectionPoolSize,
 			config.ConnectTimeout, config.MaxConnectionLifeTime,
-			config.Debug, logger,
+			config.Debug, masterCfg.SSL, logger,
 		)
 	}
 
@@ -122,13 +123,14 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 
 		port := mongoCfg["port"].(string)
 		dbName := mongoCfg["database"].(string)
+		ssl := sslConfigFromMap(mongoCfg)
 
 		var closeDB func() error
 		mongoConns[t.TenantID], mongoDBNames[t.TenantID], closeDB, err = connectMongoDB(
 			userName, password, host, port, dbName,
 			config.MaxConnectionPoolSize, config.MinConnectionPoolSize,
 			config.ConnectTimeout, config.MaxConnectionLifeTime,
-			config.Debug, logger,
+			config.Debug, ssl, logger,
 		)
 		if err != nil {
 			return nil, nil, noClosers, fmt.Errorf("failed to connect mongo tenant database: %w", err)
@@ -142,7 +144,7 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 func connectMongoDB(userName, password, host, port, dbName string,
 	maxPoolSize, minPoolSize uint64,
 	connectTimeout, maxConnIdleTime time.Duration,
-	debug bool, logger echo.Logger,
+	debug bool, ssl SSLConfig, logger echo.Logger,
 ) (*mongo.Client, string, func() error, error) {
 
 	connStr := "mongodb://" + host + ":" + port
@@ -156,6 +158,14 @@ func connectMongoDB(userName, password, host, port, dbName string,
 		SetMaxPoolSize(maxPoolSize).
 		SetMinPoolSize(minPoolSize).
 		SetMaxConnIdleTime(maxConnIdleTime)
+
+	if ssl.On {
+		tlsConfig, err := newTLSConfig(ssl)
+		if err != nil {
+			return nil, "", noClose, err
+		}
+		opts.SetTLSConfig(tlsConfig)
+	}
 
 	if userName != "" && password != "" {
 		credential := options.Credential{Username: userName, Password: password, AuthSource: dbName}
