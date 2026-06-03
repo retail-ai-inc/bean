@@ -126,6 +126,7 @@ func watchCertFile(certFile string, tlsConfig *tls.Config) {
 	}
 
 	go func() {
+		//nolint:errcheck
 		defer watcher.Close()
 		for {
 			select {
