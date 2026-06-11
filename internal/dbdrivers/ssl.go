@@ -27,6 +27,8 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"sync/atomic"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -36,6 +38,10 @@ type SSLConfig struct {
 	CertFile          string
 	VerifyCertificate *bool
 	HotReload         bool
+}
+
+type certManager struct {
+	rootCAs atomic.Value
 }
 
 func sslConfigFromMap(cfg map[string]interface{}) SSLConfig {
@@ -85,10 +91,32 @@ func newTLSConfig(ssl SSLConfig) (*tls.Config, error) {
 		return nil, err
 	}
 
-	tlsConfig.RootCAs = rootCAs
-
 	if ssl.HotReload && ssl.CertFile != "" {
-		watchCertFile(ssl.CertFile, tlsConfig)
+		tlsConfig.InsecureSkipVerify = true
+
+		cm := &certManager{}
+		cm.rootCAs.Store(rootCAs)
+
+		tlsConfig.VerifyConnection = func(cs tls.ConnectionState) error {
+			pool, _ := cm.rootCAs.Load().(*x509.CertPool)
+			opts := x509.VerifyOptions{
+				Roots:         pool,
+				Intermediates: x509.NewCertPool(),
+				DNSName:       cs.ServerName,
+			}
+			if len(cs.PeerCertificates) == 0 {
+				return fmt.Errorf("tls: no certificates from peer")
+			}
+			for _, cert := range cs.PeerCertificates[1:] {
+				opts.Intermediates.AddCert(cert)
+			}
+			_, err := cs.PeerCertificates[0].Verify(opts)
+			return err
+		}
+
+		watchCertFile(ssl.CertFile, cm)
+	} else {
+		tlsConfig.RootCAs = rootCAs
 	}
 
 	return tlsConfig, nil
@@ -114,7 +142,7 @@ func loadRootCAs(certFile string) (*x509.CertPool, error) {
 	return rootCAs, nil
 }
 
-func watchCertFile(certFile string, tlsConfig *tls.Config) {
+func watchCertFile(certFile string, cm *certManager) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return
@@ -128,6 +156,7 @@ func watchCertFile(certFile string, tlsConfig *tls.Config) {
 	go func() {
 		//nolint:errcheck
 		defer watcher.Close()
+		var timer *time.Timer
 		for {
 			select {
 			case event, ok := <-watcher.Events:
@@ -140,9 +169,14 @@ func watchCertFile(certFile string, tlsConfig *tls.Config) {
 						_ = watcher.Add(certFile)
 					}
 
-					if newPool, err := loadRootCAs(certFile); err == nil {
-						tlsConfig.RootCAs = newPool
+					if timer != nil {
+						timer.Stop()
 					}
+					timer = time.AfterFunc(500*time.Millisecond, func() {
+						if newPool, err := loadRootCAs(certFile); err == nil {
+							cm.rootCAs.Store(newPool)
+						}
+					})
 				}
 			case _, ok := <-watcher.Errors:
 				if !ok {
