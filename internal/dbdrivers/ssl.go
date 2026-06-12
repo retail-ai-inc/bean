@@ -104,13 +104,24 @@ func newTLSConfig(ssl SSLConfig) (*tls.Config, error) {
 				Intermediates: x509.NewCertPool(),
 				DNSName:       cs.ServerName,
 			}
+
 			if len(cs.PeerCertificates) == 0 {
 				return fmt.Errorf("tls: no certificates from peer")
 			}
+
 			for _, cert := range cs.PeerCertificates[1:] {
 				opts.Intermediates.AddCert(cert)
 			}
+
 			_, err := cs.PeerCertificates[0].Verify(opts)
+			if err != nil {
+				if newPool, loadErr := loadRootCAs(ssl.CertFile); loadErr == nil {
+					cm.rootCAs.Store(newPool)
+					opts.Roots = newPool
+					_, err = cs.PeerCertificates[0].Verify(opts)
+				}
+			}
+
 			return err
 		}
 
