@@ -23,11 +23,13 @@
 package dbdrivers
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"slices"
 	"time"
 
+	mysqlDriver "github.com/go-sql-driver/mysql"
 	"github.com/retail-ai-inc/bean/v2/aes"
 	"gorm.io/datatypes"
 	"gorm.io/driver/mysql"
@@ -42,6 +44,7 @@ type SQLConfig struct {
 		Password string
 		Host     string
 		Port     string
+		SSL      SSLConfig
 	}
 	MaxIdleConnections        int
 	MaxOpenConnections        int
@@ -83,7 +86,7 @@ func InitMysqlMasterConn(config SQLConfig) (*gorm.DB, string, func() error, erro
 		return connectMysqlDB(
 			masterCfg.Username, masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
 			config.MaxIdleConnections, config.MaxOpenConnections, config.MaxConnectionLifeTime, config.MaxIdleConnectionLifeTime,
-			config.Debug,
+			config.Debug, masterCfg.SSL,
 		)
 	}
 
@@ -173,12 +176,13 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
 
 		port := mysqlCfg["port"].(string)
 		dbName := mysqlCfg["database"].(string)
+		ssl := sslConfigFromMap(mysqlCfg)
 
 		var closeDB func() error
 		mysqlConns[t.TenantID], mysqlDBNames[t.TenantID], closeDB, err = connectMysqlDB(
 			userName, password, host, port, dbName, config.MaxIdleConnections,
 			config.MaxOpenConnections, config.MaxConnectionLifeTime, config.MaxIdleConnectionLifeTime,
-			config.Debug,
+			config.Debug, ssl,
 		)
 		if err != nil {
 			return nil, nil, noClosers, fmt.Errorf("failed to connect mysql tenant database (%d:%s): %w", t.TenantID, t.Code, err)
@@ -191,11 +195,25 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
 
 func connectMysqlDB(userName, password, host, port, dbName string,
 	maxIdleConnections, maxOpenConnections int, maxConnectionLifeTime, maxIdleConnectionLifeTime time.Duration,
-	debug bool) (*gorm.DB, string, func() error, error) {
+	debug bool, ssl SSLConfig) (*gorm.DB, string, func() error, error) {
+
+	tlsConfigName := ""
+	if ssl.On {
+		tlsConfig, err := newTLSConfig(ssl)
+		if err != nil {
+			return nil, "", noClose, err
+		}
+
+		tlsConfigName = mysqlTLSConfigName(host, dbName, ssl.CertFile)
+		if err := mysqlDriver.RegisterTLSConfig(tlsConfigName, tlsConfig); err != nil {
+			return nil, "", noClose, fmt.Errorf("failed to register mysql tls config: %w", err)
+		}
+	}
 
 	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/%s?parseTime=true&multiStatements=true",
+		"%s:%s@tcp(%s:%s)/%s?parseTime=true&multiStatements=true%s",
 		userName, password, host, port, dbName,
+		mysqlTLSDSNParam(tlsConfigName),
 	)
 
 	var db *gorm.DB
@@ -227,6 +245,20 @@ func connectMysqlDB(userName, password, host, port, dbName string,
 	}
 
 	return db, dbName, sqlDB.Close, nil
+}
+
+func mysqlTLSDSNParam(tlsConfigName string) string {
+	if tlsConfigName == "" {
+		return ""
+	}
+
+	return "&tls=" + tlsConfigName
+}
+
+func mysqlTLSConfigName(host, dbName, certFile string) string {
+	sum := sha256.Sum256([]byte(host + "|" + dbName + "|" + certFile))
+
+	return fmt.Sprintf("bean-%x", sum[:8])
 }
 
 func createTenantConnectionsTableIfNotExist(masterDb *gorm.DB) error {

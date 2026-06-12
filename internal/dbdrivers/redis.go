@@ -54,6 +54,7 @@ type RedisConfig struct {
 		Host     string
 		Port     string
 		Reads    []string
+		SSL      SSLConfig
 	}
 	Prefix             string
 	Maxretries         int
@@ -109,7 +110,7 @@ func InitRedisMasterConn(config RedisConfig) (*RedisDBConn, []func() error, erro
 		masterRedisDB.Primary, masterRedisDB.Name, close, err = connectRedisDB(
 			masterCfg.Password, masterCfg.Host, masterCfg.Port, masterCfg.Database,
 			config.Maxretries, config.PoolSize, config.MinIdleConnections, config.DialTimeout,
-			config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, false,
+			config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, false, masterCfg.SSL,
 		)
 		if err != nil {
 			return nil, noClosers, err
@@ -128,7 +129,7 @@ func InitRedisMasterConn(config RedisConfig) (*RedisDBConn, []func() error, erro
 				redisReadConns[uint64(i)], _, close, err = connectRedisDB(
 					masterCfg.Password, readHost, masterCfg.Port, masterCfg.Database,
 					config.Maxretries, config.PoolSize, config.MinIdleConnections, config.DialTimeout,
-					config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, true,
+					config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, true, masterCfg.SSL,
 				)
 				if err != nil {
 					return nil, noClosers, err
@@ -844,6 +845,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 			if _dbName, ok := redisCfg["database"].(float64); ok {
 				dbName = int(_dbName)
 			}
+			ssl := sslConfigFromMap(redisCfg)
 
 			tenantRedisDB[t.TenantID] = &RedisDBConn{}
 			var (
@@ -852,7 +854,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 			)
 			tenantRedisDB[t.TenantID].Primary, tenantRedisDB[t.TenantID].Name, close, err = connectRedisDB(
 				password, host, port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
-				config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, false,
+				config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, false, ssl,
 			)
 			if err != nil {
 				return nil, noClosers, fmt.Errorf("failed to connect redis tenant database (%d:%s): %w", t.TenantID, t.Code, err)
@@ -875,7 +877,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 
 						redisReadConn[uint64(i)], _, close, err = connectRedisDB(
 							password, host, port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
-							config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, true,
+							config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, true, ssl,
 						)
 						if err != nil {
 							return nil, noClosers, fmt.Errorf("failed to connect to redis tenant database read replica (%d:%s): %w", t.TenantID, t.Code, err)
@@ -895,7 +897,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 
 func connectRedisDB(
 	password, host, port string, dbName int, maxretries, poolsize, minIdleConnections int,
-	dialTimeout, readTimeout, writeTimeout, poolTimeout time.Duration, readOnly bool,
+	dialTimeout, readTimeout, writeTimeout, poolTimeout time.Duration, readOnly bool, ssl SSLConfig,
 ) (redis.UniversalClient, int, func() error, error) {
 
 	hosts := strings.Split(host, ",")
@@ -904,6 +906,11 @@ func connectRedisDB(
 		if len(hs) == 1 {
 			hosts[i] = strings.Join([]string{h, port}, ":")
 		}
+	}
+
+	tlsConfig, err := newTLSConfig(ssl)
+	if err != nil {
+		return nil, 0, noClose, err
 	}
 
 	rdb := redis.NewUniversalClient(&redis.UniversalOptions{
@@ -918,9 +925,10 @@ func connectRedisDB(
 		WriteTimeout: writeTimeout,
 		PoolTimeout:  poolTimeout,
 		ReadOnly:     readOnly,
+		TLSConfig:    tlsConfig,
 	})
 	// Check the connection
-	_, err := rdb.Ping(context.TODO()).Result()
+	_, err = rdb.Ping(context.TODO()).Result()
 	if err != nil {
 		return nil, 0, noClose, fmt.Errorf("redis connection error: %w", err)
 	}
