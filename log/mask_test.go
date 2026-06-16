@@ -355,6 +355,83 @@ func TestMaskProcessor_Process(t *testing.T) {
 	}
 }
 
+func TestMaskProcessor_maskXMLBytes(t *testing.T) {
+	tests := []struct {
+		name   string
+		fields []string
+		in     string
+		want   string
+		wantOK bool
+	}{
+		{
+			name:   "mask_leaf_element_text",
+			fields: []string{"cardNumber"},
+			in:     `<payment><cardNumber>4111111111111111</cardNumber><amount>100</amount></payment>`,
+			want:   `<payment><cardNumber>****</cardNumber><amount>100</amount></payment>`,
+			wantOK: true,
+		},
+		{
+			name:   "mask_namespaced_soap_element_by_local_name",
+			fields: []string{"cardNumber"},
+			in:     `<soapenv:Envelope><soapenv:Body><ns:cardNumber>4111111111111111</ns:cardNumber></soapenv:Body></soapenv:Envelope>`,
+			want:   `<soapenv:Envelope><soapenv:Body><ns:cardNumber>****</ns:cardNumber></soapenv:Body></soapenv:Envelope>`,
+			wantOK: true,
+		},
+		{
+			name:   "mask_nested_descendants_of_masked_container",
+			fields: []string{"card"},
+			in:     `<req><card><number>4111</number><cvv>123</cvv></card></req>`,
+			want:   `<req><card><number>****</number><cvv>****</cvv></card></req>`,
+			wantOK: true,
+		},
+		{
+			name:   "preserve_whitespace_indentation",
+			fields: []string{"pin"},
+			in:     "<root>\n  <pin>9999</pin>\n  <ok>yes</ok>\n</root>",
+			want:   "<root>\n  <pin>****</pin>\n  <ok>yes</ok>\n</root>",
+			wantOK: true,
+		},
+		{
+			name:   "no_matching_fields_returns_input_unchanged",
+			fields: []string{"missing"},
+			in:     `<root><a>1</a></root>`,
+			want:   `<root><a>1</a></root>`,
+			wantOK: true,
+		},
+		{
+			name:   "incomplete_xml_not_masked",
+			fields: []string{"pin"},
+			in:     `<root><pin`,
+			wantOK: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewMaskProcessor(tt.fields)
+			out, ok := p.maskXMLBytes([]byte(tt.in))
+			assert.Equal(t, tt.wantOK, ok)
+			if tt.wantOK {
+				assert.Equal(t, tt.want, string(out))
+			}
+		})
+	}
+}
+
+func TestMaskProcessor_Process_XMLStringField(t *testing.T) {
+	p := NewMaskProcessor([]string{"cardNumber", "pinCode"})
+	entry := Entry{
+		Fields: map[string]interface{}{
+			"request_body": `<soapenv:Envelope><soapenv:Body><Deposit><cardNumber>4111111111111111</cardNumber><pinCode>1234</pinCode><amount>500</amount></Deposit></soapenv:Body></soapenv:Envelope>`,
+		},
+	}
+
+	got := p.Process(entry)
+
+	want := `<soapenv:Envelope><soapenv:Body><Deposit><cardNumber>****</cardNumber><pinCode>****</pinCode><amount>500</amount></Deposit></soapenv:Body></soapenv:Envelope>`
+	assert.Equal(t, want, got.Fields["request_body"])
+}
+
 func TestMaskProcessor_Process_PreserveMetadata(t *testing.T) {
 	now := time.Now()
 	trace := Trace{
