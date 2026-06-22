@@ -2,7 +2,15 @@ package log
 
 import (
 	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
 )
+
+// utf8BOM is the UTF-8 byte order mark. We only support UTF-8 payloads; a
+// leading BOM is still valid UTF-8 but would defeat the JSON/XML sniffing
+// below, so we strip it before detection and masking.
+const utf8BOM = "\uFEFF"
 
 type Processor interface {
 	Process(entry Entry) Entry
@@ -10,15 +18,24 @@ type Processor interface {
 
 type MaskProcessor struct {
 	fields map[string]struct{}
+	xmlRes []*regexp.Regexp
 }
 
 func NewMaskProcessor(fields []string) *MaskProcessor {
 	fm := make(map[string]struct{}, len(fields))
+	xmlRes := make([]*regexp.Regexp, 0, len(fields))
 	for _, f := range fields {
+		f = strings.TrimSpace(f)
+		if f == "" {
+			continue
+		}
 		fm[f] = struct{}{}
+
+		quoted := regexp.QuoteMeta(f)
+		xmlRes = append(xmlRes, regexp.MustCompile(fmt.Sprintf(`(?s)(<(?:\w+:)?%s\b[^>]*>)(.*?)(</(?:\w+:)?%s>)`, quoted, quoted)))
 	}
 
-	return &MaskProcessor{fields: fm}
+	return &MaskProcessor{fields: fm, xmlRes: xmlRes}
 }
 
 func (p *MaskProcessor) Process(entry Entry) Entry {
@@ -53,19 +70,31 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 		return v
 
 	case string:
-		if !looksLikeJSON(v) {
+		s := strings.TrimPrefix(v, utf8BOM)
+		if !p.containsAnyField(s) {
 			return v
 		}
-		var decoded interface{}
-		if err := json.Unmarshal([]byte(v), &decoded); err != nil {
-			return v
+
+		if looksLikeJSON(s) {
+			var decoded interface{}
+			if err := json.Unmarshal([]byte(s), &decoded); err != nil {
+				return v
+			}
+			masked := p.maskValue(decoded)
+			b, err := json.Marshal(masked)
+			if err != nil {
+				return v
+			}
+			return string(b)
 		}
-		masked := p.maskValue(decoded)
-		b, err := json.Marshal(masked)
-		if err != nil {
-			return v
+
+		if looksLikeXMLPayload(s) {
+			if out, masked := p.maskXMLString(s); masked {
+				return out
+			}
+			return "****"
 		}
-		return string(b)
+		return v
 
 	case json.RawMessage:
 		b, ok := p.maskJSONBytes([]byte(v))
@@ -75,11 +104,26 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 		return json.RawMessage(b)
 
 	case []byte:
-		b, ok := p.maskJSONBytes(v)
-		if !ok {
+		s := strings.TrimPrefix(string(v), utf8BOM)
+		if !p.containsAnyField(s) {
 			return string(v)
 		}
-		return json.RawMessage(b)
+
+		if looksLikeJSON(s) {
+			if b, ok := p.maskJSONBytes([]byte(s)); ok {
+				return json.RawMessage(b)
+			}
+			return string(v)
+		}
+
+		if looksLikeXMLPayload(s) {
+			if out, masked := p.maskXMLString(s); masked {
+				return []byte(out)
+			}
+			// Fail closed for truncated/malformed XML carrying a sensitive field.
+			return []byte("****")
+		}
+		return string(v)
 
 	default:
 		return v
@@ -109,4 +153,48 @@ func looksLikeJSON(s string) bool {
 		return true
 	}
 	return false
+}
+
+// containsAnyField reports whether any configured mask field name appears as a
+// substring of s.
+func (p *MaskProcessor) containsAnyField(s string) bool {
+	for f := range p.fields {
+		if f != "" && strings.Contains(s, f) {
+			return true
+		}
+	}
+	return false
+}
+
+// looksLikeXMLPayload reports whether s contains XML markup. It intentionally
+// tolerates surrounding log noise such as HTTP status lines and headers.
+func looksLikeXMLPayload(s string) bool {
+	return strings.IndexByte(s, '<') >= 0
+}
+
+func (p *MaskProcessor) maskXMLBytes(in []byte) ([]byte, bool) {
+	out, masked := p.maskXMLString(string(in))
+	if !masked {
+		return in, !p.containsAnyField(string(in))
+	}
+	return []byte(out), true
+}
+
+// maskXMLString redacts configured XML/SOAP element values without requiring the
+// whole input to be a valid XML document, matching the logger used by emoney.
+func (p *MaskProcessor) maskXMLString(s string) (string, bool) {
+	if s == "" || !looksLikeXMLPayload(s) || !p.containsAnyField(s) {
+		return s, false
+	}
+
+	masked := false
+	for _, re := range p.xmlRes {
+		next := re.ReplaceAllString(s, "${1}****${3}")
+		if next != s {
+			masked = true
+			s = next
+		}
+	}
+
+	return s, masked
 }
