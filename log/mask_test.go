@@ -1,7 +1,10 @@
 package log
 
 import (
+	"bytes"
 	"encoding/json"
+	"encoding/xml"
+	"io"
 	"testing"
 	"time"
 
@@ -551,5 +554,105 @@ func TestMaskProcessor_maskValue_EdgeCases(t *testing.T) {
 
 		// Should return the original malformed JSON
 		assert.Equal(t, malformedJSON, result.Fields["data"])
+	})
+}
+
+// benchSOAP is a representative SOAP/XML payload carrying several sensitive
+// elements, used by the masking benchmarks below.
+var benchSOAP = []byte(`<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">` +
+	`<soapenv:Header/>` +
+	`<soapenv:Body>` +
+	`<ns:Deposit xmlns:ns="urn:vd">` +
+	`<ns:cardNo>4111111111111111</ns:cardNo>` +
+	`<ns:pinCode>1234</ns:pinCode>` +
+	`<ns:accessKey>super-secret-access-key-value</ns:accessKey>` +
+	`<ns:amount>1500</ns:amount>` +
+	`<ns:currency>JPY</ns:currency>` +
+	`<ns:merchant>SUPAY-DEMO-MERCHANT</ns:merchant>` +
+	`</ns:Deposit>` +
+	`</soapenv:Body>` +
+	`</soapenv:Envelope>`)
+
+// maskXMLViaDecoder reproduces the previous encoding/xml streaming masker. It
+// exists only as a performance baseline for BenchmarkMaskSOAP and is not used
+// by production code.
+func (p *MaskProcessor) maskXMLViaDecoder(in []byte) ([]byte, bool) {
+	dec := xml.NewDecoder(bytes.NewReader(in))
+	dec.Strict = false
+
+	var spans [][2]int
+	depth := 0
+	maskDepth := 0 // 0 = not masking; >0 = inside a masked subtree rooted at this depth
+
+	for {
+		off0 := dec.InputOffset()
+		tok, err := dec.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, false
+		}
+		off1 := dec.InputOffset()
+
+		switch t := tok.(type) {
+		case xml.StartElement:
+			depth++
+			if maskDepth == 0 {
+				if _, ok := p.fields[t.Name.Local]; ok {
+					maskDepth = depth
+				}
+			}
+		case xml.EndElement:
+			if maskDepth > 0 && depth == maskDepth {
+				maskDepth = 0
+			}
+			depth--
+		case xml.CharData:
+			if maskDepth > 0 && len(bytes.TrimSpace([]byte(t))) > 0 {
+				spans = append(spans, [2]int{int(off0), int(off1)})
+			}
+		}
+	}
+
+	if len(spans) == 0 {
+		return in, true
+	}
+
+	var out bytes.Buffer
+	prev := 0
+	for _, s := range spans {
+		if s[0] < prev || s[1] > len(in) {
+			continue
+		}
+		out.Write(in[prev:s[0]])
+		out.WriteString("****")
+		prev = s[1]
+	}
+	out.Write(in[prev:])
+
+	return out.Bytes(), true
+}
+
+// BenchmarkMaskSOAP compares the current regexp-based masker against the
+// previous encoding/xml streaming masker on the same SOAP payload.
+//
+//	go test ./log -bench=BenchmarkMaskSOAP -benchmem -benchtime=3s
+func BenchmarkMaskSOAP(b *testing.B) {
+	p := NewMaskProcessor([]string{"cardNo", "pinCode", "accessKey"})
+	s := string(benchSOAP)
+
+	b.Run("regex", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, _ = p.maskXMLString(s)
+		}
+	})
+
+	b.Run("xml_decoder", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, _ = p.maskXMLViaDecoder(benchSOAP)
+		}
 	})
 }
