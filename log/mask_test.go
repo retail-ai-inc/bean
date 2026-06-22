@@ -378,10 +378,23 @@ func TestMaskProcessor_maskXMLBytes(t *testing.T) {
 			wantOK: true,
 		},
 		{
-			name:   "mask_nested_descendants_of_masked_container",
+			name:   "mask_element_contents_without_parsing_full_document",
 			fields: []string{"card"},
 			in:     `<req><card><number>4111</number><cvv>123</cvv></card></req>`,
-			want:   `<req><card><number>****</number><cvv>****</cvv></card></req>`,
+			want:   `<req><card>****</card></req>`,
+			wantOK: true,
+		},
+		{
+			name:   "mask_xml_inside_http_dump",
+			fields: []string{"cardNo", "pinCode"},
+			in: `HTTP/1.1 200 OK
+Content-Type: text/xml
+
+<Deposit><cardNo>4111111111111111</cardNo><pinCode>1234</pinCode><amount>100</amount></Deposit>`,
+			want: `HTTP/1.1 200 OK
+Content-Type: text/xml
+
+<Deposit><cardNo>****</cardNo><pinCode>****</pinCode><amount>100</amount></Deposit>`,
 			wantOK: true,
 		},
 		{
@@ -416,6 +429,48 @@ func TestMaskProcessor_maskXMLBytes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMaskProcessor_Process_XMLFailClosedAndBOM(t *testing.T) {
+	t.Run("truncated_xml_with_sensitive_field_is_fully_redacted", func(t *testing.T) {
+		p := NewMaskProcessor([]string{"cardNo"})
+		entry := Entry{
+			Fields: map[string]interface{}{
+				// Truncated/unparseable XML that still carries the card number.
+				"request_body": `<Deposit><cardNo>4111111111111111</cardN`,
+			},
+		}
+
+		got := p.Process(entry)
+
+		assert.Equal(t, "****", got.Fields["request_body"])
+	})
+
+	t.Run("unparseable_xml_without_sensitive_field_is_kept", func(t *testing.T) {
+		p := NewMaskProcessor([]string{"cardNo"})
+		entry := Entry{
+			Fields: map[string]interface{}{
+				"request_body": `<note>hello <b`,
+			},
+		}
+
+		got := p.Process(entry)
+
+		assert.Equal(t, `<note>hello <b`, got.Fields["request_body"])
+	})
+
+	t.Run("utf8_bom_prefixed_xml_is_masked", func(t *testing.T) {
+		p := NewMaskProcessor([]string{"cardNo"})
+		entry := Entry{
+			Fields: map[string]interface{}{
+				"request_body": "\uFEFF<Deposit><cardNo>4111111111111111</cardNo></Deposit>",
+			},
+		}
+
+		got := p.Process(entry)
+
+		assert.Equal(t, `<Deposit><cardNo>****</cardNo></Deposit>`, got.Fields["request_body"])
+	})
 }
 
 func TestMaskProcessor_Process_XMLStringField(t *testing.T) {
