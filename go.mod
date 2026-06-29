@@ -31,7 +31,7 @@ require (
 	google.golang.org/grpc v1.81.1
 	gorm.io/datatypes v1.2.7
 	gorm.io/driver/mysql v1.6.0
-	gorm.io/gorm v1.31.1
+	gorm.io/gorm v1.31.2
 )
 
 replace github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 => github.com/sourcegraph/conc v0.3.0
