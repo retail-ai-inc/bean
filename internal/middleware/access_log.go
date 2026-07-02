@@ -29,6 +29,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -178,7 +179,13 @@ func logBodyDump(
 
 	// ---- structured response body ----
 	if resBody != nil && resBody.Len() > 0 {
-		fields["response_body"] = resBody.String()
+		if isGzipEncoded(res.Header().Get(echo.HeaderContentEncoding)) {
+			fields["response_body"] = "[gzip compressed response omitted]"
+			fields["response_body_size"] = resBody.Len()
+			fields["response_content_encoding"] = res.Header().Get(echo.HeaderContentEncoding)
+		} else {
+			fields["response_body"] = resBody.String()
+		}
 	}
 
 	// ---- request headers ----
@@ -208,6 +215,15 @@ func logBodyDump(
 		"DUMP",
 		fields,
 	)
+}
+
+func isGzipEncoded(contentEncoding string) bool {
+	for _, encoding := range strings.Split(contentEncoding, ",") {
+		if strings.EqualFold(strings.TrimSpace(encoding), "gzip") {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *bodyDumpResponseWriter) WriteHeader(code int) {

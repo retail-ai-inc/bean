@@ -103,15 +103,12 @@ func (g *sink) Write(e Entry) error {
 		payload[g.payloadTrace] = e.Trace.TraceID
 	}
 
+	truncateBodyFields(payload, g.maxSizeBytes)
+
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 
 	err := json.NewEncoder(buf).Encode(payload)
-	if err == nil && g.maxSizeBytes > 0 && buf.Len() > g.maxSizeBytes {
-		truncatePayloadToSize(payload, g.maxSizeBytes)
-		buf.Reset()
-		err = json.NewEncoder(buf).Encode(payload)
-	}
 
 	clear(payload)
 	payloadPool.Put(payload)

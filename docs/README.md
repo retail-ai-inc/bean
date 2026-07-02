@@ -159,7 +159,8 @@ Bean has a pre-builtin logging system. If you open the `env.json` file from your
 - `bodyDumpMaskParam` — List of **JSON object keys** whose values should be **masked** in structured log fields before write. These names are passed to `log.Init` → `WithMaskFields` and applied by `MaskProcessor`: matching keys at **any nesting level** in maps / decoded JSON have their values replaced with `****`. Use the same key names as in your API JSON bodies (e.g. `password`, `access_token`). Nested objects are traversed; only **exact key names** are matched (not dot-paths like `user.password`). Default is an empty slice.
 - `async` — When `true`, log writes are performed asynchronously by a background worker goroutine. The caller's `Write` only enqueues the encoded buffer, reducing latency on the request path. Default is `false` (synchronous).
 - `asyncQueueSize` — Bounded channel capacity for async mode. When the queue is full, new log entries are dropped (drop-new policy) rather than blocking the request. Default is `4096`. Ignored when `async` is `false`.
-- `maxSizeBytes` - Maximum size, in bytes, for each encoded structured log entry. Larger string, byte, and nested values are truncated with a `...(truncated)` suffix before writing to the sink. Default is `8192` (8KB).
+- `maxSizeBytes` - Maximum size, in bytes, for each `request_body` and `response_body` structured log field. Larger body values keep the first `maxSizeBytes` bytes and append a `...(truncated)` suffix before writing to the sink. Default is `8192` (8KB), excluding the suffix length.
+- Gzip-compressed responses are not written to `response_body` as raw bytes. When `Content-Encoding` contains `gzip`, Bean logs `[gzip compressed response omitted]`, `response_body_size`, and `response_content_encoding` instead.
 
 **Note:** `bodyDumpMaskParam` affects **structured** `TraceInfo` / `TraceError` payloads (including `request_body` / `response_body` when they contain JSON). It does not change what the middleware reads from the wire; it only redacts values in the logged output.
 
@@ -447,7 +448,7 @@ Functional options for `NewLogger`:
 | `WithMaskFields(fields)` | Field names to mask with `****` |
 | `WithRuntimePlatform(platform)` | Cloud platform hint (`gcp`/`aws`/`azure`) for trace key |
 | `WithSinkAsync(async, queueSize)` | Enable async writing with bounded queue |
-| `WithMaxSizeBytes(maxBytes)` | Limit each encoded structured log entry; values <= 0 use the 8KB default |
+| `WithMaxSizeBytes(maxBytes)` | Limit each request_body and response_body field; values <= 0 use the 8KB default |
 
 #### Extractors
 
@@ -472,7 +473,7 @@ Processors are composable and applied in pipeline order.
 
 #### Sink
 
-Final output destination. Implement the `Sink` interface (`Write(entry Entry) error`). The package provides `NewSink(out io.WriteCloser, projectID string, cfg SinkConfig)` which writes JSON lines (GCP-compatible: timestamp, severity, level, fields, optional `logging.googleapis.com/trace`). When `SinkConfig.Async` is `true`, writes go through a bounded channel consumed by a single background goroutine, decoupling callers from I/O latency. Before writing, entries larger than `MaxSizeBytes` are shrunk by truncating large structured fields. On close, if any entries were dropped, a JSON warning line with `dropped_count` is emitted before the underlying writer is closed.
+Final output destination. Implement the `Sink` interface (`Write(entry Entry) error`). The package provides `NewSink(out io.WriteCloser, projectID string, cfg SinkConfig)` which writes JSON lines (GCP-compatible: timestamp, severity, level, fields, optional `logging.googleapis.com/trace`). When `SinkConfig.Async` is `true`, writes go through a bounded channel consumed by a single background goroutine, decoupling callers from I/O latency. Before writing, `request_body` and `response_body` values larger than `MaxSizeBytes` are truncated. On close, if any entries were dropped, a JSON warning line with `dropped_count` is emitted before the underlying writer is closed.
 
 ### Features
 

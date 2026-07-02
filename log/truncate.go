@@ -6,104 +6,44 @@ import (
 )
 
 const (
-	// DefaultMaxSizeBytes limits one encoded structured log entry to 8KB.
+	// DefaultMaxSizeBytes limits request_body and response_body fields to 8KB each.
 	DefaultMaxSizeBytes = 8 * 1024
 	truncatedSuffix     = "...(truncated)"
 )
 
-type truncateCandidate struct {
-	value string
-	set   func(string)
-}
+var bodyLogFields = [...]string{"request_body", "response_body"}
 
-func encodedPayloadSize(payload map[string]any) int {
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return 0
-	}
-	return len(b) + 1 // json.Encoder appends a newline.
-}
-
-func truncatePayloadToSize(payload map[string]any, maxBytes int) {
+func truncateBodyFields(payload map[string]any, maxBytes int) {
 	if maxBytes <= 0 {
 		maxBytes = DefaultMaxSizeBytes
 	}
 
-	for range 128 {
-		currentSize := encodedPayloadSize(payload)
-		if currentSize == 0 || currentSize <= maxBytes {
-			return
-		}
-
-		candidate, ok := largestTruncateCandidate(payload)
+	for _, field := range bodyLogFields {
+		value, ok := payload[field]
 		if !ok {
-			return
+			continue
 		}
-
-		overBy := currentSize - maxBytes
-		targetBytes := len(candidate.value) - overBy
-		if targetBytes >= len(candidate.value) {
-			targetBytes = len(candidate.value) / 2
-		}
-		if targetBytes < len(truncatedSuffix) {
-			targetBytes = len(truncatedSuffix)
-		}
-
-		next := truncateStringBytes(candidate.value, targetBytes)
-		if next == candidate.value {
-			next = truncatedSuffix
-		}
-		candidate.set(next)
+		payload[field] = truncateBodyValue(value, maxBytes)
 	}
 }
 
-func largestTruncateCandidate(v any) (truncateCandidate, bool) {
-	var best truncateCandidate
-	var found bool
-	collectTruncateCandidates(v, func(c truncateCandidate) {
-		if !found || len(c.value) > len(best.value) {
-			best = c
-			found = true
-		}
-	})
-	return best, found
-}
-
-func collectTruncateCandidates(v any, add func(truncateCandidate)) {
-	switch x := v.(type) {
-	case map[string]any:
-		for k, vv := range x {
-			key := k
-			collectTruncateCandidatesWithSetter(vv, func(next any) { x[key] = next }, add)
-		}
-	case []any:
-		for i, vv := range x {
-			idx := i
-			collectTruncateCandidatesWithSetter(vv, func(next any) { x[idx] = next }, add)
-		}
-	}
-}
-
-func collectTruncateCandidatesWithSetter(v any, setAny func(any), add func(truncateCandidate)) {
-	switch x := v.(type) {
+func truncateBodyValue(value any, maxBytes int) any {
+	switch v := value.(type) {
 	case string:
-		if x != truncatedSuffix {
-			add(truncateCandidate{value: x, set: func(next string) { setAny(next) }})
-		}
+		return truncateStringBytes(v, maxBytes)
 	case []byte:
-		s := string(x)
-		if s != truncatedSuffix {
-			add(truncateCandidate{value: s, set: func(next string) { setAny(next) }})
+		if len(v) <= maxBytes {
+			return v
 		}
+		return truncateStringBytes(string(v), maxBytes)
 	case json.RawMessage:
-		s := string(x)
-		if s != truncatedSuffix {
-			add(truncateCandidate{value: s, set: func(next string) { setAny(next) }})
+		if len(v) <= maxBytes {
+			return v
 		}
-	case map[string]any:
-		collectTruncateCandidates(x, add)
-	case []any:
-		collectTruncateCandidates(x, add)
+		// Return a string instead of RawMessage so truncation cannot produce invalid JSON.
+		return truncateStringBytes(string(v), maxBytes)
+	default:
+		return v
 	}
 }
 
@@ -114,12 +54,7 @@ func truncateStringBytes(s string, maxBytes int) string {
 	if len(s) <= maxBytes {
 		return s
 	}
-	if maxBytes <= len(truncatedSuffix) {
-		return trimStringToBytes(truncatedSuffix, maxBytes)
-	}
-
-	prefixLimit := maxBytes - len(truncatedSuffix)
-	return trimStringToBytes(s, prefixLimit) + truncatedSuffix
+	return trimStringToBytes(s, maxBytes) + truncatedSuffix
 }
 
 func trimStringToBytes(s string, maxBytes int) string {
