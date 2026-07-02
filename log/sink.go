@@ -30,8 +30,9 @@ const defaultAsyncQueueSize = 4096
 var ErrSinkClosed = errors.New("log sink is closed")
 
 type SinkConfig struct {
-	Async     bool
-	QueueSize int
+	Async        bool
+	QueueSize    int
+	MaxSizeBytes int
 }
 
 // NopWriteCloser wraps an io.Writer with a no-op Close so it satisfies io.WriteCloser.
@@ -43,6 +44,7 @@ type sink struct {
 	out          io.WriteCloser
 	payloadTrace string
 	async        bool
+	maxSizeBytes int
 
 	queue    chan *bytes.Buffer
 	workerWg sync.WaitGroup
@@ -58,6 +60,11 @@ func NewSink(out io.WriteCloser, payloadTrace string, cfg SinkConfig) (*sink, er
 		out:          out,
 		payloadTrace: strings.TrimSpace(payloadTrace),
 		async:        cfg.Async,
+		maxSizeBytes: cfg.MaxSizeBytes,
+	}
+
+	if gs.maxSizeBytes <= 0 {
+		gs.maxSizeBytes = DefaultMaxSizeBytes
 	}
 
 	if !cfg.Async {
@@ -100,6 +107,11 @@ func (g *sink) Write(e Entry) error {
 	buf.Reset()
 
 	err := json.NewEncoder(buf).Encode(payload)
+	if err == nil && g.maxSizeBytes > 0 && buf.Len() > g.maxSizeBytes {
+		truncatePayloadToSize(payload, g.maxSizeBytes)
+		buf.Reset()
+		err = json.NewEncoder(buf).Encode(payload)
+	}
 
 	clear(payload)
 	payloadPool.Put(payload)

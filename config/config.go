@@ -20,8 +20,9 @@ type Config struct {
 	Secret       string
 	AccessLog    struct {
 		On                bool
-		Async             bool 
-		AsyncQueueSize    int 
+		Async             bool
+		AsyncQueueSize    int
+		MaxSizeBytes      int
 		BodyDump          bool
 		Path              string
 		RuntimePlatform   string

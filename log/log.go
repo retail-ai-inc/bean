@@ -57,6 +57,7 @@ type Config struct {
 	runtimePlatform  string
 	sinkAsync        bool
 	sinkAsyncQueueSz int
+	maxSizeBytes     int
 }
 
 type LoggerOptions func(*Config)
@@ -80,6 +81,10 @@ func WithSinkAsync(async bool, queueSize int) LoggerOptions {
 	}
 }
 
+func WithMaxSizeBytes(maxBytes int) LoggerOptions {
+	return func(c *Config) { c.maxSizeBytes = maxBytes }
+}
+
 func tracePayloadKey(platform string) string {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
 	case "gcp", "google":
@@ -101,8 +106,9 @@ func NewLogger(elogger echo.Logger, options ...LoggerOptions) (*logger, error) {
 	payloadTrace := tracePayloadKey(cfg.runtimePlatform)
 
 	sinkCfg := SinkConfig{
-		Async:     cfg.sinkAsync,
-		QueueSize: cfg.sinkAsyncQueueSz,
+		Async:        cfg.sinkAsync,
+		QueueSize:    cfg.sinkAsyncQueueSz,
+		MaxSizeBytes: cfg.maxSizeBytes,
 	}
 
 	var out io.WriteCloser = NopWriteCloser{Writer: elogger.Output()}
@@ -163,6 +169,7 @@ func Init(logger echo.Logger) BeanLogger {
 			WithAccessLogPath(config.Bean.AccessLog.Path),
 			WithRuntimePlatform(config.Bean.AccessLog.RuntimePlatform),
 			WithSinkAsync(config.Bean.AccessLog.Async, config.Bean.AccessLog.AsyncQueueSize),
+			WithMaxSizeBytes(config.Bean.AccessLog.MaxSizeBytes),
 		)
 		if err != nil {
 			panic(err)
