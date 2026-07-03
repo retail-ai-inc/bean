@@ -6,35 +6,35 @@ import (
 )
 
 const (
-	// DefaultMaxSizeBytes limits request_body and response_body fields to 8KB each.
-	DefaultMaxSizeBytes = 8 * 1024
+	// DefaultBodyLimit limits request_body and response_body fields to 8KB each.
+	DefaultBodyLimit = 8 * 1024
 	truncatedSuffix     = "...(truncated)"
 )
 
 var bodyLogFields = [...]string{"request_body", "response_body"}
 
 type TruncateBodyProcessor struct {
-	maxBytes int
+	bodyLimit int
 }
 
-func NewTruncateBodyProcessor(maxBytes int) *TruncateBodyProcessor {
-	if maxBytes <= 0 {
-		maxBytes = DefaultMaxSizeBytes
+func NewTruncateBodyProcessor(bodyLimit int) *TruncateBodyProcessor {
+	if bodyLimit <= 0 {
+		bodyLimit = DefaultBodyLimit
 	}
-	return &TruncateBodyProcessor{maxBytes: maxBytes}
+	return &TruncateBodyProcessor{bodyLimit: bodyLimit}
 }
 
 func (p *TruncateBodyProcessor) Process(entry Entry) Entry {
 	if entry.Fields == nil {
 		return entry
 	}
-	truncateBodyFields(entry.Fields, p.maxBytes)
+	truncateBodyFields(entry.Fields, p.bodyLimit)
 	return entry
 }
 
-func truncateBodyFields(payload map[string]any, maxBytes int) {
-	if maxBytes <= 0 {
-		maxBytes = DefaultMaxSizeBytes
+func truncateBodyFields(payload map[string]any, bodyLimit int) {
+	if bodyLimit <= 0 {
+		bodyLimit = DefaultBodyLimit
 	}
 
 	for _, field := range bodyLogFields {
@@ -42,51 +42,51 @@ func truncateBodyFields(payload map[string]any, maxBytes int) {
 		if !ok {
 			continue
 		}
-		payload[field] = truncateBodyValue(value, maxBytes)
+		payload[field] = truncateBodyValue(value, bodyLimit)
 	}
 }
 
-func truncateBodyValue(value any, maxBytes int) any {
+func truncateBodyValue(value any, bodyLimit int) any {
 	switch v := value.(type) {
 	case string:
-		return truncateStringBytes(v, maxBytes)
+		return truncateStringBytes(v, bodyLimit)
 	case []byte:
-		if len(v) <= maxBytes {
+		if len(v) <= bodyLimit {
 			return v
 		}
-		return truncateStringBytes(string(v), maxBytes)
+		return truncateStringBytes(string(v), bodyLimit)
 	case json.RawMessage:
-		if len(v) <= maxBytes {
+		if len(v) <= bodyLimit {
 			return v
 		}
 		// Return a string instead of RawMessage so truncation cannot produce invalid JSON.
-		return truncateStringBytes(string(v), maxBytes)
+		return truncateStringBytes(string(v), bodyLimit)
 	case map[string]any, []any:
 		b, err := json.Marshal(v)
 		if err != nil {
 			return v
 		}
-		return truncateStringBytes(string(b), maxBytes)
+		return truncateStringBytes(string(b), bodyLimit)
 	default:
 		return v
 	}
 }
 
-func truncateStringBytes(s string, maxBytes int) string {
-	if maxBytes <= 0 {
-		maxBytes = DefaultMaxSizeBytes
+func truncateStringBytes(s string, bodyLimit int) string {
+	if bodyLimit <= 0 {
+		bodyLimit = DefaultBodyLimit
 	}
-	if len(s) <= maxBytes {
+	if len(s) <= bodyLimit {
 		return s
 	}
-	return trimStringToBytes(s, maxBytes) + truncatedSuffix
+	return trimStringToBytes(s, bodyLimit) + truncatedSuffix
 }
 
-func trimStringToBytes(s string, maxBytes int) string {
-	if maxBytes <= 0 {
+func trimStringToBytes(s string, bodyLimit int) string {
+	if bodyLimit <= 0 {
 		return ""
 	}
-	if len(s) <= maxBytes {
+	if len(s) <= bodyLimit {
 		return s
 	}
 
@@ -96,7 +96,7 @@ func trimStringToBytes(s string, maxBytes int) string {
 		if r == utf8.RuneError && size == 0 {
 			break
 		}
-		if end+size > maxBytes {
+		if end+size > bodyLimit {
 			break
 		}
 		end += size

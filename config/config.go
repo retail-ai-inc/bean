@@ -22,7 +22,7 @@ type Config struct {
 		On                bool
 		Async             bool
 		AsyncQueueSize    int
-		MaxSizeBytes      int
+		BodyLimit         int
 		BodyDump          bool
 		Path              string
 		RuntimePlatform   string

@@ -57,7 +57,7 @@ type Config struct {
 	runtimePlatform  string
 	sinkAsync        bool
 	sinkAsyncQueueSz int
-	maxSizeBytes     int
+	bodyLimit        int
 }
 
 type LoggerOptions func(*Config)
@@ -81,8 +81,8 @@ func WithSinkAsync(async bool, queueSize int) LoggerOptions {
 	}
 }
 
-func WithMaxSizeBytes(maxBytes int) LoggerOptions {
-	return func(c *Config) { c.maxSizeBytes = maxBytes }
+func WithBodyLimit(bodyLimit int) LoggerOptions {
+	return func(c *Config) { c.bodyLimit = bodyLimit }
 }
 
 func tracePayloadKey(platform string) string {
@@ -106,9 +106,9 @@ func NewLogger(elogger echo.Logger, options ...LoggerOptions) (*logger, error) {
 	payloadTrace := tracePayloadKey(cfg.runtimePlatform)
 
 	sinkCfg := SinkConfig{
-		Async:        cfg.sinkAsync,
-		QueueSize:    cfg.sinkAsyncQueueSz,
-		MaxSizeBytes: cfg.maxSizeBytes,
+		Async:     cfg.sinkAsync,
+		QueueSize: cfg.sinkAsyncQueueSz,
+		BodyLimit: cfg.bodyLimit,
 	}
 
 	var out io.WriteCloser = NopWriteCloser{Writer: elogger.Output()}
@@ -126,7 +126,7 @@ func NewLogger(elogger echo.Logger, options ...LoggerOptions) (*logger, error) {
 	}
 
 	processors := make([]Processor, 0, 3)
-	processors = append(processors, NewTruncateBodyProcessor(cfg.maxSizeBytes))
+	processors = append(processors, NewTruncateBodyProcessor(cfg.bodyLimit))
 	if len(cfg.maskFields) > 0 {
 		processors = append(processors, NewMaskProcessor(cfg.maskFields))
 	}
@@ -170,7 +170,7 @@ func Init(logger echo.Logger) BeanLogger {
 			WithAccessLogPath(config.Bean.AccessLog.Path),
 			WithRuntimePlatform(config.Bean.AccessLog.RuntimePlatform),
 			WithSinkAsync(config.Bean.AccessLog.Async, config.Bean.AccessLog.AsyncQueueSize),
-			WithMaxSizeBytes(config.Bean.AccessLog.MaxSizeBytes),
+			WithBodyLimit(config.Bean.AccessLog.BodyLimit),
 		)
 		if err != nil {
 			panic(err)

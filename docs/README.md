@@ -148,7 +148,7 @@ Bean has a pre-builtin logging system. If you open the `env.json` file from your
   "bodyDumpMaskParam": ["password", "token"],
   "async": false,
   "asyncQueueSize": 4096,
-  "maxSizeBytes": 8192
+  "bodyLimit": 8192
 }
 ```
 
@@ -159,7 +159,7 @@ Bean has a pre-builtin logging system. If you open the `env.json` file from your
 - `bodyDumpMaskParam` — List of **JSON object keys** whose values should be **masked** in structured log fields before write. These names are passed to `log.Init` → `WithMaskFields` and applied by `MaskProcessor`: matching keys at **any nesting level** in maps / decoded JSON have their values replaced with `****`. Use the same key names as in your API JSON bodies (e.g. `password`, `access_token`). Nested objects are traversed; only **exact key names** are matched (not dot-paths like `user.password`). Default is an empty slice.
 - `async` — When `true`, log writes are performed asynchronously by a background worker goroutine. The caller's `Write` only enqueues the encoded buffer, reducing latency on the request path. Default is `false` (synchronous).
 - `asyncQueueSize` — Bounded channel capacity for async mode. When the queue is full, new log entries are dropped (drop-new policy) rather than blocking the request. Default is `4096`. Ignored when `async` is `false`.
-- `maxSizeBytes` - Maximum size, in bytes, for each `request_body` and `response_body` structured log field. Larger body values keep the first `maxSizeBytes` bytes and append a `...(truncated)` suffix before writing to the sink. Default is `8192` (8KB), excluding the suffix length.
+- `bodyLimit` - Maximum size, in bytes, for each `request_body` and `response_body` structured log field. Larger body values keep the first `bodyLimit` bytes and append a `...(truncated)` suffix before writing to the sink. Default is `8192` (8KB), excluding the suffix length.
 - Gzip-compressed responses are not written to `response_body` as raw bytes. When `Content-Encoding` contains `gzip`, Bean logs `[gzip compressed response omitted]`, `response_body_size`, and `response_content_encoding` instead.
 
 **Note:** `bodyDumpMaskParam` affects **structured** `TraceInfo` / `TraceError` payloads (including `request_body` / `response_body` when they contain JSON). It does not change what the middleware reads from the wire; it only redacts values in the logged output.
@@ -448,7 +448,7 @@ Functional options for `NewLogger`:
 | `WithMaskFields(fields)` | Field names to mask with `****` |
 | `WithRuntimePlatform(platform)` | Cloud platform hint (`gcp`/`aws`/`azure`) for trace key |
 | `WithSinkAsync(async, queueSize)` | Enable async writing with bounded queue |
-| `WithMaxSizeBytes(maxBytes)` | Limit each request_body and response_body field; values <= 0 use the 8KB default |
+| `WithBodyLimit(bodyLimit)` | Limit each request_body and response_body field; values <= 0 use the 8KB default |
 
 #### Extractors
 
@@ -473,7 +473,7 @@ Processors are composable and applied in pipeline order.
 
 #### Sink
 
-Final output destination. Implement the `Sink` interface (`Write(entry Entry) error`). The package provides `NewSink(out io.WriteCloser, projectID string, cfg SinkConfig)` which writes JSON lines (GCP-compatible: timestamp, severity, level, fields, optional `logging.googleapis.com/trace`). When `SinkConfig.Async` is `true`, writes go through a bounded channel consumed by a single background goroutine, decoupling callers from I/O latency. `NewLogger` applies body truncation before masking and JSON string unescaping, so large JSON body strings are bounded before they can be parsed into structured maps. If a truncated JSON body still contains a configured sensitive field name and can no longer be parsed, masking fails closed by replacing the body with `****`. Before writing, `request_body` and `response_body` values larger than `MaxSizeBytes` are truncated. On close, if any entries were dropped, a JSON warning line with `dropped_count` is emitted before the underlying writer is closed.
+Final output destination. Implement the `Sink` interface (`Write(entry Entry) error`). The package provides `NewSink(out io.WriteCloser, projectID string, cfg SinkConfig)` which writes JSON lines (GCP-compatible: timestamp, severity, level, fields, optional `logging.googleapis.com/trace`). When `SinkConfig.Async` is `true`, writes go through a bounded channel consumed by a single background goroutine, decoupling callers from I/O latency. `NewLogger` applies body truncation before masking and JSON string unescaping, so large JSON body strings are bounded before they can be parsed into structured maps. If a truncated JSON body still contains a configured sensitive field name and can no longer be parsed, masking fails closed by replacing the body with `****`. Before writing, `request_body` and `response_body` values larger than `BodyLimit` are truncated. On close, if any entries were dropped, a JSON warning line with `dropped_count` is emitted before the underlying writer is closed.
 
 ### Features
 
@@ -514,7 +514,7 @@ blogger, err := log.NewLogger(
     log.WithRuntimePlatform("gcp"),
     log.WithMaskFields([]string{"password", "token"}),
     log.WithSinkAsync(true, 4096),
-    log.WithMaxSizeBytes(8192),
+    log.WithBodyLimit(8192),
 )
 ```
 
@@ -550,7 +550,7 @@ It captures:
 | Field                | Description                                                                      |
 | -------------------- | -------------------------------------------------------------------------------- |
 | `DumpBody`           | Include request and response bodies in log fields.                               |
-| `MaxBodySize`        | Max bytes to read from response body (default 64KB).                             |
+| `BodyLimit`          | Max bytes to read from response body (default 64KB).                             |
 | `LogType`            | Written as `"type"` in log fields for filtering (e.g. in GCP).                   |
 | `AllowedReqHeaders`  | Request header names to log. Empty uses `config.Bean.AccessLog.ReqHeaderParam`.  |
 | `AllowedRespHeaders` | Response header names to log. Empty uses `config.Bean.AccessLog.ResHeaderParam`. |
@@ -559,7 +559,7 @@ It captures:
 
 - Wraps any `http.RoundTripper` (nil uses `http.DefaultTransport`).
 - Logs via `AccessLogger.TraceInfo` (success) or `TraceError` (failure) with level `"OUTBOUND_API"`.
-- Optional body dumping via `LoggingOptions.DumpBody`; `MaxBodySize` caps response body size (default 64KB).
+- Optional body dumping via `LoggingOptions.DumpBody`; `BodyLimit` caps response body size (default 64KB).
 - Safe body re-read with `io.NopCloser` so the request can still be sent.
 - Compatible with the log pipeline (masking, sink). Body fields are `[]byte`; in JSON output they appear as base64 unless the pipeline or sink converts them.
 
@@ -577,7 +577,7 @@ transport := http.NewLoggingTransport(
     logger,
     http.LoggingOptions{
         DumpBody:           true,
-        MaxBodySize:        64 * 1024,
+        BodyLimit:          64 * 1024,
         LogType:            "my-service",
         AllowedReqHeaders:  []string{"Authorization", "Content-Type"},
         AllowedRespHeaders: []string{"Content-Type"},

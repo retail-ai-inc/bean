@@ -14,12 +14,12 @@ import (
 
 func TestTruncateBodyProcessor_DefaultsTo8KB(t *testing.T) {
 	p := NewTruncateBodyProcessor(0)
-	entry := Entry{Fields: map[string]any{"request_body": strings.Repeat("a", DefaultMaxSizeBytes*2)}}
+	entry := Entry{Fields: map[string]any{"request_body": strings.Repeat("a", DefaultBodyLimit*2)}}
 
 	got := p.Process(entry)
 
 	requestBody := got.Fields["request_body"].(string)
-	assert.Len(t, strings.TrimSuffix(requestBody, truncatedSuffix), DefaultMaxSizeBytes)
+	assert.Len(t, strings.TrimSuffix(requestBody, truncatedSuffix), DefaultBodyLimit)
 	assert.Contains(t, requestBody, "truncated")
 }
 
