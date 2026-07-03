@@ -103,8 +103,6 @@ func (g *sink) Write(e Entry) error {
 		payload[g.payloadTrace] = e.Trace.TraceID
 	}
 
-	truncateBodyFields(payload, g.maxSizeBytes)
-
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 

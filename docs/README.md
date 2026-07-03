@@ -473,13 +473,13 @@ Processors are composable and applied in pipeline order.
 
 #### Sink
 
-Final output destination. Implement the `Sink` interface (`Write(entry Entry) error`). The package provides `NewSink(out io.WriteCloser, projectID string, cfg SinkConfig)` which writes JSON lines (GCP-compatible: timestamp, severity, level, fields, optional `logging.googleapis.com/trace`). When `SinkConfig.Async` is `true`, writes go through a bounded channel consumed by a single background goroutine, decoupling callers from I/O latency. Before writing, `request_body` and `response_body` values larger than `MaxSizeBytes` are truncated. On close, if any entries were dropped, a JSON warning line with `dropped_count` is emitted before the underlying writer is closed.
+Final output destination. Implement the `Sink` interface (`Write(entry Entry) error`). The package provides `NewSink(out io.WriteCloser, projectID string, cfg SinkConfig)` which writes JSON lines (GCP-compatible: timestamp, severity, level, fields, optional `logging.googleapis.com/trace`). When `SinkConfig.Async` is `true`, writes go through a bounded channel consumed by a single background goroutine, decoupling callers from I/O latency. `NewLogger` applies body truncation before masking and JSON string unescaping, so large JSON body strings are bounded before they can be parsed into structured maps. If a truncated JSON body still contains a configured sensitive field name and can no longer be parsed, masking fails closed by replacing the body with `****`. Before writing, `request_body` and `response_body` values larger than `MaxSizeBytes` are truncated. On close, if any entries were dropped, a JSON warning line with `dropped_count` is emitted before the underlying writer is closed.
 
 ### Features
 
 - Structured (map-based) logging
 - Context-aware trace extraction (e.g. Sentry)
-- Processor pipeline (mask, remove escape)
+- Processor pipeline (body truncation, mask, remove escape)
 - Pluggable sink (e.g. stdout, any `io.Writer`)
 - JSON-first design
 - Cloud-ready (GCP trace format)

@@ -434,6 +434,41 @@ Content-Type: text/xml
 	}
 }
 
+func TestMaskProcessor_Process_MalformedJSONStringWithSensitiveFieldUsesRegexFallback(t *testing.T) {
+	p := NewMaskProcessor([]string{"cardNo"})
+	entry := Entry{Fields: map[string]interface{}{
+		"response_body": `{"cardNo":"4111111111111111`,
+	}}
+
+	got := p.Process(entry)
+
+	assert.Equal(t, `{"cardNo":"****`, got.Fields["response_body"])
+}
+
+func TestMaskProcessor_Process_MalformedJSONStringWithSensitiveFieldFailsClosedWhenRegexMisses(t *testing.T) {
+	p := NewMaskProcessor([]string{"cardNo"})
+	entry := Entry{Fields: map[string]interface{}{
+		"response_body": `{"cardNo`,
+	}}
+
+	got := p.Process(entry)
+
+	assert.Equal(t, "****", got.Fields["response_body"])
+}
+
+func TestMaskProcessor_Process_MalformedJSONScalarFieldUsesRegexFallback(t *testing.T) {
+	p := NewMaskProcessor([]string{"pinCode", "active"})
+	entry := Entry{Fields: map[string]interface{}{
+		"response_body": `{"pinCode":1234,"active":true,"name":"test`,
+	}}
+
+	got := p.Process(entry)
+
+	masked := got.Fields["response_body"].(string)
+	assert.Contains(t, masked, `"pinCode":"****"`)
+	assert.Contains(t, masked, `"active":"****"`)
+}
+
 func TestMaskProcessor_Process_XMLFailClosedAndBOM(t *testing.T) {
 	t.Run("truncated_xml_with_sensitive_field_is_fully_redacted", func(t *testing.T) {
 		p := NewMaskProcessor([]string{"cardNo"})

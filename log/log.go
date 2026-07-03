@@ -125,7 +125,8 @@ func NewLogger(elogger echo.Logger, options ...LoggerOptions) (*logger, error) {
 		return nil, err
 	}
 
-	processors := make([]Processor, 0, 2)
+	processors := make([]Processor, 0, 3)
+	processors = append(processors, NewTruncateBodyProcessor(cfg.maxSizeBytes))
 	if len(cfg.maskFields) > 0 {
 		processors = append(processors, NewMaskProcessor(cfg.maskFields))
 	}

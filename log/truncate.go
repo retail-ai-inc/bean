@@ -13,6 +13,25 @@ const (
 
 var bodyLogFields = [...]string{"request_body", "response_body"}
 
+type TruncateBodyProcessor struct {
+	maxBytes int
+}
+
+func NewTruncateBodyProcessor(maxBytes int) *TruncateBodyProcessor {
+	if maxBytes <= 0 {
+		maxBytes = DefaultMaxSizeBytes
+	}
+	return &TruncateBodyProcessor{maxBytes: maxBytes}
+}
+
+func (p *TruncateBodyProcessor) Process(entry Entry) Entry {
+	if entry.Fields == nil {
+		return entry
+	}
+	truncateBodyFields(entry.Fields, p.maxBytes)
+	return entry
+}
+
 func truncateBodyFields(payload map[string]any, maxBytes int) {
 	if maxBytes <= 0 {
 		maxBytes = DefaultMaxSizeBytes
@@ -42,6 +61,12 @@ func truncateBodyValue(value any, maxBytes int) any {
 		}
 		// Return a string instead of RawMessage so truncation cannot produce invalid JSON.
 		return truncateStringBytes(string(v), maxBytes)
+	case map[string]any, []any:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return v
+		}
+		return truncateStringBytes(string(b), maxBytes)
 	default:
 		return v
 	}
