@@ -27,8 +27,8 @@ func NewLoggingTransport(
 		base = http.DefaultTransport
 	}
 
-	if opt.MaxBodySize == 0 {
-		opt.MaxBodySize = 64 * 1024
+	if opt.BodyLimit == 0 {
+		opt.BodyLimit = 64 * 1024
 	}
 
 	if len(opt.AllowedReqHeaders) == 0 {
@@ -98,7 +98,7 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	}
 
 	if t.opt.DumpBody && resp != nil && resp.Body != nil {
-		limited := io.LimitReader(resp.Body, t.opt.MaxBodySize)
+		limited := io.LimitReader(resp.Body, t.opt.BodyLimit)
 		buf := &bytes.Buffer{}
 		respBody, _ := io.ReadAll(io.TeeReader(limited, buf))
 		resp.Body = io.NopCloser(io.MultiReader(buf, resp.Body))

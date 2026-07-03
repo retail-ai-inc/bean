@@ -17,13 +17,17 @@ type Processor interface {
 }
 
 type MaskProcessor struct {
-	fields map[string]struct{}
-	xmlRes []*regexp.Regexp
+	fields        map[string]struct{}
+	xmlRes        []*regexp.Regexp
+	jsonStringRes []*regexp.Regexp
+	jsonScalarRes []*regexp.Regexp
 }
 
 func NewMaskProcessor(fields []string) *MaskProcessor {
 	fm := make(map[string]struct{}, len(fields))
 	xmlRes := make([]*regexp.Regexp, 0, len(fields))
+	jsonStringRes := make([]*regexp.Regexp, 0, len(fields))
+	jsonScalarRes := make([]*regexp.Regexp, 0, len(fields))
 	for _, f := range fields {
 		f = strings.TrimSpace(f)
 		if f == "" {
@@ -33,9 +37,11 @@ func NewMaskProcessor(fields []string) *MaskProcessor {
 
 		quoted := regexp.QuoteMeta(f)
 		xmlRes = append(xmlRes, regexp.MustCompile(fmt.Sprintf(`(?s)(<(?:\w+:)?%s\b[^>]*>)(.*?)(</(?:\w+:)?%s>)`, quoted, quoted)))
+		jsonStringRes = append(jsonStringRes, regexp.MustCompile(fmt.Sprintf(`(?s)("%s"\s*:\s*")(?:\\.|[^"\\])*("?)`, quoted)))
+		jsonScalarRes = append(jsonScalarRes, regexp.MustCompile(fmt.Sprintf(`(?s)("%s"\s*:\s*)(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)`, quoted)))
 	}
 
-	return &MaskProcessor{fields: fm, xmlRes: xmlRes}
+	return &MaskProcessor{fields: fm, xmlRes: xmlRes, jsonStringRes: jsonStringRes, jsonScalarRes: jsonScalarRes}
 }
 
 func (p *MaskProcessor) Process(entry Entry) Entry {
@@ -78,7 +84,10 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 		if looksLikeJSON(s) {
 			var decoded interface{}
 			if err := json.Unmarshal([]byte(s), &decoded); err != nil {
-				return v
+				if out, masked := p.maskJSONString(s); masked {
+					return out
+				}
+				return "****"
 			}
 			masked := p.maskValue(decoded)
 			b, err := json.Marshal(masked)
@@ -170,6 +179,30 @@ func (p *MaskProcessor) containsAnyField(s string) bool {
 // tolerates surrounding log noise such as HTTP status lines and headers.
 func looksLikeXMLPayload(s string) bool {
 	return strings.IndexByte(s, '<') >= 0
+}
+
+func (p *MaskProcessor) maskJSONString(s string) (string, bool) {
+	if s == "" || !p.containsAnyField(s) {
+		return s, false
+	}
+
+	masked := false
+	for _, re := range p.jsonStringRes {
+		next := re.ReplaceAllString(s, "${1}****${2}")
+		if next != s {
+			masked = true
+			s = next
+		}
+	}
+	for _, re := range p.jsonScalarRes {
+		next := re.ReplaceAllString(s, `${1}"****"`)
+		if next != s {
+			masked = true
+			s = next
+		}
+	}
+
+	return s, masked
 }
 
 func (p *MaskProcessor) maskXMLBytes(in []byte) ([]byte, bool) {
