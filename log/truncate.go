@@ -8,7 +8,7 @@ import (
 const (
 	// DefaultMaxSizeBytes limits request_body and response_body fields to 8KB each.
 	DefaultMaxSizeBytes = 8 * 1024
-	truncatedSuffix     = "...(truncated)"
+	truncatedSuffix     = "..."
 )
 
 var bodyLogFields = [...]string{"request_body", "response_body"}
@@ -101,5 +101,6 @@ func trimStringToBytes(s string, maxBytes int) string {
 		}
 		end += size
 	}
+
 	return s[:end]
 }
