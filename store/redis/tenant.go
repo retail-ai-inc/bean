@@ -41,6 +41,7 @@ type TenantCache interface {
 	Keys(c context.Context, tenantID uint64, pattern string) ([]string, error)
 	TTL(c context.Context, tenantID uint64, key string) (time.Duration, error)
 	SetString(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) error
+	SetNX(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) (bool, error)
 	GetString(c context.Context, tenantID uint64, key string) (string, error)
 	SetJSON(c context.Context, tenantID uint64, key string, data interface{}, ttl time.Duration) error
 	GetJSON(c context.Context, tenantID uint64, key string, dst interface{}) (bool, error)
@@ -172,6 +173,21 @@ func (t *tenantCache) SetString(c context.Context, tenantID uint64, key string, 
 	}
 
 	return client.Set(c, key, data, ttl)
+}
+
+func (t *tenantCache) SetNX(c context.Context, tenantID uint64, key string, data string, ttl time.Duration) (bool, error) {
+	c, finish := trace.StartSpan(c, t.operation)
+	defer finish()
+
+	client, exist := t.clients[tenantID]
+	if !exist {
+		return false, fmt.Errorf("tenantID:%d not found", tenantID)
+	}
+	if t.prefix != "" {
+		key = t.prefix + t.sep + key
+	}
+
+	return client.SetNX(c, key, data, ttl)
 }
 
 func (t *tenantCache) GetString(c context.Context, tenantID uint64, key string) (string, error) {

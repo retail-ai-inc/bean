@@ -603,6 +603,17 @@ func (clients *RedisDBConn) Set(c context.Context, key string, data interface{},
 	return nil
 }
 
+// SetNX sets key to data only if the key does not already exist.
+// Returns true when the key was set, false when it already existed.
+func (clients *RedisDBConn) SetNX(c context.Context, key string, data interface{}, ttl time.Duration) (bool, error) {
+	ok, err := clients.Primary.SetNX(c, key, data, ttl).Result()
+	if err != nil {
+		return false, errors.WithStack(err)
+	}
+
+	return ok, nil
+}
+
 // - HSet("myhash", map[string]interface{}{"key1": "value1", "key2": "value2"})
 // - HSet("myhash", []string{"key1", "value1", "key2", "value2"})
 // - HSet("myhash", "key1", "value1", "key2", "value2")

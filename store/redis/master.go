@@ -38,6 +38,7 @@ type MasterCache interface {
 	Keys(c context.Context, pattern string) ([]string, error)
 	TTL(c context.Context, key string) (time.Duration, error)
 	SetString(c context.Context, key string, data string, ttl time.Duration) error
+	SetNX(c context.Context, key string, data string, ttl time.Duration) (bool, error)
 	GetString(c context.Context, key string) (string, error)
 	SetJSON(c context.Context, key string, data interface{}, ttl time.Duration) error
 	GetJSON(c context.Context, key string, dst interface{}) (bool, error)
@@ -125,6 +126,10 @@ func (m *masterCache) TTL(c context.Context, key string) (time.Duration, error) 
 
 func (m *masterCache) SetString(c context.Context, key string, data string, ttl time.Duration) error {
 	return m.cache.SetString(c, masterID, key, data, ttl)
+}
+
+func (m *masterCache) SetNX(c context.Context, key string, data string, ttl time.Duration) (bool, error) {
+	return m.cache.SetNX(c, masterID, key, data, ttl)
 }
 
 func (m *masterCache) GetString(c context.Context, key string) (string, error) {
