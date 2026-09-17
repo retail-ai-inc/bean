@@ -3,7 +3,7 @@ module github.com/retail-ai-inc/bean/v2
 go 1.25.0
 
 require (
-	github.com/alicebob/miniredis/v2 v2.35.0
+	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/alphadose/haxmap v1.4.1
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/getsentry/sentry-go v0.48.0
