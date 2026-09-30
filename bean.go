@@ -34,7 +34,6 @@ import (
 	"os"
 	"os/signal"
 	"slices"
-	"strings"
 	"syscall"
 	"time"
 
@@ -101,6 +100,62 @@ var TenantAlterDbHostParam string
 // Support a DNS cache version of the net/http Transport.
 var NetHttpFastTransporter *http.Transport
 
+func newNetHTTPFastTransporter() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	defaultDialContext := transport.DialContext
+	resolver := &dnscache.Resolver{}
+	transportConfig := config.Bean.NetHttpFastTransporter
+
+	transport.MaxIdleConns = valueOr(transportConfig.MaxIdleConns, 0)
+	transport.MaxIdleConnsPerHost = valueOr(transportConfig.MaxIdleConnsPerHost, 0)
+	transport.MaxConnsPerHost = valueOr(transportConfig.MaxConnsPerHost, 0)
+	transport.IdleConnTimeout = valueOr(transportConfig.IdleConnTimeout, time.Duration(0))
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, fmt.Errorf("split address %q: %w", address, err)
+		}
+
+		ips, err := resolver.LookupHost(ctx, host)
+		if err != nil {
+			return nil, fmt.Errorf("resolve host %q: %w", host, err)
+		}
+
+		var lastErr error
+		for _, ip := range ips {
+			conn, err := defaultDialContext(ctx, network, net.JoinHostPort(ip, port))
+			if err == nil {
+				return conn, nil
+			}
+			lastErr = err
+		}
+
+		if lastErr == nil {
+			lastErr = fmt.Errorf("DNS returned no addresses for %q", host)
+		}
+
+		return nil, lastErr
+	}
+
+	refreshInterval := valueOr(transportConfig.DNSCacheTimeout, 5*time.Minute)
+	go func() {
+		ticker := time.NewTicker(refreshInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			resolver.Refresh(true)
+		}
+	}()
+
+	return transport
+}
+
+func valueOr[T any](value *T, fallback T) T {
+	if value == nil {
+		return fallback
+	}
+	return *value
+}
+
 func New() *Bean {
 	if config.Bean == nil {
 		log.Fatal("config is not loaded")
@@ -117,58 +172,7 @@ func New() *Bean {
 
 	// If `NetHttpFastTransporter` is on from env.json then initialize it.
 	if config.Bean.NetHttpFastTransporter.On {
-		resolver := &dnscache.Resolver{}
-		if config.Bean.NetHttpFastTransporter.MaxIdleConns == nil {
-			*config.Bean.NetHttpFastTransporter.MaxIdleConns = 0
-		}
-
-		if config.Bean.NetHttpFastTransporter.MaxIdleConnsPerHost == nil {
-			*config.Bean.NetHttpFastTransporter.MaxIdleConnsPerHost = 0
-		}
-
-		if config.Bean.NetHttpFastTransporter.MaxConnsPerHost == nil {
-			*config.Bean.NetHttpFastTransporter.MaxConnsPerHost = 0
-		}
-
-		if config.Bean.NetHttpFastTransporter.IdleConnTimeout == nil {
-			*config.Bean.NetHttpFastTransporter.IdleConnTimeout = 0
-		}
-
-		if config.Bean.NetHttpFastTransporter.DNSCacheTimeout == nil {
-			*config.Bean.NetHttpFastTransporter.DNSCacheTimeout = 5 * time.Minute
-		}
-
-		NetHttpFastTransporter = &http.Transport{
-			DialContext: func(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
-				separator := strings.LastIndex(addr, ":")
-				ips, err := resolver.LookupHost(ctx, addr[:separator])
-				if err != nil {
-					return nil, err
-				}
-
-				for _, ip := range ips {
-					conn, err = net.Dial(network, ip+addr[separator:])
-					if err == nil {
-						break
-					}
-				}
-
-				return
-			},
-			MaxIdleConns:        *config.Bean.NetHttpFastTransporter.MaxIdleConns,
-			MaxIdleConnsPerHost: *config.Bean.NetHttpFastTransporter.MaxIdleConnsPerHost,
-			MaxConnsPerHost:     *config.Bean.NetHttpFastTransporter.MaxConnsPerHost,
-			IdleConnTimeout:     *config.Bean.NetHttpFastTransporter.IdleConnTimeout,
-		}
-
-		// IMPORTANT: Refresh unused DNS cache in every 5 minutes by default unless set via env.json.
-		go func() {
-			t := time.NewTicker(*config.Bean.NetHttpFastTransporter.DNSCacheTimeout)
-			defer t.Stop()
-			for range t.C {
-				resolver.Refresh(true)
-			}
-		}()
+		NetHttpFastTransporter = newNetHTTPFastTransporter()
 	}
 
 	// If `memory` database is on and `delKeyAPI` end point along with bearer token are properly set.
