@@ -1,6 +1,6 @@
 module github.com/retail-ai-inc/bean/v2
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
@@ -27,7 +27,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	go.mongodb.org/mongo-driver v1.17.9
-	golang.org/x/sync v0.22.0
+	golang.org/x/sync v0.23.0
 	golang.org/x/tools v0.49.0
 	google.golang.org/grpc v1.83.2
 	gorm.io/datatypes v1.2.7
