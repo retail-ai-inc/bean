@@ -26,7 +26,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
-	go.mongodb.org/mongo-driver v1.17.9
+	go.mongodb.org/mongo-driver v1.17.10
 	golang.org/x/sync v0.23.0
 	golang.org/x/tools v0.49.0
 	google.golang.org/grpc v1.83.2
