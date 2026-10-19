@@ -12,3 +12,8 @@ updates:
       day: "monday"
       time: "10:00"
       timezone: "Asia/Tokyo"
+    ignore:
+      # sentry-go/echo >= 0.45.0 requires Echo v5; bean is still on Echo v4.
+      # Remove this once bean migrates to Echo v5.
+      - dependency-name: "github.com/getsentry/sentry-go/echo"
+        versions: [">= 0.45.0"]

@@ -15,13 +15,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: '1.26.x' # Latest 1.26 patch; go1.26.0/1.26.1 crash with -race -gcflags "all=-N -l"
     - name: Run go mod tidy
       run: go mod tidy
     - name: Run golangci-lint with Reviewdog
       uses: reviewdog/action-golangci-lint@v2
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        go_version: '1.25' # Ensure this matches go version in your project
+        go_version: '1.26' # Ensure this matches go version in your project
         level: error
         reporter: github-pr-review
         fail_level: error
