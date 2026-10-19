@@ -81,8 +81,9 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 
 			// ---- Body Dump handling ----
 			var reqBody []byte
+			var reqBodyErr error
 			if config.BodyDump && req.Body != nil {
-				reqBody, _ = io.ReadAll(req.Body)
+				reqBody, reqBodyErr = io.ReadAll(req.Body)
 				req.Body = io.NopCloser(bytes.NewBuffer(reqBody))
 			}
 
@@ -108,7 +109,7 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 
 			// ---- Body Dump Log (after) ----
 			if config.BodyDump {
-				logBodyDump(config, c, reqBody, resBody, writer, start, stop, err)
+				logBodyDump(config, c, reqBody, reqBodyErr, resBody, writer, start, stop, err)
 			}
 
 			return
@@ -150,6 +151,7 @@ func logBodyDump(
 	config LoggerConfig,
 	c echo.Context,
 	reqBody []byte,
+	reqBodyErr error,
 	resBody *bytes.Buffer,
 	writer *bodyDumpResponseWriter,
 	start, stop time.Time,
@@ -172,9 +174,13 @@ func logBodyDump(
 		fields["error"] = handlerErr.Error()
 	}
 
-	// ---- structured request body ----
+	// Keep partial body when the client aborts mid-read (e.g. context canceled).
 	if len(reqBody) > 0 {
 		fields["request_body"] = string(reqBody)
+	}
+	if reqBodyErr != nil {
+		fields["request_body_error"] = reqBodyErr.Error()
+		fields["bytes_in_read"] = len(reqBody)
 	}
 
 	// ---- structured response body ----
