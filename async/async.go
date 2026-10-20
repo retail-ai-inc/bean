@@ -375,7 +375,7 @@ func newTask(ctx context.Context, fn TaskWithCtx,
 				"error":   err.Error(),
 			}
 			if reqID, ok := bctx.GetRequestID(ctx); ok {
-				msg["request_id"] = reqID
+				msg["id"] = reqID
 			}
 			log.Logger().Errorj(msg)
 			return
@@ -459,7 +459,7 @@ func recoverPanic(ctx context.Context) {
 			"cause":   v,
 		}
 		if reqID, ok := bctx.GetRequestID(ctx); ok {
-			msg["request_id"] = reqID
+			msg["id"] = reqID
 		}
 		log.Logger().Errorj(msg)
 	}

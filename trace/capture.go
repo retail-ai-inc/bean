@@ -7,7 +7,9 @@ import (
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	"github.com/labstack/echo/v4"
+	elog "github.com/labstack/gommon/log"
 	"github.com/retail-ai-inc/bean/v2/config"
+	bctx "github.com/retail-ai-inc/bean/v2/context"
 	"github.com/retail-ai-inc/bean/v2/log"
 )
 
@@ -17,7 +19,7 @@ import (
 // For supported libraries, see: https://pkg.go.dev/github.com/getsentry/sentry-go@v0.30.0#ExtractStacktrace
 func SentryCaptureExceptionWithEcho(c echo.Context, err error) {
 
-	sentryCaptureException(err, false, func() (*sentry.Hub, bool) {
+	sentryCaptureException(echoRequestContext(c), err, false, func() (*sentry.Hub, bool) {
 
 		if c != nil {
 			return sentryecho.GetHubFromContext(c), true
@@ -33,7 +35,7 @@ func SentryCaptureExceptionWithEcho(c echo.Context, err error) {
 // For supported libraries, see: https://pkg.go.dev/github.com/getsentry/sentry-go@v0.30.0#ExtractStacktrace
 func SentryCaptureException(ctx context.Context, err error) {
 
-	sentryCaptureException(err, false, func() (*sentry.Hub, bool) {
+	sentryCaptureException(ctx, err, false, func() (*sentry.Hub, bool) {
 
 		if ctx != nil {
 			return sentry.GetHubFromContext(ctx), true
@@ -45,9 +47,10 @@ func SentryCaptureException(ctx context.Context, err error) {
 
 // LogAndSentryCaptureException logs the error and captures an exception with context and send to sentry if sentry is configured.
 // It caputures the exception even if the context or sentry hub in the context is nil.
+// The log includes the request ID as `id` when the context carries one.
 func LogAndSentryCaptureException(ctx context.Context, err error) {
 
-	sentryCaptureException(err, true, func() (*sentry.Hub, bool) {
+	sentryCaptureException(ctx, err, true, func() (*sentry.Hub, bool) {
 
 		if ctx != nil {
 			return sentry.GetHubFromContext(ctx), true
@@ -57,7 +60,7 @@ func LogAndSentryCaptureException(ctx context.Context, err error) {
 	})
 }
 
-func sentryCaptureException(err error, logging bool, getHub func() (hub *sentry.Hub, addMissHubInfo bool)) {
+func sentryCaptureException(ctx context.Context, err error, logging bool, getHub func() (hub *sentry.Hub, addMissHubInfo bool)) {
 
 	if err == nil {
 		return
@@ -65,7 +68,7 @@ func sentryCaptureException(err error, logging bool, getHub func() (hub *sentry.
 
 	// Log the error if logging is on, whether sentry is on or off.
 	if logging {
-		log.Logger().Error(err)
+		logWithRequestID(ctx, err.Error(), log.Logger().Errorj, func() { log.Logger().Error(err) })
 	}
 
 	if !config.Bean.Sentry.On {
@@ -90,7 +93,7 @@ func sentryCaptureException(err error, logging bool, getHub func() (hub *sentry.
 // It captures the message even if the context or sentry hub in the context is nil.
 func SentryCaptureMessageWithEcho(c echo.Context, msg string) {
 
-	sentryCaptureMsg(msg, false, func() (*sentry.Hub, bool) {
+	sentryCaptureMsg(echoRequestContext(c), msg, false, func() (*sentry.Hub, bool) {
 
 		if c != nil {
 			return sentryecho.GetHubFromContext(c), true
@@ -104,7 +107,7 @@ func SentryCaptureMessageWithEcho(c echo.Context, msg string) {
 // It captures the message even if the context or sentry hub in the context is nil.
 func SentryCaptureMessage(ctx context.Context, msg string) {
 
-	sentryCaptureMsg(msg, false, func() (*sentry.Hub, bool) {
+	sentryCaptureMsg(ctx, msg, false, func() (*sentry.Hub, bool) {
 
 		if ctx != nil {
 			return sentry.GetHubFromContext(ctx), true
@@ -116,9 +119,10 @@ func SentryCaptureMessage(ctx context.Context, msg string) {
 
 // LogAndSentryCaptureMessage logs the message and captures a message with context and send to sentry if sentry is configured.
 // It captures the message without context even if the context or sentry hub in the context is nil.
+// The log includes the request ID as `id` when the context carries one.
 func LogAndSentryCaptureMessage(ctx context.Context, msg string) {
 
-	sentryCaptureMsg(msg, true, func() (*sentry.Hub, bool) {
+	sentryCaptureMsg(ctx, msg, true, func() (*sentry.Hub, bool) {
 
 		if ctx != nil {
 			return sentry.GetHubFromContext(ctx), true
@@ -128,7 +132,7 @@ func LogAndSentryCaptureMessage(ctx context.Context, msg string) {
 	})
 }
 
-func sentryCaptureMsg(msg string, logging bool, getHub func() (hub *sentry.Hub, addMissHubInfo bool)) {
+func sentryCaptureMsg(ctx context.Context, msg string, logging bool, getHub func() (hub *sentry.Hub, addMissHubInfo bool)) {
 
 	if msg == "" {
 		return
@@ -136,7 +140,7 @@ func sentryCaptureMsg(msg string, logging bool, getHub func() (hub *sentry.Hub, 
 
 	// Log the message if logging is on, whether sentry is on or off.
 	if logging {
-		log.Logger().Info(msg)
+		logWithRequestID(ctx, msg, log.Logger().Infoj, func() { log.Logger().Info(msg) })
 	}
 
 	if !config.Bean.Sentry.On {
@@ -155,4 +159,30 @@ func sentryCaptureMsg(msg string, logging bool, getHub func() (hub *sentry.Hub, 
 	}
 
 	hub.CaptureMessage(msg)
+}
+
+func echoRequestContext(c echo.Context) context.Context {
+
+	if c == nil || c.Request() == nil {
+		return context.TODO()
+	}
+
+	return c.Request().Context()
+}
+
+// logWithRequestID writes a JSON log with `message` and `id` (same key as the access log) when the context
+// has a request ID, otherwise it falls back to the plain log so the output stays the same as before.
+func logWithRequestID(ctx context.Context, msg string, logj func(elog.JSON), fallback func()) {
+
+	if ctx != nil {
+		if reqID, ok := bctx.GetRequestID(ctx); ok {
+			logj(elog.JSON{
+				"message": msg,
+				"id":      reqID,
+			})
+			return
+		}
+	}
+
+	fallback()
 }
