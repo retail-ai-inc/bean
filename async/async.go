@@ -370,14 +370,7 @@ func newTask(ctx context.Context, fn TaskWithCtx,
 				err = errors.Join(ErrTaskTimeout, err)
 			}
 			trace.SentryCaptureException(ctx, err)
-			msg := map[string]interface{}{
-				"message": "Async task failed.",
-				"error":   err.Error(),
-			}
-			if reqID, ok := bctx.GetRequestID(ctx); ok {
-				msg["id"] = reqID
-			}
-			log.Logger().Errorj(msg)
+			log.Logger().Errorj(taskFailedLog(ctx, err))
 			return
 		}
 	}
@@ -454,13 +447,32 @@ func recoverPanic(ctx context.Context) {
 			clone.Recover(v)
 		}
 
-		msg := map[string]interface{}{
-			"message": "Recovered panic from async task.",
-			"cause":   v,
-		}
-		if reqID, ok := bctx.GetRequestID(ctx); ok {
-			msg["id"] = reqID
-		}
-		log.Logger().Errorj(msg)
+		log.Logger().Errorj(recoveredPanicLog(ctx, v))
 	}
+}
+
+func taskFailedLog(ctx context.Context, err error) map[string]interface{} {
+	return withRequestID(ctx, map[string]interface{}{
+		"message": "Async task failed.",
+		"error":   err.Error(),
+	})
+}
+
+func recoveredPanicLog(ctx context.Context, v any) map[string]interface{} {
+	return withRequestID(ctx, map[string]interface{}{
+		"message": "Recovered panic from async task.",
+		"cause":   v,
+	})
+}
+
+// withRequestID uses the `id` key so async logs match the access log and error logs.
+func withRequestID(ctx context.Context, msg map[string]interface{}) map[string]interface{} {
+	if ctx == nil {
+		return msg
+	}
+	if reqID, ok := bctx.GetRequestID(ctx); ok {
+		msg["id"] = reqID
+	}
+
+	return msg
 }

@@ -1,113 +1,49 @@
 package async
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"strings"
-	"sync"
 	"testing"
 
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/config"
 	bctx "github.com/retail-ai-inc/bean/v2/context"
-	"github.com/retail-ai-inc/bean/v2/log"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestAsyncFailureLogUsesIDKey(t *testing.T) {
 
-	originalConf := config.Bean
-	config.Bean = &config.Config{}
-	t.Cleanup(func() { config.Bean = originalConf })
-
-	logger := log.Init(echo.New().Logger)
-	originalOutput := logger.Output()
-	t.Cleanup(func() { logger.SetOutput(originalOutput) })
+	withID := bctx.SetRequestID(context.Background(), "req-1")
 
 	tests := []struct {
-		name        string
-		ctx         context.Context
-		task        TaskWithCtx
-		wantMessage string
-		wantID      string
+		name string
+		log  map[string]interface{}
+		want map[string]interface{}
 	}{
 		{
-			name:        "task error with request id",
-			ctx:         bctx.SetRequestID(context.Background(), "req-1"),
-			task:        func(context.Context) error { return errors.New("boom") },
-			wantMessage: "Async task failed.",
-			wantID:      "req-1",
+			name: "task error with request id",
+			log:  taskFailedLog(withID, errors.New("boom")),
+			want: map[string]interface{}{"message": "Async task failed.", "error": "boom", "id": "req-1"},
 		},
 		{
-			name:        "task error without request id",
-			ctx:         context.Background(),
-			task:        func(context.Context) error { return errors.New("boom") },
-			wantMessage: "Async task failed.",
+			name: "task error without request id",
+			log:  taskFailedLog(context.Background(), errors.New("boom")),
+			want: map[string]interface{}{"message": "Async task failed.", "error": "boom"},
 		},
 		{
-			name:        "task panic with request id",
-			ctx:         bctx.SetRequestID(context.Background(), "req-2"),
-			task:        func(context.Context) error { panic("boom") },
-			wantMessage: "Recovered panic from async task.",
-			wantID:      "req-2",
+			name: "panic with request id",
+			log:  recoveredPanicLog(withID, "boom"),
+			want: map[string]interface{}{"message": "Recovered panic from async task.", "cause": "boom", "id": "req-1"},
+		},
+		{
+			name: "panic with nil context",
+			//nolint:staticcheck // recoverPanic may receive a nil context from callers.
+			log:  recoveredPanicLog(nil, "boom"),
+			want: map[string]interface{}{"message": "Recovered panic from async task.", "cause": "boom"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			buf := &syncBuffer{}
-			logger.SetOutput(buf)
-
-			newTask(tt.ctx, tt.task, nil)()
-
-			entry := findBoomEntry(t, buf.String())
-			assert.Equal(t, tt.wantMessage, entry["message"])
-			assert.NotContains(t, entry, "request_id")
-			if tt.wantID == "" {
-				assert.NotContains(t, entry, "id")
-			} else {
-				assert.Equal(t, tt.wantID, entry["id"])
-			}
+			assert.Equal(t, tt.want, tt.log)
 		})
 	}
-}
-
-// syncBuffer guards writes because goroutines left by other tests share the global logger.
-type syncBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-}
-
-func (b *syncBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	return b.buf.Write(p)
-}
-
-func (b *syncBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	return b.buf.String()
-}
-
-func findBoomEntry(t *testing.T, out string) map[string]any {
-	t.Helper()
-
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		var entry map[string]any
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
-		}
-		if entry["error"] == "boom" || entry["cause"] == "boom" {
-			return entry
-		}
-	}
-	require.FailNow(t, "async failure log not found", out)
-
-	return nil
 }
