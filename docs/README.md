@@ -1,4 +1,13 @@
-<div id="top"></div>
+<div align="center">
+
+[![Go Version](https://img.shields.io/badge/go-1.26.x-blue.svg)](https://golang.org/)
+[![Lint](https://github.com/retail-ai-inc/bean/actions/workflows/lint.yml/badge.svg)](https://github.com/retail-ai-inc/bean/actions/workflows/lint.yml)
+[![CodeQL](https://github.com/retail-ai-inc/bean/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/retail-ai-inc/bean/actions/workflows/github-code-scanning/codeql)
+[![Code Vulnerability Scan](https://github.com/retail-ai-inc/bean/actions/workflows/govulncheck.yml/badge.svg)](https://github.com/retail-ai-inc/bean/actions/workflows/govulncheck.yml)
+[![Dependabot Updates](https://github.com/retail-ai-inc/bean/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/retail-ai-inc/bean/actions/workflows/dependabot/dependabot-updates)
+[![Dependency Graph](https://github.com/retail-ai-inc/bean/actions/workflows/dependabot/update-graph/badge.svg)](https://github.com/retail-ai-inc/bean/actions/workflows/dependabot/update-graph)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+</div>
 
 # BEAN (豆)
 
