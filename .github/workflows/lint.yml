@@ -1,0 +1,52 @@
+name: Lint
+
+on:
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - '**.json'
+      - 'Dockerfile'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  golangci-lint:
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Setup reviewdog
+        if: github.event_name == 'pull_request'
+        uses: reviewdog/action-setup@v1
+
+      - name: Run golangci-lint
+        id: lint
+        run: make lint LINT_ARGS="--output.text.path=stdout --output.sarif.path=$RUNNER_TEMP/golangci-lint.sarif"
+
+      - name: Report lint results
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && (steps.lint.outcome == 'success' || steps.lint.outcome == 'failure') }}
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
+          REVIEWDOG_REPORTER: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && 'github-pr-review' || 'github-pr-annotations' }}
+        run: |
+          if [ -s "$RUNNER_TEMP/golangci-lint.sarif" ]; then
+            reviewdog -f=sarif \
+              -name=golangci-lint \
+              -reporter="$REVIEWDOG_REPORTER" \
+              -filter-mode=added \
+              -level=error \
+              -fail-level=none < "$RUNNER_TEMP/golangci-lint.sarif"
+          fi
