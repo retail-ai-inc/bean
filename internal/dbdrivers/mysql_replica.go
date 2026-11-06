@@ -54,6 +54,8 @@ type replicaConnPool struct {
 	downUntil atomic.Int64
 }
 
+var _ gorm.ConnPool = (*replicaConnPool)(nil)
+
 func newReplicaConnPool(host string, replica, master gorm.ConnPool, logger echo.Logger) *replicaConnPool {
 	return &replicaConnPool{host: host, replica: replica, master: master, logger: logger, now: time.Now}
 }
