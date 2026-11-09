@@ -28,6 +28,13 @@ MAX_FUNCS = 3  # Vulnerable functions per call site in the PR comment
 MAX_ANNOTATIONS = 10  # GitHub shows at most 10 error annotations per step
 MAX_COMMENT = 60000  # GitHub rejects comments over 65536 characters
 
+# Fixed upstream but not yet recorded in the Go vuln DB. Remove each entry once
+# https://pkg.go.dev/vuln/<id> lists the fixed version.
+IGNORED = {
+    "GO-2026-6872": "fixed in github.com/labstack/echo/v4 v4.16.3 (GHSA-246p-cpwv-v3jq)",
+    "GO-2026-6875": "fixed in github.com/labstack/echo/v4 v4.16.3 (GHSA-99jh-6h7p-pp36)",
+}
+
 server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
 repo = os.environ.get("GITHUB_REPOSITORY", "")
 sha = os.environ.get("GITHUB_SHA", "")
@@ -341,7 +348,14 @@ def main():
     driver = run.get("tool", {}).get("driver", {})
     props = driver.get("properties", {})
     rules = {r.get("id"): r for r in driver.get("rules", [])}
-    items = build_items(run.get("results", []), rules)
+    results = []
+    for res in run.get("results", []):
+        rule_id = res.get("ruleId")
+        if rule_id in IGNORED:
+            print(f"::notice::Ignoring {rule_id}: {IGNORED[rule_id]}")
+        else:
+            results.append(res)
+    items = build_items(results, rules)
     counts = {level: sum(1 for item in items if item["level"] == level) for level in ORDER}
 
     with open(HTML_OUT, "w", encoding="utf-8") as out:
