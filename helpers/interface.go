@@ -162,12 +162,12 @@ func indirect(i interface{}) interface{} {
 	if i == nil {
 		return nil
 	}
-	if t := reflect.TypeOf(i); t.Kind() != reflect.Ptr {
+	if t := reflect.TypeOf(i); t.Kind() != reflect.Pointer {
 		// Avoid creating a reflect.Value if it's not a pointer.
 		return i
 	}
 	v := reflect.ValueOf(i)
-	for v.Kind() == reflect.Ptr && !v.IsNil() {
+	for v.Kind() == reflect.Pointer && !v.IsNil() {
 		v = v.Elem()
 	}
 	return v.Interface()
