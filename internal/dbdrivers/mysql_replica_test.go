@@ -117,20 +117,6 @@ func TestReplicaConnPoolFallback(t *testing.T) {
 				return err
 			},
 		},
-		{
-			name: "prepare",
-			expect: func(mock sqlmock.Sqlmock, err error) {
-				if err != nil {
-					mock.ExpectPrepare(quoted).WillReturnError(err)
-					return
-				}
-				mock.ExpectPrepare(quoted)
-			},
-			call: func(p *replicaConnPool) error {
-				_, err := p.PrepareContext(ctx, query)
-				return err
-			},
-		},
 	}
 
 	for _, m := range methods {
@@ -184,6 +170,44 @@ func TestReplicaConnPoolFallback(t *testing.T) {
 			assert.NoError(t, masterMock.ExpectationsWereMet())
 		})
 	}
+}
+
+func TestReplicaConnPoolPrepareUsesMaster(t *testing.T) {
+	const query = "SELECT 1"
+	replicaDB, replicaMock := newMockSQLDB(t)
+	masterDB, masterMock := newMockSQLDB(t)
+	pool := newReplicaConnPool("replica", replicaDB, masterDB, nil)
+
+	masterMock.ExpectPrepare(regexp.QuoteMeta(query))
+	stmt, err := pool.PrepareContext(context.Background(), query)
+	require.NoError(t, err)
+	require.NoError(t, stmt.Close())
+	assert.NoError(t, replicaMock.ExpectationsWereMet())
+	assert.NoError(t, masterMock.ExpectationsWereMet())
+}
+
+func TestReplicaConnPoolAllowsOneRecoveryProbe(t *testing.T) {
+	replicaDB, _ := newMockSQLDB(t)
+	masterDB, _ := newMockSQLDB(t)
+	now := time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC)
+	pool := newReplicaConnPool("replica", replicaDB, masterDB, nil)
+	pool.now = func() time.Time { return now }
+	pool.downUntil.Store(now.Add(-time.Second).UnixNano())
+
+	useReplica, probeUntil := pool.tryReplica()
+	assert.True(t, useReplica)
+	assert.NotZero(t, probeUntil)
+	useReplica, _ = pool.tryReplica()
+	assert.False(t, useReplica, "a concurrent request must keep using the primary")
+
+	pool.finishProbe(probeUntil)
+	pool.probing.Store(false)
+	useReplica, probeUntil = pool.tryReplica()
+	assert.True(t, useReplica, "a successful probe restores normal replica reads")
+	assert.Zero(t, probeUntil)
+	useReplica, probeUntil = pool.tryReplica()
+	assert.True(t, useReplica, "healthy replicas do not serialize reads")
+	assert.Zero(t, probeUntil)
 }
 
 func TestUseMysqlReplicasFallsBackToMaster(t *testing.T) {

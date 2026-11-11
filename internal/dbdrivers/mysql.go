@@ -23,6 +23,7 @@
 package dbdrivers
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
@@ -43,6 +44,8 @@ import (
 	gormLogger "gorm.io/gorm/logger"
 	"gorm.io/plugin/dbresolver"
 )
+
+const mysqlReplicaPingTimeout = 5 * time.Second
 
 type SQLConfig struct {
 	Master *struct {
@@ -142,19 +145,18 @@ func GetAllTenantCfgs(db *gorm.DB) ([]*TenantConnections, error) {
 // getAllMysqlTenantDB returns all tenant db connection.
 func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
 	tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger echo.Logger,
-) (map[uint64]*gorm.DB, map[uint64]string, []func() error, error) {
+) (mysqlConns map[uint64]*gorm.DB, mysqlDBNames map[uint64]string, resultClosers []func() error, err error) {
 
-	mysqlConns := make(map[uint64]*gorm.DB, len(tenantCfgs))
-	mysqlDBNames := make(map[uint64]string, len(tenantCfgs))
+	mysqlConns = make(map[uint64]*gorm.DB, len(tenantCfgs))
+	mysqlDBNames = make(map[uint64]string, len(tenantCfgs))
+	openedClosers := make([]func() error, 0, len(tenantCfgs))
 
-	closers := make([]func() error, 0, len(tenantCfgs))
 	for _, t := range tenantCfgs {
 
 		var cfgsMap map[string]map[string]interface{}
-		var err error
 		if t.Connections != nil {
 			if err = json.Unmarshal(t.Connections, &cfgsMap); err != nil {
-				return nil, nil, noClosers, fmt.Errorf("failed to unmarshal tenant connections (%d:%s): %w", t.TenantID, t.Code, err)
+				return nil, nil, nil, fmt.Errorf("failed to unmarshal tenant connections (%d:%s): %w", t.TenantID, t.Code, err)
 			}
 		}
 
@@ -171,7 +173,7 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
 		if tenantDBPassPhraseKey != "" {
 			password, err = aes.BeanAESDecrypt(tenantDBPassPhraseKey, password)
 			if err != nil {
-				return nil, nil, noClosers, fmt.Errorf("failed to decrypt mysql tenant database password (%d:%s): %w", t.TenantID, t.Code, err)
+				return nil, nil, nil, fmt.Errorf("failed to decrypt mysql tenant database password (%d:%s): %w", t.TenantID, t.Code, err)
 			}
 		}
 
@@ -190,7 +192,7 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
 
 		readHosts, err := readHostsFromMap(mysqlCfg)
 		if err != nil {
-			return nil, nil, noClosers, fmt.Errorf("invalid mysql tenant read replicas (%d:%s): %w", t.TenantID, t.Code, err)
+			return nil, nil, nil, fmt.Errorf("invalid mysql tenant read replicas (%d:%s): %w", t.TenantID, t.Code, err)
 		}
 
 		var closeDB func() error
@@ -200,12 +202,12 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
 			config.Debug, ssl, logger,
 		)
 		if err != nil {
-			return nil, nil, noClosers, fmt.Errorf("failed to connect mysql tenant database (%d:%s): %w", t.TenantID, t.Code, err)
+			return nil, nil, nil, fmt.Errorf("failed to connect mysql tenant database (%d:%s): %w", t.TenantID, t.Code, err)
 		}
-		closers = append(closers, closeDB)
+		openedClosers = append(openedClosers, closeDB)
 	}
 
-	return mysqlConns, mysqlDBNames, closers, nil
+	return mysqlConns, mysqlDBNames, openedClosers, nil
 }
 
 func connectMysqlDB(userName, password, host, port, dbName string, readHosts []string,
@@ -259,8 +261,15 @@ func connectMysqlDB(userName, password, host, port, dbName string, readHosts []s
 
 			// An unreachable replica must not block startup; configuration errors such as bad credentials still do.
 			pool := newReplicaConnPool(readHost, replicaDB, sqlDB, logger)
-			if err := replicaDB.Ping(); err != nil && !pool.markUnavailable(err) {
-				return nil, "", noClose, errors.Join(fmt.Errorf("failed to connect mysql read replica %s: %w", readHost, err), closeAll(closers))
+			pingCtx, cancel := context.WithTimeout(context.Background(), mysqlReplicaPingTimeout)
+			pingErr := replicaDB.PingContext(pingCtx)
+			cancel()
+			if pingErr != nil {
+				if errors.Is(pingErr, context.DeadlineExceeded) {
+					pool.setUnavailable(pingErr)
+				} else if !pool.markUnavailable(pingErr) {
+					return nil, "", noClose, errors.Join(fmt.Errorf("failed to connect mysql read replica %s: %w", readHost, pingErr), closeAll(closers))
+				}
 			}
 
 			replicas = append(replicas, mysql.New(mysql.Config{DSN: replicaDSN, Conn: pool, SkipInitializeWithVersion: true}))
@@ -275,8 +284,12 @@ func connectMysqlDB(userName, password, host, port, dbName string, readHosts []s
 }
 
 // useMysqlReplicas routes reads outside transactions to a random replica;
-// writes, transactions and locking reads stay on the master.
+// writes, transactions and locking reads stay on the primary.
 func useMysqlReplicas(db *gorm.DB, replicas []gorm.Dialector) error {
+	if len(replicas) == 0 {
+		return nil
+	}
+
 	if err := db.Use(dbresolver.Register(dbresolver.Config{Replicas: replicas, Policy: dbresolver.RandomPolicy{}})); err != nil {
 		return fmt.Errorf("failed to register mysql read replicas: %w", err)
 	}
@@ -292,7 +305,7 @@ func mysqlDSN(userName, password, host, port, dbName string, ssl SSLConfig) (str
 			return "", err
 		}
 
-		tlsConfigName = mysqlTLSConfigName(host, dbName, ssl.CertFile)
+		tlsConfigName = mysqlTLSConfigName(host, dbName, ssl)
 		if err := mysqlDriver.RegisterTLSConfig(tlsConfigName, tlsConfig); err != nil {
 			return "", fmt.Errorf("failed to register mysql tls config: %w", err)
 		}
@@ -402,8 +415,9 @@ func mysqlTLSDSNParam(tlsConfigName string) string {
 	return "&tls=" + tlsConfigName
 }
 
-func mysqlTLSConfigName(host, dbName, certFile string) string {
-	sum := sha256.Sum256([]byte(host + "|" + dbName + "|" + certFile))
+func mysqlTLSConfigName(host, dbName string, ssl SSLConfig) string {
+	key := fmt.Sprintf("%s|%s|%s|%t|%t", host, dbName, ssl.CertFile, ssl.ShouldVerifyCertificate(), ssl.HotReload)
+	sum := sha256.Sum256([]byte(key))
 
 	return fmt.Sprintf("bean-%x", sum[:8])
 }

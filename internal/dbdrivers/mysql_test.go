@@ -120,6 +120,21 @@ func TestUseMysqlReplicasRouting(t *testing.T) {
 	}
 }
 
+func TestNoReadsUsesMasterWithoutResolver(t *testing.T) {
+	masterDialector, masterMock := newMockMysqlDialector(t)
+	db, err := gorm.Open(masterDialector, &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	require.NoError(t, err)
+	require.NoError(t, useMysqlReplicas(db, nil))
+
+	masterMock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `users`")).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	var rows []map[string]any
+	require.NoError(t, db.Table("users").Find(&rows).Error)
+	assert.Len(t, rows, 1)
+	assert.NoError(t, masterMock.ExpectationsWereMet())
+}
+
 func TestReadHostsFromMap(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -190,6 +205,17 @@ func TestMysqlDSNWithoutSSL(t *testing.T) {
 			assert.Equal(t, tt.want, dsn)
 		})
 	}
+}
+
+func TestMysqlTLSConfigNameIncludesSecuritySettings(t *testing.T) {
+	verify, skipVerify := true, false
+	base := SSLConfig{On: true, CertFile: "ca.pem", VerifyCertificate: &verify}
+	insecure := SSLConfig{On: true, CertFile: "ca.pem", VerifyCertificate: &skipVerify}
+	hotReload := SSLConfig{On: true, CertFile: "ca.pem", VerifyCertificate: &verify, HotReload: true}
+
+	baseName := mysqlTLSConfigName("mysql", "db", base)
+	assert.NotEqual(t, baseName, mysqlTLSConfigName("mysql", "db", insecure))
+	assert.NotEqual(t, baseName, mysqlTLSConfigName("mysql", "db", hotReload))
 }
 
 func TestParseReadAddr(t *testing.T) {

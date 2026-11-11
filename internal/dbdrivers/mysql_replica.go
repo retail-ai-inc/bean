@@ -44,68 +44,103 @@ const (
 	mysqlErrServerShutdown     = 1053
 )
 
-// replicaConnPool sends reads to a replica and falls back to the master while the replica is unavailable.
+// replicaConnPool sends reads to a replica and falls back to the primary while the replica is unavailable.
 type replicaConnPool struct {
 	host      string
 	replica   gorm.ConnPool
-	master    gorm.ConnPool
+	primary   gorm.ConnPool
 	logger    echo.Logger
 	now       func() time.Time
 	downUntil atomic.Int64
+	probing   atomic.Bool
 }
 
 var _ gorm.ConnPool = (*replicaConnPool)(nil)
 
-func newReplicaConnPool(host string, replica, master gorm.ConnPool, logger echo.Logger) *replicaConnPool {
-	return &replicaConnPool{host: host, replica: replica, master: master, logger: logger, now: time.Now}
+func newReplicaConnPool(host string, replica, primary gorm.ConnPool, logger echo.Logger) *replicaConnPool {
+	return &replicaConnPool{host: host, replica: replica, primary: primary, logger: logger, now: time.Now}
 }
 
 func (p *replicaConnPool) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
-	if p.available() {
-		stmt, err := p.replica.PrepareContext(ctx, query)
-		if !p.markUnavailable(err) {
-			return stmt, err
-		}
-	}
-
-	return p.master.PrepareContext(ctx, query)
+	// A prepared statement is bound to the pool that prepared it and cannot
+	// safely switch to the primary after a replica failure.
+	return p.primary.PrepareContext(ctx, query)
 }
 
 func (p *replicaConnPool) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	if p.available() {
+	if useReplica, probeUntil := p.tryReplica(); useReplica {
+		probe := probeUntil != 0
+		if probe {
+			defer p.probing.Store(false)
+		}
 		result, err := p.replica.ExecContext(ctx, query, args...)
 		if !p.markUnavailable(err) {
+			p.finishProbe(probeUntil)
 			return result, err
 		}
 	}
 
-	return p.master.ExecContext(ctx, query, args...)
+	return p.primary.ExecContext(ctx, query, args...)
 }
 
 func (p *replicaConnPool) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	if p.available() {
+	if useReplica, probeUntil := p.tryReplica(); useReplica {
+		probe := probeUntil != 0
+		if probe {
+			defer p.probing.Store(false)
+		}
 		rows, err := p.replica.QueryContext(ctx, query, args...)
 		if !p.markUnavailable(err) {
+			p.finishProbe(probeUntil)
 			return rows, err
 		}
 	}
 
-	return p.master.QueryContext(ctx, query, args...)
+	return p.primary.QueryContext(ctx, query, args...)
 }
 
 func (p *replicaConnPool) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	if p.available() {
+	if useReplica, probeUntil := p.tryReplica(); useReplica {
+		probe := probeUntil != 0
+		if probe {
+			defer p.probing.Store(false)
+		}
 		row := p.replica.QueryRowContext(ctx, query, args...)
 		if !p.markUnavailable(row.Err()) {
+			p.finishProbe(probeUntil)
 			return row
 		}
 	}
 
-	return p.master.QueryRowContext(ctx, query, args...)
+	return p.primary.QueryRowContext(ctx, query, args...)
 }
 
 func (p *replicaConnPool) available() bool {
 	return p.now().UnixNano() >= p.downUntil.Load()
+}
+
+// tryReplica allows all reads while the replica is healthy. After a failure,
+// only one request probes it when the retry interval expires; concurrent reads
+// continue using the primary until that probe completes.
+func (p *replicaConnPool) tryReplica() (useReplica bool, probeUntil int64) {
+	downUntil := p.downUntil.Load()
+	if downUntil == 0 {
+		return true, 0
+	}
+	if p.now().UnixNano() < downUntil {
+		return false, 0
+	}
+	if p.probing.CompareAndSwap(false, true) {
+		return true, downUntil
+	}
+	return false, 0
+}
+
+func (p *replicaConnPool) finishProbe(probeUntil int64) {
+	if probeUntil != 0 {
+		// Do not erase a newer failure recorded by another in-flight request.
+		p.downUntil.CompareAndSwap(probeUntil, 0)
+	}
 }
 
 // markUnavailable reports whether err means the replica cannot serve reads;
@@ -115,16 +150,19 @@ func (p *replicaConnPool) markUnavailable(err error) bool {
 		return false
 	}
 
-	p.downUntil.Store(p.now().Add(replicaRetryInterval).UnixNano())
-	if p.logger != nil {
-		p.logger.Warnf("mysql read replica %s is unavailable, falling back to master for %s: %v", p.host, replicaRetryInterval, err)
-	}
-
+	p.setUnavailable(err)
 	return true
 }
 
+func (p *replicaConnPool) setUnavailable(err error) {
+	p.downUntil.Store(p.now().Add(replicaRetryInterval).UnixNano())
+	if p.logger != nil {
+		p.logger.Warnf("mysql read replica %s is unavailable, falling back to primary for %s: %v", p.host, replicaRetryInterval, err)
+	}
+}
+
 // isReplicaUnavailable matches connection-level failures only. Query errors and
-// caller cancellation are returned as-is because the master would fail the same way.
+// caller cancellation are returned as-is because the primary would fail the same way.
 func isReplicaUnavailable(err error) bool {
 	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
