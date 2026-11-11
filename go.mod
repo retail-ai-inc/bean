@@ -3,6 +3,7 @@ module github.com/retail-ai-inc/bean/v2
 go 1.26.10
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/alicebob/miniredis/v2 v2.40.0
 	github.com/alphadose/haxmap v1.4.1
 	github.com/fsnotify/fsnotify v1.10.1
@@ -33,6 +34,7 @@ require (
 	gorm.io/datatypes v1.2.7
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.2
+	gorm.io/plugin/dbresolver v1.6.2
 )
 
 replace github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 => github.com/sourcegraph/conc v0.3.0
