@@ -537,7 +537,7 @@ func (b *Bean) InitDB() error {
 	var masterMemoryDB memory.Cache
 	var cleanups []func() error
 
-	masterMySQLDB, masterMySQLDBName, close, err := dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL)
+	masterMySQLDB, masterMySQLDBName, close, err := dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL, blog.Logger())
 	if err != nil {
 		return fmt.Errorf("failed to initialize master mysql db: %w", err)
 	}
@@ -559,7 +559,7 @@ func (b *Bean) InitDB() error {
 	if b.Config.Database.Tenant.On {
 		var closeDBs []func() error
 
-		tenantMySQLDBs, tenantMySQLDBNames, closeDBs, err = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
+		tenantMySQLDBs, tenantMySQLDBNames, closeDBs, err = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, blog.Logger())
 		if err != nil {
 			return fmt.Errorf("failed to initialize tenant mysql dbs: %w", err)
 		}
