@@ -28,8 +28,9 @@ import (
 	"strings"
 )
 
-// Redacted replaces the value of a sensitive header in logs.
-const Redacted = "[REDACTED]"
+// Mask is the placeholder written to logs in place of a sensitive value.
+// It is shared with log.MaskProcessor so every masked value looks the same.
+const Mask = "****"
 
 // sensitiveHeaders are canonical header names whose values are always masked.
 var sensitiveHeaders = map[string]struct{}{
@@ -70,7 +71,7 @@ func IsSensitiveHeader(name string) bool {
 }
 
 // HeaderValue returns value as it is safe to log for the header name.
-// Sensitive values are replaced with Redacted; for Authorization-style headers
+// Sensitive values are replaced with Mask; for Authorization-style headers
 // the auth scheme (e.g. "Bearer") is kept so the log is still useful.
 func HeaderValue(name, value string) string {
 	if !IsSensitiveHeader(name) {
@@ -80,11 +81,11 @@ func HeaderValue(name, value string) string {
 	switch http.CanonicalHeaderKey(name) {
 	case "Authorization", "Proxy-Authorization":
 		if scheme, _, ok := strings.Cut(strings.TrimSpace(value), " "); ok && scheme != "" {
-			return scheme + " " + Redacted
+			return scheme + " " + Mask
 		}
 	}
 
-	return Redacted
+	return Mask
 }
 
 // Headers collects the non-empty values of the given header names from h,

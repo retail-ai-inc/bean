@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/retail-ai-inc/bean/v2/internal/redact"
 )
 
 // utf8BOM is the UTF-8 byte order mark. We only support UTF-8 payloads; a
@@ -62,7 +64,7 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 	case map[string]interface{}:
 		for k, vv := range v {
 			if _, ok := p.fields[k]; ok {
-				v[k] = "****"
+				v[k] = redact.Mask
 			} else {
 				v[k] = p.maskValue(vv)
 			}
@@ -87,7 +89,7 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 				if out, masked := p.maskJSONString(s); masked {
 					return out
 				}
-				return "****"
+				return redact.Mask
 			}
 			masked := p.maskValue(decoded)
 			b, err := json.Marshal(masked)
@@ -101,7 +103,7 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 			if out, masked := p.maskXMLString(s); masked {
 				return out
 			}
-			return "****"
+			return redact.Mask
 		}
 		return v
 
@@ -130,7 +132,7 @@ func (p *MaskProcessor) maskValue(val interface{}) interface{} {
 				return []byte(out)
 			}
 			// Fail closed for truncated/malformed XML carrying a sensitive field.
-			return []byte("****")
+			return []byte(redact.Mask)
 		}
 		return string(v)
 
@@ -188,14 +190,14 @@ func (p *MaskProcessor) maskJSONString(s string) (string, bool) {
 
 	masked := false
 	for _, re := range p.jsonStringRes {
-		next := re.ReplaceAllString(s, "${1}****${2}")
+		next := re.ReplaceAllString(s, "${1}"+redact.Mask+"${2}")
 		if next != s {
 			masked = true
 			s = next
 		}
 	}
 	for _, re := range p.jsonScalarRes {
-		next := re.ReplaceAllString(s, `${1}"****"`)
+		next := re.ReplaceAllString(s, `${1}"`+redact.Mask+`"`)
 		if next != s {
 			masked = true
 			s = next
@@ -222,7 +224,7 @@ func (p *MaskProcessor) maskXMLString(s string) (string, bool) {
 
 	masked := false
 	for _, re := range p.xmlRes {
-		next := re.ReplaceAllString(s, "${1}****${3}")
+		next := re.ReplaceAllString(s, "${1}"+redact.Mask+"${3}")
 		if next != s {
 			masked = true
 			s = next

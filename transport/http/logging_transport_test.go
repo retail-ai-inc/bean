@@ -58,13 +58,13 @@ func TestLoggingTransportRedactsSensitiveHeaders(t *testing.T) {
 	_ = resp.Body.Close()
 
 	assert.Equal(t, map[string]any{
-		"Authorization":       "Bearer [REDACTED]",
-		"X-Api-Key":           "[REDACTED]",
+		"Authorization":       "Bearer ****",
+		"X-Api-Key":           "****",
 		"Content-Type":        "application/json",
 		echo.HeaderXRequestID: "req-1",
 	}, logger.fields["request_header"])
 	assert.Equal(t, map[string]any{
-		"Set-Cookie":   "[REDACTED]",
+		"Set-Cookie":   "****",
 		"Content-Type": "application/json",
 	}, logger.fields["response_header"])
 }

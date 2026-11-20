@@ -14,17 +14,17 @@ func TestHeaderValue(t *testing.T) {
 		value  string
 		want   string
 	}{
-		{"bearer token keeps scheme", "Authorization", "Bearer abc.def.ghi", "Bearer " + Redacted},
-		{"lower-case name", "authorization", "Basic dXNlcjpwYXNz", "Basic " + Redacted},
-		{"proxy authorization", "Proxy-Authorization", "Bearer xyz", "Bearer " + Redacted},
-		{"authorization without scheme", "Authorization", "rawsecret", Redacted},
-		{"cookie", "Cookie", "sid=abc; theme=dark", Redacted},
-		{"set-cookie", "Set-Cookie", "sid=abc; HttpOnly", Redacted},
-		{"api key", "X-Api-Key", "k-123", Redacted},
-		{"apikey without dash", "X-APIKEY", "k-123", Redacted},
-		{"auth token", "X-Auth-Token", "t-123", Redacted},
-		{"client secret", "X-Client-Secret", "s-123", Redacted},
-		{"session id", "X-Session-Id", "s-123", Redacted},
+		{"bearer token keeps scheme", "Authorization", "Bearer abc.def.ghi", "Bearer " + Mask},
+		{"lower-case name", "authorization", "Basic dXNlcjpwYXNz", "Basic " + Mask},
+		{"proxy authorization", "Proxy-Authorization", "Bearer xyz", "Bearer " + Mask},
+		{"authorization without scheme", "Authorization", "rawsecret", Mask},
+		{"cookie", "Cookie", "sid=abc; theme=dark", Mask},
+		{"set-cookie", "Set-Cookie", "sid=abc; HttpOnly", Mask},
+		{"api key", "X-Api-Key", "k-123", Mask},
+		{"apikey without dash", "X-APIKEY", "k-123", Mask},
+		{"auth token", "X-Auth-Token", "t-123", Mask},
+		{"client secret", "X-Client-Secret", "s-123", Mask},
+		{"session id", "X-Session-Id", "s-123", Mask},
 		{"request id is kept", "X-Request-Id", "req-1", "req-1"},
 		{"content type is kept", "Content-Type", "application/json", "application/json"},
 		{"user agent is kept", "User-Agent", "curl/8.0", "curl/8.0"},
@@ -47,8 +47,8 @@ func TestHeaders(t *testing.T) {
 	got := Headers(h, []string{"Authorization", "cookie", "X-Request-Id", "Content-Type", "X-Missing"})
 
 	assert.Equal(t, map[string]any{
-		"Authorization": "Bearer " + Redacted,
-		"cookie":        Redacted,
+		"Authorization": "Bearer " + Mask,
+		"cookie":        Mask,
 		"X-Request-Id":  "req-1",
 		"Content-Type":  "application/json",
 	}, got)
