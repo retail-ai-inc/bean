@@ -166,7 +166,7 @@ func Init(logger echo.Logger) BeanLogger {
 	once.Do(func() {
 		var err error
 		blogger, err = NewLogger(logger,
-			WithMaskFields(config.Bean.AccessLog.BodyDumpMaskParam),
+			WithMaskFields(config.Bean.AccessLog.MaskFields),
 			WithAccessLogPath(config.Bean.AccessLog.Path),
 			WithRuntimePlatform(config.Bean.AccessLog.RuntimePlatform),
 			WithSinkAsync(config.Bean.AccessLog.Async, config.Bean.AccessLog.AsyncQueueSize),
