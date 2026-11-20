@@ -10,7 +10,6 @@ import (
 	"github.com/retail-ai-inc/bean/v3/config"
 	"github.com/retail-ai-inc/bean/v3/helpers"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -40,17 +39,8 @@ func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	rootCmd.Version = helpers.CurrVersion()
 
-	viper.AddConfigPath(".")
-	viper.SetConfigType("json")
-	viper.SetConfigName("env")
-
-	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalln(err)
-	}
-
-	// IMPORTANT: Unmarshal the env.json into the global config object `config.Bean`.
-	config.Bean = &config.Config{}
-	if err := viper.Unmarshal(config.Bean); err != nil {
+	// IMPORTANT: Load env.json into the global config object `config.Bean`.
+	if _, err := config.LoadConfig("env.json"); err != nil {
 		log.Fatalln(err)
 	}
 

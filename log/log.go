@@ -332,7 +332,7 @@ func Init(w io.Writer) (*BeanLogger, error) {
 
 	l, err := NewLogger(w,
 		WithLevel(level),
-		WithMaskFields(config.Bean.AccessLog.BodyDumpMaskParam),
+		WithMaskFields(config.Bean.AccessLog.MaskFields),
 		WithAccessLogPath(config.Bean.AccessLog.Path),
 		WithRuntimePlatform(config.Bean.AccessLog.RuntimePlatform),
 		WithSinkAsync(config.Bean.AccessLog.Async, config.Bean.AccessLog.AsyncQueueSize),

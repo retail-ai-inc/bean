@@ -313,6 +313,25 @@ e, closeEcho, err := bean.NewEcho()
 
 > **由 `bean init` 生成的项目**：`commands/start.go`、`commands/route.go`、`commands/gopher/gopher.go` 中的 `bean.New()` 需要按上面的方式处理 error。
 
+### 4.12 配置项 `accessLog.bodyDumpMaskParam` 改名为 `accessLog.maskFields`
+
+旧名称容易误解：`bodyDump` 让人以为它只对请求/响应体生效、而且只在开启 `bodyDump` 时生效；`Param` 让人以为它针对 URL 参数。实际上它会对所有结构化访问日志（`ACCESS`、`DUMP`、`OUTBOUND_API`）中匹配的字段脱敏，包括 `request_header` / `response_header`，与 `bodyDump` 是否开启无关。新名称 `maskFields` 与 `log.WithMaskFields` 一致。脱敏行为本身没有变化。
+
+修改每个项目的 `env.json`：
+
+```diff
+ "accessLog": {
+-  "bodyDumpMaskParam": ["password", "token"],
++  "maskFields": ["password", "token"],
+ }
+```
+
+- 如果 `bodyDumpMaskParam` 仍然有值，**启动失败**并报错 `config: accessLog.bodyDumpMaskParam has been removed, rename it to accessLog.maskFields`，以免脱敏在不知不觉中失效。`config.LoadConfig` 和 `bean.New()` 都会做这项检查，所以即使项目自己用 viper 读取配置也会生效。
+- 空的 `"bodyDumpMaskParam": []`（旧版项目模板生成的默认值）会被忽略，但建议删除或改名。
+- Go 代码中读取 `config.Bean.AccessLog.BodyDumpMaskParam` 的地方改为 `config.Bean.AccessLog.MaskFields`。
+
+> **由 `bean init` 生成的项目**：`commands/root.go` 现在用 `config.LoadConfig("env.json")` 加载配置，不再直接调用 viper。
+
 ## 5. bean 自身的行为变化
 
 以下变化由 bean 内部处理，项目通常无需改代码，但请了解：
@@ -373,6 +392,7 @@ v2 用一个全局中间件在每个请求上遍历全部路由、自行匹配�
 - [ ] `commands/route.go` 中 `b.Echo.Routes()` 改为 `b.Echo.Router().Routes()`
 - [ ] 自定义 Binder / Renderer 调整签名
 - [ ] `bean.New()` / `bean.NewEcho()` 处理返回的 error
+- [ ] `env.json` 中的 `accessLog.bodyDumpMaskParam` 改名为 `accessLog.maskFields`
 - [ ] 测试中的 `log.Init(echo.New().Logger)`、`echo.NewResponse(w, e)` 等改为 v3 写法
 - [ ] `go build ./... && go test ./...` 通过
 - [ ] 检查启动日志中是否有 `route is not registered because its method is not listed in http.allowedMethod` 警告

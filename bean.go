@@ -214,6 +214,11 @@ func NewEcho() (*echo.Echo, func() error, error) {
 	if config.Bean == nil {
 		return nil, nil, ErrConfigNotLoaded
 	}
+	// Projects may load env.json with viper directly instead of `config.LoadConfig`; check here as well so an
+	// unmigrated config (e.g. `accessLog.bodyDumpMaskParam`) cannot silently turn log masking off.
+	if err := config.CheckRemovedKeys(); err != nil {
+		return nil, nil, err
+	}
 
 	// IMPORTANT: Configure the logger. Application logs go to `debugLogPath` (stdout if empty), the access log
 	// to `accessLog.path` (the same output if empty). `log.Logger()`, echo's logger and `c.Logger()` are the

@@ -156,7 +156,7 @@ Bean has a pre-builtin logging system. If you open the `env.json` file from your
   "bodyDump": true,
   "path": "",
   "runtimePlatform": "gcp",
-  "bodyDumpMaskParam": ["password", "token"],
+  "maskFields": ["password", "token"],
   "async": false,
   "asyncQueueSize": 4096,
   "bodyLimit": 8192
@@ -167,16 +167,16 @@ Bean has a pre-builtin logging system. If you open the `env.json` file from your
 - `bodyDump` — When `true`, the access logger middleware captures the **HTTP request body** and **response body** and writes them to structured logs **after the handler runs** (along with latency and status). The access logger emits an initial `ACCESS` line before the handler and, if `bodyDump` is enabled, a second `DUMP` line with `request_body` / `response_body` fields. This is useful for debugging but increases log volume and I/O; set to `false` in production if you do not need full bodies. Default is `true`.
 - `path` — Log file path for the Bean structured logger output (e.g. `tmp/logs/console.log`). An **empty** string means logs go to **stdout** (Echo logger output). When a path is set, the file is opened by the logger and will be properly closed during graceful shutdown.
 - `runtimePlatform` — Deployment / log **runtime** hint for structured logs (string, optional). Common values: `gcp` (Google Cloud), `aws` (Amazon Web Services), `azure` (Microsoft Azure), or leave **empty** for a generic default. It is written on every structured trace log line as `runtime_platform`, and selects which JSON key holds the trace id from Sentry context: `gcp` → `logging.googleapis.com/trace`; `aws` / `azure` → `trace_id`; empty or unknown → `trace`. It does **not** replace cloud SDK configuration elsewhere.
-- `bodyDumpMaskParam` — List of **JSON object keys** whose values should be **masked** in structured log fields before write. These names are passed to `log.Init` → `WithMaskFields` and applied by `MaskProcessor`: matching keys at **any nesting level** in maps / decoded JSON have their values replaced with `****`. Use the same key names as in your API JSON bodies (e.g. `password`, `access_token`). Nested objects are traversed; only **exact key names** are matched (not dot-paths like `user.password`). Default is an empty slice.
+- `maskFields` — List of **field names** whose values should be **masked** in structured log fields before write. These names are passed to `log.Init` → `WithMaskFields` and applied by `MaskProcessor`: matching keys at **any nesting level** in maps / decoded JSON / XML elements have their values replaced with `****`. This covers `request_body` / `response_body` (JSON or XML) and the `request_header` / `response_header` maps, and it applies whether or not `bodyDump` is on. Matching is **exact and case-sensitive**: list every spelling your APIs use (e.g. `password`, `access_token`, `accessToken`); dot-paths like `user.password` are not supported. Bodies that are neither JSON nor XML (e.g. `application/x-www-form-urlencoded`, plain text) and URL query strings in `uri` / `url` are **not** masked. Default is an empty slice.
 - `async` — When `true`, log writes are performed asynchronously by a background worker goroutine. The caller's `Write` only enqueues the encoded buffer, reducing latency on the request path. Default is `false` (synchronous).
 - `asyncQueueSize` — Bounded channel capacity for async mode. When the queue is full, new log entries are dropped (drop-new policy) rather than blocking the request. Default is `4096`. Ignored when `async` is `false`.
 - `bodyLimit` - Maximum size, in bytes, for each `request_body` and `response_body` structured log field. Larger body values keep the first `bodyLimit` bytes and append a `...(truncated)` suffix before writing to the sink. Default is `8192` (8KB), excluding the suffix length.
 - Gzip-compressed responses are not written to `response_body` as raw bytes. When `Content-Encoding` contains `gzip`, Bean logs `[gzip compressed response omitted]`, `response_body_size`, and `response_content_encoding` instead.
 
-**Note:** `bodyDumpMaskParam` affects **structured** `TraceInfo` / `TraceError` payloads (including `request_body` / `response_body` when they contain JSON). It does not change what the middleware reads from the wire; it only redacts values in the logged output.
+**Note:** `maskFields` affects **structured** `TraceInfo` / `TraceError` payloads (including `request_body` / `response_body` when they contain JSON). It does not change what the middleware reads from the wire; it only redacts values in the logged output.
 
-**Scope of `bodyDumpMaskParam` (where masking applies)**  
-`accessLog.bodyDumpMaskParam` in `env.json` is wired as `log.Init(..., WithMaskFields(config.Bean.AccessLog.BodyDumpMaskParam))`. That installs **MaskProcessor** on the **Bean structured logger** singleton, so the same key list applies to **all** entries produced via that logger’s `TraceInfo` / `TraceError`—not only inbound access logs:
+**Scope of `maskFields` (where masking applies)**  
+`accessLog.maskFields` in `env.json` is wired as `log.Init(..., WithMaskFields(config.Bean.AccessLog.MaskFields))`. That installs **MaskProcessor** on the **Bean structured logger** singleton, so the same key list applies to **all** entries produced via that logger’s `TraceInfo` / `TraceError`—not only inbound access logs:
 
 | Area          | Location                                                                                | Typical log content                                                                                                                            |
 | ------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |

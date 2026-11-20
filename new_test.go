@@ -1,12 +1,16 @@
 package bean
 
 import (
+	"context"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/retail-ai-inc/bean/v3/config"
 	"github.com/retail-ai-inc/bean/v3/internal/gopool"
 	blog "github.com/retail-ai-inc/bean/v3/log"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -129,4 +133,35 @@ func TestNewEcho_InvalidLogLevel(t *testing.T) {
 
 	_, _, err := NewEcho()
 	assert.ErrorContains(t, err, "debugLogLevel")
+}
+
+// Projects that load env.json with viper directly (not config.LoadConfig) must still be stopped when the
+// removed `accessLog.bodyDumpMaskParam` is set, otherwise log masking would be silently turned off.
+func TestNewEcho_RejectsRemovedMaskConfig(t *testing.T) {
+	useConfig(t, validTestConfig())
+	viper.Set("accessLog.bodyDumpMaskParam", []string{"password"})
+	t.Cleanup(func() { viper.Set("accessLog.bodyDumpMaskParam", nil) })
+
+	_, _, err := NewEcho()
+	assert.ErrorContains(t, err, "rename it to accessLog.maskFields")
+}
+
+func TestNewEcho_MaskFieldsAreApplied(t *testing.T) {
+	accessLogPath := filepath.Join(t.TempDir(), "access.log")
+	conf := validTestConfig()
+	conf.AccessLog.MaskFields = []string{"password"}
+	conf.AccessLog.Path = accessLogPath
+	useConfig(t, conf)
+
+	_, closeEcho, err := NewEcho()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = closeEcho() })
+
+	blog.Logger().TraceInfo(context.Background(), "DUMP", map[string]any{"request_body": `{"password":"secret","user":"bob"}`})
+	require.NoError(t, blog.Shutdown(context.Background())) // flush and close the access log file
+
+	out, err := os.ReadFile(accessLogPath)
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), "secret")
+	assert.Contains(t, string(out), "bob")
 }
