@@ -19,17 +19,19 @@ type Config struct {
 	DebugLogPath string
 	Secret       string
 	AccessLog    struct {
-		On                bool
-		Async             bool
-		AsyncQueueSize    int
-		BodyLimit         int
-		BodyDump          bool
-		Path              string
-		RuntimePlatform   string
-		BodyDumpMaskParam []string
-		ReqHeaderParam    []string
-		ResHeaderParam    []string
-		SkipEndpoints     []string
+		On              bool
+		Async           bool
+		AsyncQueueSize  int
+		BodyLimit       int
+		BodyDump        bool
+		Path            string
+		RuntimePlatform string
+		// MaskFields lists field names whose values are masked in every
+		// structured access-log entry (headers, JSON/XML bodies, any nested key).
+		MaskFields     []string
+		ReqHeaderParam []string
+		ResHeaderParam []string
+		SkipEndpoints  []string
 	}
 	Prometheus struct {
 		On            bool
@@ -173,6 +175,10 @@ func LoadConfig(filename string) (*Config, error) {
 		return nil, fmt.Errorf("error reading config file, %s", err)
 	}
 
+	if err := checkRemovedKeys(); err != nil {
+		return nil, err
+	}
+
 	Bean = &Config{}
 	if err := viper.Unmarshal(Bean); err != nil {
 		Bean = nil
@@ -180,4 +186,14 @@ func LoadConfig(filename string) (*Config, error) {
 	}
 
 	return Bean, nil
+}
+
+// checkRemovedKeys rejects config keys that were removed in a breaking change
+// when they still carry a value. Unknown keys are otherwise ignored silently by
+// viper, which for a security setting would quietly turn the protection off.
+func checkRemovedKeys() error {
+	if len(viper.GetStringSlice("accessLog.bodyDumpMaskParam")) > 0 {
+		return fmt.Errorf("config: accessLog.bodyDumpMaskParam has been removed, rename it to accessLog.maskFields")
+	}
+	return nil
 }
