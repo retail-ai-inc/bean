@@ -18,7 +18,7 @@ func NewIPExtractor(ranges []string) (echo.IPExtractor, error) {
 
 	options := make([]echo.TrustOption, 0, len(ranges)+3)
 	options = append(options,
-		echo.TrustLoopback(false),
+		echo.TrustLoopback(true),
 		echo.TrustLinkLocal(false),
 		echo.TrustPrivateNet(false),
 	)

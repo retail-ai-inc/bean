@@ -64,6 +64,24 @@ func TestNewIPExtractorAcceptsSingleIP(t *testing.T) {
 	}
 }
 
+func TestNewIPExtractorTrustsLoopbackPeer(t *testing.T) {
+	extractor, err := NewIPExtractor([]string{"34.102.207.206/32"})
+	if err != nil {
+		t.Fatalf("NewIPExtractor() error = %v", err)
+	}
+
+	e := echo.New()
+	e.IPExtractor = extractor
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.6:12345"
+	req.Header.Set(echo.HeaderXForwardedFor, "221.214.179.58,34.102.207.206")
+	c := e.NewContext(req, httptest.NewRecorder())
+
+	if got := c.RealIP(); got != "221.214.179.58" {
+		t.Fatalf("RealIP() = %q, want client from X-Forwarded-For", got)
+	}
+}
+
 func TestNewIPExtractorIgnoresPrivatePeerUnlessConfigured(t *testing.T) {
 	extractor, err := NewIPExtractor([]string{"198.51.100.0/24"})
 	if err != nil {
