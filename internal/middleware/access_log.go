@@ -35,6 +35,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
+	"github.com/retail-ai-inc/bean/v2/internal/redact"
 	"github.com/retail-ai-inc/bean/v2/log"
 )
 
@@ -131,13 +132,7 @@ func logAccess(config LoggerConfig, c echo.Context) {
 	}
 
 	if len(config.RequestHeader) > 0 {
-		reqHeader := make(map[string]any)
-		for _, h := range config.RequestHeader {
-			if v := req.Header.Get(h); v != "" {
-				reqHeader[h] = v
-			}
-		}
-		fields["request_header"] = reqHeader
+		fields["request_header"] = redact.Headers(req.Header, config.RequestHeader)
 	}
 
 	config.Logger.TraceInfo(
@@ -196,24 +191,12 @@ func logBodyDump(
 
 	// ---- request headers ----
 	if len(config.RequestHeader) > 0 {
-		reqHeader := make(map[string]any)
-		for _, h := range config.RequestHeader {
-			if v := req.Header.Get(h); v != "" {
-				reqHeader[h] = v
-			}
-		}
-		fields["request_header"] = reqHeader
+		fields["request_header"] = redact.Headers(req.Header, config.RequestHeader)
 	}
 
 	// ---- response headers ----
 	if len(config.ResponseHeader) > 0 {
-		resHeader := make(map[string]any)
-		for _, h := range config.ResponseHeader {
-			if v := res.Header().Get(h); v != "" {
-				resHeader[h] = v
-			}
-		}
-		fields["response_header"] = resHeader
+		fields["response_header"] = redact.Headers(res.Header(), config.ResponseHeader)
 	}
 
 	config.Logger.TraceInfo(

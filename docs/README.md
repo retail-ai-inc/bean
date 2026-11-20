@@ -588,7 +588,7 @@ transport := http.NewLoggingTransport(
         DumpBody:           true,
         BodyLimit:          64 * 1024,
         LogType:            "my-service",
-        AllowedReqHeaders:  []string{"Authorization", "Content-Type"},
+        AllowedReqHeaders:  []string{"Content-Type", "X-Correlation-Id"},
         AllowedRespHeaders: []string{"Content-Type"},
     },
 )
@@ -602,6 +602,7 @@ client.SetTransport(transport)
 - When `DumpBody` is enabled, request and response bodies are stored as `[]byte`; `encoding/json` encodes them as base64 in the final log line.
 - Body dumping increases memory use; use cautiously in production.
 - Leave `AllowedReqHeaders` or `AllowedRespHeaders` empty to use the access-log config from `env.json` (`ReqHeaderParam` / `ResHeaderParam`).
+- Sensitive header values are always redacted before logging, both here and in the access-log middleware: `Authorization` / `Proxy-Authorization` keep only the auth scheme (e.g. `Bearer [REDACTED]`), while `Cookie`, `Set-Cookie` and any header whose name contains `token`, `secret`, `password`, `passwd`, `api-key`, `apikey`, `session`, `signature` or `credential` are logged as `[REDACTED]`. The outgoing request itself is not modified.
 
 ## TenantAlterDbHostParam
 

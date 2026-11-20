@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/retail-ai-inc/bean/v2/config"
 	bctx "github.com/retail-ai-inc/bean/v2/context"
+	"github.com/retail-ai-inc/bean/v2/internal/redact"
 	blog "github.com/retail-ai-inc/bean/v2/log"
 )
 
@@ -62,14 +63,12 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		fields["type"] = t.opt.LogType
 	}
 
-	reqHeader := make(map[string]any)
+	reqHeader := redact.Headers(req.Header, t.opt.AllowedReqHeaders)
 	if requestID, ok := bctx.GetRequestID(req.Context()); ok {
 		fields["id"] = requestID
-		reqHeader[echo.HeaderXRequestID] = requestID
-	}
-	for _, h := range t.opt.AllowedReqHeaders {
-		if v := req.Header.Get(h); v != "" {
-			reqHeader[h] = v
+		// A non-empty X-Request-ID header on the request itself takes precedence.
+		if _, exists := reqHeader[echo.HeaderXRequestID]; !exists {
+			reqHeader[echo.HeaderXRequestID] = requestID
 		}
 	}
 
@@ -85,12 +84,7 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 
 	if resp != nil {
 		fields["status"] = resp.StatusCode
-		respHeader := make(map[string]any)
-		for _, h := range t.opt.AllowedRespHeaders {
-			if v := resp.Header.Get(h); v != "" {
-				respHeader[h] = v
-			}
-		}
+		respHeader := redact.Headers(resp.Header, t.opt.AllowedRespHeaders)
 
 		if len(respHeader) > 0 {
 			fields["response_header"] = respHeader
