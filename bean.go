@@ -237,6 +237,14 @@ func NewEcho() (*echo.Echo, func() error) {
 	}
 	e.Logger.SetLevel(elog.DEBUG)
 
+	extractor, err := middleware.NewIPExtractor(config.Bean.HTTP.TrustIPRange)
+	if err != nil {
+		e.Logger.Fatalf("Invalid http.trustIPRange: %v Server 🚀  crash landed. Exiting...\n", err)
+	}
+	if extractor != nil {
+		e.IPExtractor = extractor
+	}
+
 	// Initialize `BeanLogger` global variable using `e.Logger`.
 	_ = blog.Init(e.Logger)
 

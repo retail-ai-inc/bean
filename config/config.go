@@ -41,8 +41,12 @@ type Config struct {
 		Host            string
 		BodyLimit       string
 		IsHttpsRedirect bool
-		Timeout         time.Duration
-		ErrorMessage    struct {
+		// TrustIPRange lists the only proxy CIDRs or single IPs allowed to supply X-Forwarded-For.
+		// Private, loopback, and link-local addresses are not trusted unless listed here.
+		// Empty means the service is reached directly and RealIP uses the connection peer.
+		TrustIPRange []string
+		Timeout      time.Duration
+		ErrorMessage struct {
 			E404 struct {
 				Json []struct {
 					Key   string
