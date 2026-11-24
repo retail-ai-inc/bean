@@ -276,7 +276,7 @@ c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 2. **`http.bodyLimit` 配置格式不变**：仍可写 `"1M"`、`"512K"` 等，bean 会换算成字节数。配置值无法解析时启动失败。
 3. **超时返回 504**：`http.timeout` 超时时返回 `echo.NewHTTPError(504, "gateway timeout").Wrap(context.DeadlineExceeded)`，上报到 Sentry 的仍是内部错误。
 4. **404 / 405 改由 Echo 路由判断**：详见 [5.1](#51-404--405-的处理方式)。
-5. **访问日志（body dump）**：响应体、状态码、`bytes_out` 的记录方式已适配 v5，日志字段不变。
+5. **访问日志（body dump）内存有上限**：v2 会把整个请求体、响应体读入内存再截断，大文件上传/下载时内存占用与正文大小相同。v3 只在内存中保留前 `accessLog.bodyLimit + 1` 字节（默认 8KB），其余部分直接流式传给 handler / 客户端。日志字段和内容不变（截断本来就按 `accessLog.bodyLimit` 进行）。另外，客户端中途断开上传时，v2 会把已读到的部分当作完整请求体交给 handler，v3 中 handler 会收到读取错误；日志中的 `request_body_error` / `bytes_in_read` 照常记录。
 6. **Echo 自身日志**：Echo v5 的 slog 日志（含 `c.Logger()`）与 bean 日志输出到同一目标，格式为 JSON，但字段与 gommon 日志略有不同（slog 为 `time` / `level` / `message`，没有 `prefix` / `file` / `line`）。
 
 ### 5.1 404 / 405 的处理方式

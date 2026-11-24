@@ -360,6 +360,7 @@ func NewEcho() (*echo.Echo, func() error) {
 			RequestHeader:  config.Bean.AccessLog.ReqHeaderParam,
 			ResponseHeader: config.Bean.AccessLog.ResHeaderParam,
 			Logger:         blog.Logger(),
+			BodyLimit:      config.Bean.AccessLog.BodyLimit,
 		}
 
 		accessLogger := middleware.AccessLoggerWithConfig(accessLogConfig)
