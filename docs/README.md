@@ -394,6 +394,26 @@ ctx := trace.SetUser(c.Request().Context(), sentry.User{
 
 Please refer to the [`helpers` package](helpers/) in this codebase or [go doc](https://pkg.go.dev/github.com/retail-ai-inc/bean/v3/helpers) for more information.
 
+### Processing large CSV files
+
+`helpers.ProcessCSV` / `helpers.ProcessCSVFile` read a CSV file of any size with bounded memory and call your handler with batches of records from several goroutines (one per CPU by default). Records are parsed by `encoding/csv` (quoted fields, embedded newlines, no line length limit), and a leading UTF-8 BOM is skipped.
+
+```go
+err := helpers.ProcessCSVFile(ctx, "users.csv", helpers.CSVOptions{
+    HasHeader: true, // the first record is passed as batch.Header
+    BatchSize: 1000, // records per handler call (default 1000)
+    Workers:   8,    // concurrent handlers (default runtime.NumCPU(); 1 keeps file order)
+}, func(ctx context.Context, batch helpers.CSVBatch) error {
+    // batch.Index is the position of batch.Records[0] in the file (header excluded).
+    return userRepo.BulkInsert(ctx, batch.Records)
+})
+```
+
+- Memory use is bounded by about `2 x Workers + 1` batches, whatever the file size (a 1.1 GB file with 10 million rows was processed in about 2.7 s with a peak heap of about 5 MB on an 8 core machine).
+- Processing stops at the first error and `ProcessCSV` returns it: a CSV parse error (`*csv.ParseError`, with the line number), an error returned by the handler, a panic in the handler (returned as an error), or the cancellation of `ctx`. The `ctx` passed to the handler is canceled when processing stops.
+- The handler runs concurrently and must be safe for concurrent use. Batches are not handled in file order unless `Workers` is 1.
+- `Comma`, `Comment`, `FieldsPerRecord`, `LazyQuotes` and `TrimLeadingSpace` are passed to `encoding/csv`.
+
 ## Bean Config
 
 Bean provides the [`config.Config`](https://pkg.go.dev/github.com/retail-ai-inc/bean/v3/config#Config) struct to enable the user to tweak the configuration of their consumer project as per their requirement .
