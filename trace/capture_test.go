@@ -25,7 +25,8 @@ func TestLogAndSentryCaptureWithRequestID(t *testing.T) {
 	config.Bean = &config.Config{}
 	t.Cleanup(func() { config.Bean = originalConf })
 
-	logger := log.Init(elog.New("echo"))
+	logger, err := log.Init(elog.New("echo"))
+	require.NoError(t, err)
 	originalLevel := logger.Level()
 	originalOutput := logger.Output()
 	logger.SetLevel(elog.DEBUG)
@@ -107,7 +108,8 @@ func TestSentryCaptureDoesNotLog(t *testing.T) {
 	config.Bean = &config.Config{}
 	t.Cleanup(func() { config.Bean = originalConf })
 
-	logger := log.Init(elog.New("echo"))
+	logger, err := log.Init(elog.New("echo"))
+	require.NoError(t, err)
 	originalOutput := logger.Output()
 	t.Cleanup(func() { logger.SetOutput(originalOutput) })
 

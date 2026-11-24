@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	elog "github.com/labstack/gommon/log"
@@ -193,34 +193,44 @@ func (l *logger) traceLog(ctx context.Context, severity Severity, level string, 
 	})
 }
 
-var (
-	blogger BeanLogger
-	once    sync.Once
-)
+// current holds the global bean logger returned by `Logger()`.
+var current atomic.Pointer[loggerHolder]
 
-func Init(logger LeveledLogger) BeanLogger {
-	once.Do(func() {
-		var err error
-		blogger, err = NewLogger(logger,
-			WithMaskFields(config.Bean.AccessLog.BodyDumpMaskParam),
-			WithAccessLogPath(config.Bean.AccessLog.Path),
-			WithRuntimePlatform(config.Bean.AccessLog.RuntimePlatform),
-			WithSinkAsync(config.Bean.AccessLog.Async, config.Bean.AccessLog.AsyncQueueSize),
-			WithBodyLimit(config.Bean.AccessLog.BodyLimit),
-		)
-		if err != nil {
-			panic(err)
-		}
-	})
-	return blogger
+type loggerHolder struct{ BeanLogger }
+
+// Init creates the bean logger from `config.Bean` using logger as the leveled logger, and sets it as the
+// global logger returned by `Logger()`. Calling it again replaces the global logger.
+func Init(logger LeveledLogger) (BeanLogger, error) {
+	l, err := NewLogger(logger,
+		WithMaskFields(config.Bean.AccessLog.BodyDumpMaskParam),
+		WithAccessLogPath(config.Bean.AccessLog.Path),
+		WithRuntimePlatform(config.Bean.AccessLog.RuntimePlatform),
+		WithSinkAsync(config.Bean.AccessLog.Async, config.Bean.AccessLog.AsyncQueueSize),
+		WithBodyLimit(config.Bean.AccessLog.BodyLimit),
+	)
+	if err != nil {
+		return nil, err
+	}
+	SetLogger(l)
+	return l, nil
 }
 
+// SetLogger sets the global logger returned by `Logger()`.
+func SetLogger(l BeanLogger) {
+	current.Store(&loggerHolder{BeanLogger: l})
+}
+
+// Logger returns the global bean logger, or nil if it is not initialized.
 func Logger() BeanLogger {
-	return blogger
+	if h := current.Load(); h != nil {
+		return h.BeanLogger
+	}
+	return nil
 }
 
+// Shutdown flushes and closes the global logger's access log sink.
 func Shutdown(ctx context.Context) error {
-	if l, ok := blogger.(*logger); ok && l != nil && l.pipeline != nil {
+	if l, ok := Logger().(*logger); ok && l != nil && l.pipeline != nil {
 		return l.pipeline.Close(ctx)
 	}
 	return nil

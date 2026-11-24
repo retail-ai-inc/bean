@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/retail-ai-inc/bean/v3"
+	"github.com/retail-ai-inc/bean/v3/trace"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +22,7 @@ func init() {
 			err := helloWorld("hello")
 			if err != nil {
 				// If you turn on `sentry` via env.json then the error will be captured by sentry otherwise ignore.
-				bean.SentryCaptureException(nil, err)
+				trace.SentryCaptureException(nil, err)
 			}
 
 			return err

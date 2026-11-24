@@ -113,7 +113,7 @@ c.Logger().Error(err.Error())
 | v2 | v3 |
 | --- | --- |
 | `log.BeanLogger` 内嵌 `echo.Logger` | 内嵌 `log.LeveledLogger`（方法集与原 `echo.Logger` 相同） |
-| `log.Init(e.Logger)` | `log.Init(elog.New("echo"))`（`elog` 为 `github.com/labstack/gommon/log`） |
+| `log.Init(e.Logger) BeanLogger`（只生效一次，失败时 panic） | `log.Init(elog.New("echo")) (BeanLogger, error)`（`elog` 为 `github.com/labstack/gommon/log`）；再次调用会替换全局 logger |
 | `log.NewLogger(e.Logger, ...)` | `log.NewLogger(elog.New("echo"), ...)` |
 
 一般项目不会自己调用 `log.Init`（`bean.New()` 内部已初始化），主要影响测试代码：
@@ -123,7 +123,7 @@ c.Logger().Error(err.Error())
 _ = log.Init(echo.New().Logger)
 
 // v3
-_ = log.Init(elog.New("echo"))
+_, _ = log.Init(elog.New("echo"))
 ```
 
 ### 4.3 `echo.HTTPError`
@@ -268,6 +268,35 @@ c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 | `echo.PathParamsBinder(c)` | 改名为 `echo.PathValuesBinder(c)` |
 | `echo.GetPath(r)` | 改用 `r.URL.RawPath` / `r.URL.Path` |
 
+### 4.11 `bean.New()` / `bean.NewEcho()` 返回 error
+
+v2 中配置错误（`http.trustIPRange`、`http.bodyLimit`、Sentry 初始化、Prometheus、协程池等）会在 `New()` 内部直接 `log.Fatal` 退出进程，无法在测试中验证，也不会清理已初始化的资源。v3 改为返回 error，并在出错时释放已初始化的资源（如已注册的协程池）：
+
+```go
+// v2
+b := bean.New()
+
+// v3
+b, err := bean.New()
+if err != nil {
+    log.Fatalf("Failed to initialize bean: %v", err)
+}
+```
+
+```go
+// v2
+e, closeEcho := bean.NewEcho()
+
+// v3
+e, closeEcho, err := bean.NewEcho()
+```
+
+`config.Bean` 未加载时返回 `bean.ErrConfigNotLoaded`。
+
+`accessLog.skipEndpoints`、`prometheus.skipEndpoints`、`sentry.skipTracesEndpoints` 中的正则表达式无效时，v2 会 panic，v3 会从 `New()` 返回包含配置项名称的错误。
+
+> **由 `bean init` 生成的项目**：`commands/start.go`、`commands/route.go`、`commands/gopher/gopher.go` 中的 `bean.New()` 需要按上面的方式处理 error。
+
 ## 5. bean 自身的行为变化
 
 以下变化由 bean 内部处理，项目通常无需改代码，但请了解：
@@ -284,6 +313,8 @@ c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
    - `berror.HTTPErrorHandlerFunc` 不再处理 `APIError` 和校验错误（它们有各自的处理函数），与注册顺序无关。
    - `http.errorMessage.*` 改为从 `config.Bean` 读取（启动时解析一次），不再在每次出错时查询 viper。`http.errorMessage.e405.html.file` 现在生效（v2 中 405 总是使用 `errors/html/405`）。JSON 配置中的 `value` 一律按字符串输出。
    - 配置结构中 5 个相同的匿名结构体合并为 `config.ErrorPage` 类型，字段名不变。
+9. **`sentry.skipTracesEndpoints` 只配置一条时也生效**：v2 中只有配置两条及以上才会跳过采样（判断条件写成了 `> 1`）。
+10. **项目模板**：`bean init` 生成的项目已修正多处在 v2 中就无法编译的问题（引用了已不存在的 `bean.BeanConfig`、`bean.Logger()`、`bean.SentryCaptureException`、`bean.DefaultBeforeSend`、`bean.Cleanup`，以及使用模块名而不是模块路径作为 import 路径等），改为使用 `config.Bean`、`log.Logger()`、`trace.SentryCaptureException`、`trace.DefaultBeforeSend`。
 
 ### 5.1 404 / 405 的处理方式
 
@@ -318,6 +349,7 @@ v2 用一个全局中间件在每个请求上遍历全部路由、自行匹配�
 - [ ] 自定义 `b.Echo.HTTPErrorHandler` 调换参数顺序
 - [ ] `commands/route.go` 中 `b.Echo.Routes()` 改为 `b.Echo.Router().Routes()`
 - [ ] 自定义 Binder / Renderer 调整签名
+- [ ] `bean.New()` / `bean.NewEcho()` 处理返回的 error
 - [ ] 测试中的 `log.Init(echo.New().Logger)`、`echo.NewResponse(w, e)` 等改为 v3 写法
 - [ ] `go build ./... && go test ./...` 通过
 - [ ] 检查启动日志中是否有 `route is not registered because its method is not listed in http.allowedMethod` 警告

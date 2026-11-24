@@ -24,7 +24,7 @@ func Test_Execute_Context(t *testing.T) {
 		TracesSampleRate: 0,
 	},
 	}
-	_ = log.Init(elog.New("echo"))
+	_, _ = log.Init(elog.New("echo"))
 
 	task := func(ctx context.Context) error {
 		_, finish := trace.StartSpan(ctx, "test")

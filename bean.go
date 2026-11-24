@@ -28,7 +28,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -158,13 +157,20 @@ func valueOr[T any](value *T, fallback T) T {
 	return *value
 }
 
-func New() *Bean {
+// ErrConfigNotLoaded is returned by `New` and `NewEcho` when `config.Bean` is not loaded.
+var ErrConfigNotLoaded = errors.New("config is not loaded")
+
+// New creates a bean instance from `config.Bean`. On error, everything already initialized is cleaned up.
+func New() (*Bean, error) {
 	if config.Bean == nil {
-		log.Fatal("config is not loaded")
+		return nil, ErrConfigNotLoaded
 	}
 
 	// Create a new echo instance
-	e, closeEcho := NewEcho()
+	e, closeEcho, err := NewEcho()
+	if err != nil {
+		return nil, err
+	}
 
 	b := &Bean{
 		Echo:     e,
@@ -200,12 +206,14 @@ func New() *Bean {
 
 	b.ShutdownSrv = append(b.ShutdownSrv, closeEcho)
 
-	return b
+	return b, nil
 }
 
-func NewEcho() (*echo.Echo, func() error) {
+// NewEcho creates the echo instance with bean's middlewares from `config.Bean`. The returned function
+// releases the resources (Sentry, goroutine pools). On error, everything already initialized is cleaned up.
+func NewEcho() (*echo.Echo, func() error, error) {
 	if config.Bean == nil {
-		log.Fatal("config is not loaded")
+		return nil, nil, ErrConfigNotLoaded
 	}
 
 	// IMPORTANT: Configure debug log.
@@ -214,7 +222,7 @@ func NewEcho() (*echo.Echo, func() error) {
 	elogger := elog.New("echo")
 	if config.Bean.DebugLogPath != "" {
 		if file, err := helpers.OpenFile(config.Bean.DebugLogPath); err != nil {
-			elogger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
+			return nil, nil, fmt.Errorf("unable to open debug log file: %w", err)
 		} else {
 			elogger.SetOutput(file)
 		}
@@ -237,6 +245,12 @@ func NewEcho() (*echo.Echo, func() error) {
 		),
 	})
 	closes := []func() error{}
+	fail := func(err error) (*echo.Echo, func() error, error) {
+		if cErr := closer(closes)(); cErr != nil {
+			err = errors.Join(err, cErr)
+		}
+		return nil, nil, err
+	}
 
 	// Set custom request binder
 	e.Binder = &binder.CustomBinder{}
@@ -255,14 +269,16 @@ func NewEcho() (*echo.Echo, func() error) {
 
 	extractor, err := middleware.NewIPExtractor(config.Bean.HTTP.TrustIPRange)
 	if err != nil {
-		elogger.Fatalf("Invalid http.trustIPRange: %v Server 🚀  crash landed. Exiting...\n", err)
+		return fail(fmt.Errorf("invalid http.trustIPRange: %w", err))
 	}
 	if extractor != nil {
 		e.IPExtractor = extractor
 	}
 
 	// Initialize `BeanLogger` global variable using `elogger`.
-	_ = blog.Init(elogger)
+	if _, err := blog.Init(elogger); err != nil {
+		return fail(fmt.Errorf("failed to initialize logger: %w", err))
+	}
 
 	// Adds a `Server` header to the response.
 	e.Use(middleware.ServerHeader(config.Bean.ProjectName, helpers.CurrVersion()))
@@ -270,7 +286,7 @@ func NewEcho() (*echo.Echo, func() error) {
 	// Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
 	bodyLimit, err := bytes.Parse(config.Bean.HTTP.BodyLimit)
 	if err != nil {
-		elogger.Fatalf("Invalid http.bodyLimit: %v Server 🚀  crash landed. Exiting...\n", err)
+		return fail(fmt.Errorf("invalid http.bodyLimit: %w", err))
 	}
 	e.Use(echomiddleware.BodyLimit(bodyLimit))
 
@@ -310,7 +326,7 @@ func NewEcho() (*echo.Echo, func() error) {
 				clientOption.EnableTracing = true
 			}
 			if err := sentry.Init(*clientOption); err != nil {
-				elogger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
+				return fail(fmt.Errorf("sentry initialization failed: %w", err))
 			}
 			flushSentry = func() error {
 				notTimeout := sentry.Flush(config.Bean.Sentry.Timeout)
@@ -333,7 +349,9 @@ func NewEcho() (*echo.Echo, func() error) {
 			e.Use(middleware.SetHubToContext)
 
 			if helpers.FloatInRange(config.Bean.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
-				regex.SetSamplingPathSkipper(config.Bean.Sentry.SkipTracesEndpoints)
+				if err := regex.SetSamplingPathSkipper(config.Bean.Sentry.SkipTracesEndpoints); err != nil {
+					return fail(err)
+				}
 				e.Use(middleware.SkipSampling)
 			}
 		}
@@ -354,8 +372,12 @@ func NewEcho() (*echo.Echo, func() error) {
 
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if config.Bean.AccessLog.On {
+		skipper, err := regex.InitAccessLogPathSkipper(config.Bean.AccessLog.SkipEndpoints)
+		if err != nil {
+			return fail(err)
+		}
 		accessLogConfig := middleware.LoggerConfig{
-			Skipper:        regex.InitAccessLogPathSkipper(config.Bean.AccessLog.SkipEndpoints),
+			Skipper:        skipper,
 			BodyDump:       config.Bean.AccessLog.BodyDump,
 			RequestHeader:  config.Bean.AccessLog.ReqHeaderParam,
 			ResponseHeader: config.Bean.AccessLog.ResHeaderParam,
@@ -380,7 +402,7 @@ func NewEcho() (*echo.Echo, func() error) {
 		const metricsPath = "/metrics" // fixed path
 		skipper, err := regex.InitPrometheusPathSkipper(config.Bean.Prometheus.SkipEndpoints, metricsPath)
 		if err != nil {
-			elogger.Fatalf("Prometheus initialization failed: %v. Server 🚀  crash landed. Exiting...\n", err)
+			return fail(fmt.Errorf("prometheus initialization failed: %w", err))
 		}
 		conf := echoprometheus.MiddlewareConfig{
 			Skipper: skipper,
@@ -395,7 +417,8 @@ func NewEcho() (*echo.Echo, func() error) {
 		e.GET(metricsPath, echoprometheus.NewHandler())
 	}
 
-	// Register goroutine pool
+	// Register goroutine pool. Register the release first so the pools are released on error too.
+	closes = append(closes, gopool.ReleaseAllPools(config.Bean.AsyncPoolReleaseTimeout))
 	if len(config.Bean.AsyncPool) > 0 {
 		for _, asyncPool := range config.Bean.AsyncPool {
 			if asyncPool.Name == "" {
@@ -404,17 +427,17 @@ func NewEcho() (*echo.Echo, func() error) {
 
 			pool, err := gopool.NewPool(asyncPool.Size, asyncPool.BlockAfter)
 			if err != nil {
-				elogger.Fatal(err, ". Server 🚀  crash landed. Exiting...")
+				return fail(fmt.Errorf("failed to create goroutine pool %q: %w", asyncPool.Name, err))
 			}
 
 			if err := gopool.Register(asyncPool.Name, pool); err != nil {
-				elogger.Fatal(err, ". Server 🚀  crash landed. Exiting...")
+				pool.Release()
+				return fail(fmt.Errorf("failed to register goroutine pool %q: %w", asyncPool.Name, err))
 			}
 		}
 	}
-	closes = append(closes, gopool.ReleaseAllPools(config.Bean.AsyncPoolReleaseTimeout))
 
-	return e, closer(closes)
+	return e, closer(closes), nil
 }
 
 func (b *Bean) ServeAt(host, port string) error {

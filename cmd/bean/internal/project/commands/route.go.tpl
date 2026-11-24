@@ -4,6 +4,7 @@ package commands
 import (
     "encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"sort"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/olekukonko/tablewriter"
 	"github.com/retail-ai-inc/bean/v3"
+	"github.com/retail-ai-inc/bean/v3/config"
 	"github.com/spf13/cobra"
 )
 
@@ -45,16 +47,19 @@ func init() {
 
 func routeList(cmd *cobra.Command, args []string) {
 	// Just initialize a plain sentry client option structure if sentry is on.
-	if bean.BeanConfig.Sentry.On {
-		bean.BeanConfig.Sentry.ClientOptions = &sentry.ClientOptions{
+	if config.Bean.Sentry.On {
+		config.Bean.Sentry.ClientOptions = &sentry.ClientOptions{
 			Debug:       false,
-			Dsn:         bean.BeanConfig.Sentry.Dsn,
-			Environment: bean.BeanConfig.Environment,
+			Dsn:         config.Bean.Sentry.Dsn,
+			Environment: config.Bean.Environment,
 		}
 	}
 
 	// Create a bean object
-	b := bean.New()
+	b, err := bean.New()
+	if err != nil {
+		log.Fatalf("failed to initialize bean: %v", err)
+	}
 
 	// Create an empty database dependency.
 	b.DBConn = &bean.DBDeps{}
@@ -65,7 +70,7 @@ func routeList(cmd *cobra.Command, args []string) {
 	}
 
 	// Consider the allowed methods to display only URI path that's support it.
-	allowedMethod := bean.BeanConfig.HTTP.AllowedMethod
+	allowedMethod := config.Bean.HTTP.AllowedMethod
 
 	jsonOutput := make([]map[string]interface{}, 0)
 

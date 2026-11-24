@@ -335,7 +335,10 @@ func Test_NewEcho(t *testing.T) {
 			rec := httptest.NewRecorder()
 
 			// Act
-			e, closeEcho := NewEcho()
+			e, closeEcho, err := NewEcho()
+			if err != nil {
+				t.Fatal(err)
+			}
 			defer func() {
 				_ = closeEcho()
 			}()
@@ -391,7 +394,10 @@ func TestNewEcho_RouterNotFoundAndMethodNotAllowed(t *testing.T) {
 	reset := setConf(t, 0) // allowedMethod: ["GET"]
 	defer reset()
 
-	e, closeEcho := NewEcho()
+	e, closeEcho, err := NewEcho()
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = closeEcho() }()
 
 	b := &Bean{Echo: e}

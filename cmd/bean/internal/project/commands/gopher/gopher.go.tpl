@@ -2,14 +2,16 @@
 package gopher
 
 import (
+	"log"
 	"sync"
 
-	// msentry "{{ .PkgName }}/packages/sentry"
-	// "{{ .PkgName }}/repositories"
-	// "{{ .PkgName }}/services"
+	// msentry "{{ .PkgPath }}/packages/sentry"
+	// "{{ .PkgPath }}/repositories"
+	// "{{ .PkgPath }}/services"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/retail-ai-inc/bean/v3"
+	"github.com/retail-ai-inc/bean/v3/config"
 	"github.com/retail-ai-inc/bean/v3/helpers"
 	"github.com/spf13/cobra"
 )
@@ -40,19 +42,23 @@ var once sync.Once
 func initBean(isInitDB ...bool) *bean.Bean {
 	once.Do(func() {
 		// Prepare sentry options before initialize bean.
-		if bean.BeanConfig.Sentry.On {
-			bean.BeanConfig.Sentry.ClientOptions = &sentry.ClientOptions{
-				Debug:       bean.BeanConfig.Sentry.Debug,
-				Dsn:         bean.BeanConfig.Sentry.Dsn,
-				Environment: bean.BeanConfig.Environment,
+		if config.Bean.Sentry.On {
+			config.Bean.Sentry.ClientOptions = &sentry.ClientOptions{
+				Debug:       config.Bean.Sentry.Debug,
+				Dsn:         config.Bean.Sentry.Dsn,
+				Environment: config.Bean.Environment,
 				//BeforeSend:       msentry.CustomBeforeSend, // Default beforeSend function. You can initialize your own custom function.
 				AttachStacktrace: true,
-				TracesSampleRate: helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0),
+				TracesSampleRate: helpers.FloatInRange(config.Bean.Sentry.TracesSampleRate, 0.0, 1.0),
 			}
 		}
 
 		// Create a bean object
-		b = bean.New()
+		var err error
+		b, err = bean.New()
+		if err != nil {
+			log.Fatalf("Failed to initialize bean: %v", err)
+		}
 		b.Echo.AcquireContext().Reset(nil, nil)
 
 		// IMPORTANT - This is very useful when you run some cloudfunction/command in GCP/AWS/Azure and you cannot connect
