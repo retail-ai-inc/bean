@@ -316,6 +316,11 @@ e, closeEcho, err := bean.NewEcho()
 9. **`sentry.skipTracesEndpoints` 只配置一条时也生效**：v2 中只有配置两条及以上才会跳过采样（判断条件写成了 `> 1`）。
 10. **项目模板**：`bean init` 生成的项目已修正多处在 v2 中就无法编译的问题（引用了已不存在的 `bean.BeanConfig`、`bean.Logger()`、`bean.SentryCaptureException`、`bean.DefaultBeforeSend`、`bean.Cleanup`，以及使用模块名而不是模块路径作为 import 路径等），改为使用 `config.Bean`、`log.Logger()`、`trace.SentryCaptureException`、`trace.DefaultBeforeSend`。
 11. **发生 panic 的请求计入 Prometheus 指标**：v2 中 `Recover` 中间件注册在 Prometheus 中间件外层，panic 会直接穿过 Prometheus 中间件，导致这类请求在指标中完全缺失，5xx 错误率偏低。v3 把 `Recover` 移到 bean 内置中间件的最内层，panic 先被转换为 error，因此会以 `code="500"` 计入 `echo_requests_total` 等指标。
+12. **panic 上报到 Sentry 时显示 panic 发生处的堆栈**：v2 中 panic 被转换为只带文本堆栈的错误，Sentry 无法解析，显示的是上报那一刻（错误处理器）的堆栈。v3 使用 bean 自己的 recover 中间件，panic 被转换为 `*berror.PanicError`：
+    - `Value` 字段为 panic 的值；如果是 error（如 `runtime.Error`），可以通过 `errors.As` / `errors.Is` 取到。
+    - 通过 `StackTrace()` 提供 panic 现场的堆栈，Sentry 中最内层的帧就是发生 panic 的函数。
+    - `Error()` 只返回 `[PANIC RECOVER] <panic 的值>`，不再包含整段 goroutine 堆栈，访问日志的 `error` 字段因此变短；需要本地堆栈时用 `%+v` 格式化（未开启 Sentry 时错误日志就是这样输出的）。
+    - 如果项目中用 `errors.As` 判断过 Echo 的 `*middleware.PanicStackError`，需要改为 `*berror.PanicError`。
 
 ### 5.1 404 / 405 的处理方式
 

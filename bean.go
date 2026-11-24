@@ -418,7 +418,7 @@ func NewEcho() (*echo.Echo, func() error, error) {
 	// IMPORTANT: Register `Recover` after (= inside) the middlewares above, so that a panic is turned into an
 	// error before it reaches them. Otherwise the panic unwinds through e.g. the Prometheus middleware and the
 	// request is not counted in the metrics at all.
-	e.Use(echomiddleware.Recover())
+	e.Use(middleware.Recover())
 
 	// Register goroutine pool. Register the release first so the pools are released on error too.
 	closes = append(closes, gopool.ReleaseAllPools(config.Bean.AsyncPoolReleaseTimeout))
