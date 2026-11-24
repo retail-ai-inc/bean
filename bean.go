@@ -429,85 +429,101 @@ func (b *Bean) ServeAt(host, port string) error {
 	}
 	b.Echo.Validator = v
 
-	s := http.Server{
-		Addr:    host + ":" + port,
-		Handler: b.Echo,
+	gracefulTimeout := b.Config.HTTP.ShutdownTimeout
+	if gracefulTimeout <= 0 {
+		gracefulTimeout = 30 * time.Second
 	}
 
-	// IMPORTANT: Keep-alive is default true but I kept this here to let you guys no that there is a settings
-	// for it :)
-	s.SetKeepAlivesEnabled(b.Config.HTTP.KeepAlive)
+	var shutdownErr error
+	sc := echo.StartConfig{
+		Address:         host + ":" + port,
+		HideBanner:      true,
+		HidePort:        true,
+		GracefulTimeout: gracefulTimeout,
+		// Even after timeout, shutdown keeps handling ongoing requests in the background
+		// while returning timeout error until main goroutine exits.
+		OnShutdownError: func(err error) { shutdownErr = err },
+		BeforeServeFunc: func(s *http.Server) error {
+			// echo sets a 30s read timeout by default, which would break long uploads. Keep the
+			// `net/http` default (no timeout) as before.
+			s.ReadTimeout = 0
+			// IMPORTANT: Keep-alive is default true but I kept this here to let you guys no that there is a settings
+			// for it :)
+			s.SetKeepAlivesEnabled(b.Config.HTTP.KeepAlive)
+			return nil
+		},
+	}
 
-	// before bean bootstrap
+	start := func(ctx context.Context) error { return sc.Start(ctx, b.Echo) }
+	if b.Config.HTTP.SSL.On {
+		// Read the files here: `StartTLS` reads file paths relative to the working directory only.
+		cert, err := os.ReadFile(b.Config.HTTP.SSL.CertFile)
+		if err != nil {
+			return pkgerrors.Wrapf(err, "error during server startup")
+		}
+		key, err := os.ReadFile(b.Config.HTTP.SSL.PrivFile)
+		if err != nil {
+			return pkgerrors.Wrapf(err, "error during server startup")
+		}
+		sc.TLSConfig = &tls.Config{
+			MinVersion: b.Config.HTTP.SSL.MinTLSVersion,
+			NextProtos: []string{"h2", "http/1.1"}, // keep HTTP/2 support as `ListenAndServeTLS` did.
+		}
+		start = func(ctx context.Context) error { return sc.StartTLS(ctx, b.Echo, cert, key) }
+	}
+
+	// The server stops (gracefully) when `srvCtx` is canceled. `Start` returns once the graceful
+	// shutdown is finished.
+	srvCtx, stopSrv := context.WithCancel(context.Background())
+	defer stopSrv()
+
+	var srvErr error
+	srvDone := make(chan struct{})
+
+	b.ShutdownSrv = append(b.ShutdownSrv, func() error {
+		stopSrv()
+		<-srvDone
+		if shutdownErr != nil {
+			return pkgerrors.Wrapf(shutdownErr, "failed to gracefully shutdown")
+		}
+		return nil
+	})
+
+	// before bean bootstrap. The server shutdown is already registered, so `Shutdown` can be called from here on.
 	if b.BeforeServe != nil {
 		b.BeforeServe()
 	}
 
-	// Start the server
+	// Listen for the interrupt signal or termination signal before the server starts.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	errCh := make(chan error, 1)
 	go func() {
-		var err error
-		if b.Config.HTTP.SSL.On {
-			s.TLSConfig = &tls.Config{
-				MinVersion: b.Config.HTTP.SSL.MinTLSVersion,
-			}
-			err = s.ListenAndServeTLS(b.Config.HTTP.SSL.CertFile, b.Config.HTTP.SSL.PrivFile)
-		} else {
-			err = s.ListenAndServe()
-		}
-		// If shutdown is called, the server will return `http.ErrServerClosed` immediately.
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errCh <- err
-		}
-		close(errCh)
+		defer close(srvDone)
+		srvErr = start(srvCtx)
 	}()
 
-	b.ShutdownSrv = append(b.ShutdownSrv, func() error {
-		var timeout time.Duration
-		if b.Config.HTTP.ShutdownTimeout > 0 {
-			timeout = b.Config.HTTP.ShutdownTimeout
-		} else {
-			timeout = 30 * time.Second
-		}
-		sdnCtx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		err = s.Shutdown(sdnCtx)
-		if err != nil {
-			// Even after timeout, shutdown keeps handling ongoing requests in the background
-			// while returning timeout error until main goroutine exits.
-			err = pkgerrors.Wrapf(err, "failed to gracefully shutdown")
-			return err
-		}
-
-		return nil
-	})
-
 	select {
-	case srvErr := <-errCh:
+	case <-srvDone: // The server failed to start / serve, or was shut down by calling `Shutdown`.
 		if srvErr != nil {
 			return pkgerrors.Wrapf(srvErr, "error during server startup")
 		}
-	case <-ctx.Done(): // Wait for the interrupt signal or termination signal.
+		return nil
+	case <-ctx.Done():
 		err = b.ShutdownAll()
 	}
 
 	// Check if there might be any other error than `http.ErrServerClosed`
-	// occurred during the server startup or shutdown.
-	if srvErr := <-errCh; srvErr != nil {
+	// occurred during the server shutdown.
+	<-srvDone
+	if srvErr != nil {
 		if err != nil {
 			return errors.Join(err, srvErr)
 		}
 		return pkgerrors.Wrapf(srvErr, "error during server shutdown")
 	}
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (b *Bean) UseMiddlewares(middlewares ...echo.MiddlewareFunc) {
