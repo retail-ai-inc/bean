@@ -129,6 +129,13 @@ bean create service auth -r login -r profile,logout
 
 Above command will create both service repository files if it doesn't exist and automatically set the association.
 
+Without `--repo`, the repository with the same name as the service is injected if it exists:
+
+```sh
+bean create repo post
+bean create service post   # NewPostService(repos.postRepo) is added to routers/route.go
+```
+
 ## How To Create Handler
 
 ```sh

@@ -23,14 +23,12 @@ package cmd
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"log"
 	"os"
-	"regexp"
 	"strings"
 	"text/template"
 	"unicode"
@@ -289,72 +287,4 @@ func insertStringToNthLineOfFile(filePath, textToInsert string, lineNumber int) 
 	}
 
 	return os.WriteFile(filePath, []byte(fileContent), 0644)
-}
-
-// Replace sting to n-th line of file.
-func replaceStringToNthLineOfFile(filePath, newText string, lineNumber int) error {
-
-	f, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	defer func(file *os.File) {
-		if err := file.Close(); err != nil {
-			log.Println(err)
-		}
-	}(f)
-
-	var lines []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-
-	if err := scanner.Err(); err != nil {
-		return err
-	}
-
-	fileContent := ""
-	for i, line := range lines {
-		if i == lineNumber-1 {
-			fileContent += newText + "\n"
-		} else {
-			fileContent += line + "\n"
-		}
-	}
-
-	return os.WriteFile(filePath, []byte(fileContent), 0644)
-}
-
-func replaceStringFromFileByRegex(filePath, regex, additonal, replaceWith string) error {
-
-	input, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	re := regexp.MustCompile(regex)
-	match := re.FindStringSubmatch(string(input))
-	if len(match) > 1 {
-		replaceMe := additonal + match[1]
-		output := bytes.ReplaceAll(input, []byte(replaceMe), []byte(replaceWith))
-		if err = os.WriteFile(filePath, output, 0664); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func replaceStringFromFileByExactMatches(filePath, replaceMe, replaceWith string) error {
-	input, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-	output := bytes.ReplaceAll(input, []byte(replaceMe), []byte(replaceWith))
-	if err = os.WriteFile(filePath, output, 0664); err != nil {
-		return err
-	}
-
-	return nil
 }
