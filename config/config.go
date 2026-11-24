@@ -47,51 +47,11 @@ type Config struct {
 		TrustIPRange []string
 		Timeout      time.Duration
 		ErrorMessage struct {
-			E404 struct {
-				Json []struct {
-					Key   string
-					Value string
-				}
-				Html struct {
-					File string
-				}
-			}
-			E405 struct {
-				Json []struct {
-					Key   string
-					Value string
-				}
-				Html struct {
-					File string
-				}
-			}
-			E500 struct {
-				Json []struct {
-					Key   string
-					Value string
-				}
-				Html struct {
-					File string
-				}
-			}
-			E504 struct {
-				Json []struct {
-					Key   string
-					Value string
-				}
-				Html struct {
-					File string
-				}
-			}
-			Default struct {
-				Json []struct {
-					Key   string
-					Value string
-				}
-				Html struct {
-					File string
-				}
-			}
+			E404    ErrorPage
+			E405    ErrorPage
+			E500    ErrorPage
+			E504    ErrorPage
+			Default ErrorPage
 		}
 		KeepAlive     bool
 		AllowedMethod []string
@@ -184,4 +144,29 @@ func LoadConfig(filename string) (*Config, error) {
 	}
 
 	return Bean, nil
+}
+
+// ErrorPage customizes the error response of an HTTP status (`http.errorMessage.*` in env.json).
+type ErrorPage struct {
+	// Json is the JSON response body as key/value pairs. Empty means bean's default error JSON.
+	Json []struct {
+		Key   string
+		Value string
+	}
+	Html struct {
+		// File is the HTML template rendered for the error. Empty means bean's default template.
+		File string
+	}
+}
+
+// JSONBody returns the configured JSON response body, or nil if none is configured.
+func (p ErrorPage) JSONBody() map[string]any {
+	if len(p.Json) == 0 {
+		return nil
+	}
+	body := make(map[string]any, len(p.Json))
+	for _, kv := range p.Json {
+		body[kv.Key] = kv.Value
+	}
+	return body
 }

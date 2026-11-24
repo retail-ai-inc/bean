@@ -30,8 +30,8 @@ import (
 
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/config"
 	"github.com/retail-ai-inc/bean/v3/internal/validator"
-	"github.com/spf13/viper"
 )
 
 // ErrorCode represents the error code of the API.
@@ -69,12 +69,10 @@ func APIErrorHandlerFunc(e error, c *echo.Context) (bool, error) {
 
 	// Log HTTP errors (status >= 404) to Sentry if enabled, else log stack trace locally.
 	// 404 threshold prevents bloating Sentry with minor errors.
-	if ae.HTTPStatusCode >= 404 && viper.GetBool("sentry.on") {
+	if ae.HTTPStatusCode >= 404 && sentryOn() {
 		// Sends stack to Sentry without logging to
 		// avoid duplication, as error is already handled explicitly.
-		if hub := sentryecho.GetHubFromContext(c); hub != nil {
-			hub.CaptureException(ae)
-		}
+		captureException(c, ae)
 	} else {
 		// logs the stack trace for all errors when sentry is disabled.
 		c.Logger().Error(fmt.Sprintf("%+v", ae))
@@ -88,9 +86,17 @@ func APIErrorHandlerFunc(e error, c *echo.Context) (bool, error) {
 	return true, err
 }
 
+// HTTPErrorHandlerFunc handles errors carrying an HTTP status: `*echo.HTTPError` and the echo predefined
+// errors such as `echo.ErrNotFound` (in echo v5 these only implement `echo.HTTPStatusCoder`).
+// The response is configured per status by `http.errorMessage.*` in env.json.
 func HTTPErrorHandlerFunc(e error, c *echo.Context) (bool, error) {
-	// In echo v5 the predefined errors (e.g. `echo.ErrNotFound`, `echo.ErrMethodNotAllowed`) are no longer
-	// `*echo.HTTPError`; they only implement `echo.HTTPStatusCoder`. So match on the status coder instead.
+	// `APIError` and `ValidationError` also carry an HTTP status; they have their own handlers.
+	var ae *APIError
+	var ve *validator.ValidationError
+	if errors.As(e, &ae) || errors.As(e, &ve) {
+		return false, nil
+	}
+
 	var sc echo.HTTPStatusCoder
 	if !errors.As(e, &sc) {
 		return false, nil
@@ -103,120 +109,16 @@ func HTTPErrorHandlerFunc(e error, c *echo.Context) (bool, error) {
 		c.Logger().Error(e.Error())
 	}
 
-	// Return different response based on some defined error.
-	var err error
-	switch he.Code {
-	case http.StatusNotFound:
-		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
-			// Get from env.json file.
-			html404File := viper.GetString("http.errorMessage.e404.html.file")
-			if html404File != "" {
-				err = c.Render(he.Code, html404File, map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
-			} else {
-				err = c.Render(he.Code, "errors/html/404", map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
-			}
+	page := errorPageFor(he.Code)
+	if page.capture && sentryOn() {
+		if page.captureInternal {
+			captureException(c, he.Internal)
 		} else {
-			// Get from env.json file.
-			e404 := viper.GetStringMap("http.errorMessage.e404")
-			if val, ok := e404["json"]; ok {
-				err = c.JSON(he.Code, converter(val))
-			} else {
-				err = c.JSON(he.Code, ErrorResp{ErrorCode: RESOURCE_NOT_FOUND, ErrorMsg: he.Message})
-			}
-		}
-
-	case http.StatusMethodNotAllowed:
-		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
-			err = c.Render(he.Code, "errors/html/405", map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
-		} else {
-			// Get from env.json file.
-			e405 := viper.GetStringMap("http.errorMessage.e405")
-			if val, ok := e405["json"]; ok {
-				err = c.JSON(he.Code, converter(val))
-			} else {
-				err = c.JSON(he.Code, ErrorResp{ErrorCode: METHOD_NOT_ALLOWED, ErrorMsg: he.Message})
-			}
-		}
-
-	case http.StatusInternalServerError:
-		// Send error event to sentry if configured.
-		if viper.GetBool("sentry.on") {
-			if hub := sentryecho.GetHubFromContext(c); hub != nil {
-				hub.CaptureException(he.err)
-			}
-		}
-
-		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
-			// Get from env.json file.
-			html500File := viper.GetString("http.errorMessage.e500.html.file")
-			if html500File != "" {
-				err = c.Render(he.Code, html500File, map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
-			} else {
-				err = c.Render(he.Code, "errors/html/500", map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
-			}
-		} else {
-			// Get from env.json file.
-			def := viper.GetStringMap("http.errorMessage.e500")
-			if val, ok := def["json"]; ok {
-				err = c.JSON(he.Code, converter(val))
-			} else {
-				err = c.JSON(he.Code, ErrorResp{ErrorCode: INTERNAL_SERVER_ERROR, ErrorMsg: he.Message})
-			}
-		}
-
-	case http.StatusGatewayTimeout:
-		if viper.GetBool("sentry.on") {
-			if hub := sentryecho.GetHubFromContext(c); hub != nil {
-				hub.CaptureException(he.Internal)
-			}
-		}
-
-		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
-			// Get from env.json file.
-			html504File := viper.GetString("http.errorMessage.e504.html.file")
-			if html504File != "" {
-				err = c.Render(he.Code, html504File, map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
-			} else {
-				err = c.Render(he.Code, "errors/html/504", map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
-			}
-		} else {
-			// Get from env.json file.
-			e504 := viper.GetStringMap("http.errorMessage.e504")
-			if val, ok := e504["json"]; ok {
-				err = c.JSON(he.Code, converter(val))
-			} else {
-				err = c.JSON(he.Code, ErrorResp{ErrorCode: TIMEOUT, ErrorMsg: he.Message})
-			}
-		}
-
-	default:
-		// Send error event to sentry if configured.
-		if viper.GetBool("sentry.on") {
-			if hub := sentryecho.GetHubFromContext(c); hub != nil {
-				hub.CaptureException(he.err)
-			}
-		}
-
-		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
-			// Get from env.json file.
-			html500File := viper.GetString("http.errorMessage.default.html.file")
-			if html500File != "" {
-				err = c.Render(he.Code, html500File, map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
-			} else {
-				err = c.Render(he.Code, "errors/html/500", map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
-			}
-		} else {
-			// Get from env.json file.
-			def := viper.GetStringMap("http.errorMessage.default")
-			if val, ok := def["json"]; ok {
-				err = c.JSON(he.Code, converter(val))
-			} else {
-				err = c.JSON(he.Code, ErrorResp{ErrorCode: INTERNAL_SERVER_ERROR, ErrorMsg: he.Message})
-			}
+			captureException(c, he.err)
 		}
 	}
 
-	return true, err
+	return true, renderErrorPage(c, he.Code, page, he.Message, e)
 }
 
 // If any other error handler doesn't catch the error then finally `DefaultErrorHandlerFunc` will
@@ -234,62 +136,86 @@ func DefaultErrorHandlerFunc(err error, c *echo.Context) (bool, error) {
 	}
 
 	// Send error event to sentry if configured.
-	if viper.GetBool("sentry.on") {
+	if sentryOn() {
 		c.Logger().Error(err.Error())
-
-		if hub := sentryecho.GetHubFromContext(c); hub != nil {
-			hub.CaptureException(err)
-		}
+		captureException(c, err)
 	} else {
 		c.Logger().Error(fmt.Sprintf("%+v", err))
 	}
 
-	// Get Content-Type parameter from request header to identify the request content type. If the request is for
-	// html then we should display the error in html.
-	if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
-		// Get from env.json file.
-		html500File := viper.GetString("http.errorMessage.default.html.file")
-		if html500File != "" {
-			return true, c.Render(http.StatusInternalServerError, html500File, map[string]any{
-				"stacktrace": fmt.Sprintf("%+v", err),
-			})
-		} else {
-			return true, c.Render(http.StatusInternalServerError, "errors/html/500", map[string]any{
-				"stacktrace": fmt.Sprintf("%+v", err),
-			})
-		}
-	}
-
-	// If the Content-Type is `application/json` then return JSON response.
-	// Get from env.json file.
-	def := viper.GetStringMap("http.errorMessage.default")
-	if val, ok := def["json"]; ok {
-		err = c.JSON(http.StatusInternalServerError, converter(val))
-	} else {
-		err = c.JSON(http.StatusInternalServerError, ErrorResp{
-			ErrorCode: INTERNAL_SERVER_ERROR,
-			ErrorMsg:  err.Error(),
-		})
-	}
-
-	return true, err
+	return true, renderErrorPage(c, http.StatusInternalServerError, defaultErrorPage(), err.Error(), err)
 }
 
-func converter(data interface{}) interface{} {
-	slice, ok := data.([]interface{})
-	if !ok {
-		return data
+// errorPage describes how an HTTP error status is rendered and reported.
+type errorPage struct {
+	config.ErrorPage           // customization from `http.errorMessage.*`
+	defaultHTML      string    // template used when `Html.File` is not configured
+	errCode          ErrorCode // `errorCode` of the default JSON body
+	capture          bool      // report the error to Sentry
+	captureInternal  bool      // report the wrapped error instead of the HTTP error
+}
+
+func errorPageFor(code int) errorPage {
+	msgs := beanConfig().HTTP.ErrorMessage
+	switch code {
+	case http.StatusNotFound:
+		return errorPage{ErrorPage: msgs.E404, defaultHTML: "errors/html/404", errCode: RESOURCE_NOT_FOUND}
+	case http.StatusMethodNotAllowed:
+		return errorPage{ErrorPage: msgs.E405, defaultHTML: "errors/html/405", errCode: METHOD_NOT_ALLOWED}
+	case http.StatusInternalServerError:
+		return errorPage{ErrorPage: msgs.E500, defaultHTML: "errors/html/500", errCode: INTERNAL_SERVER_ERROR, capture: true}
+	case http.StatusGatewayTimeout:
+		return errorPage{ErrorPage: msgs.E504, defaultHTML: "errors/html/504", errCode: TIMEOUT, capture: true, captureInternal: true}
+	default:
+		return defaultErrorPage()
+	}
+}
+
+func defaultErrorPage() errorPage {
+	return errorPage{
+		ErrorPage:   beanConfig().HTTP.ErrorMessage.Default,
+		defaultHTML: "errors/html/500",
+		errCode:     INTERNAL_SERVER_ERROR,
+		capture:     true,
+	}
+}
+
+// renderErrorPage renders the HTML page, or the JSON body when the request is a JSON request.
+func renderErrorPage(c *echo.Context, code int, page errorPage, errMsg string, stack error) error {
+	// Get Content-Type parameter from request header to identify the request content type. If the request is for
+	// html then we should display the error in html.
+	if !strings.Contains(c.Request().Header.Get(echo.HeaderContentType), echo.MIMEApplicationJSON) {
+		file := page.Html.File
+		if file == "" {
+			file = page.defaultHTML
+		}
+		return c.Render(code, file, map[string]any{"stacktrace": fmt.Sprintf("%+v", stack)})
 	}
 
-	var message = make(map[string]interface{})
-	for _, v := range slice {
-		m, ok := v.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		message[m["key"].(string)] = m["value"]
+	if body := page.JSONBody(); body != nil {
+		return c.JSON(code, body)
 	}
-	return message
+	return c.JSON(code, ErrorResp{ErrorCode: page.errCode, ErrorMsg: errMsg})
+}
+
+func beanConfig() *config.Config {
+	if config.Bean == nil {
+		return &config.Config{}
+	}
+	return config.Bean
+}
+
+func sentryOn() bool {
+	return beanConfig().Sentry.On
+}
+
+func captureException(c *echo.Context, err error) {
+	if err == nil {
+		return
+	}
+	if hub := sentryecho.GetHubFromContext(c); hub != nil {
+		hub.CaptureException(err)
+	}
 }
 
 // httpErrorInfo holds the information extracted from an echo v5 HTTP error

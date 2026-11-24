@@ -92,3 +92,9 @@ func (e *APIError) Format(s fmt.State, verb rune) {
 		_, _ = fmt.Fprintf(s, "%q", e.Error())
 	}
 }
+
+// StatusCode implements `echo.HTTPStatusCoder`, so echo and its middlewares (e.g. Prometheus metrics)
+// report the API error's HTTP status instead of 500.
+func (e *APIError) StatusCode() int {
+	return e.HTTPStatusCode
+}

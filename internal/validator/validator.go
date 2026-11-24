@@ -35,6 +35,7 @@ package validator
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -174,4 +175,10 @@ func (ve *ValidationError) Error() string {
 // Unwrap implements the builtin `error.Unwrap` function.
 func (ve *ValidationError) Unwrap() error {
 	return ve.Err
+}
+
+// StatusCode implements `echo.HTTPStatusCoder`, so echo and its middlewares (e.g. Prometheus metrics)
+// report validation errors as 400 instead of 500.
+func (ve *ValidationError) StatusCode() int {
+	return http.StatusBadRequest
 }
