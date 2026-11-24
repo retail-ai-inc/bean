@@ -224,5 +224,5 @@ func newCSVReader(r io.Reader, opts CSVOptions) (*csv.Reader, error) {
 
 // validCSVDelimiter mirrors the rule of encoding/csv, so an invalid option is reported before reading.
 func validCSVDelimiter(r rune) bool {
-	return r != 0 && r != '"' && r != '\r' && r != '\n' && r != 0xFFFD && !(r >= 0xD800 && r <= 0xDFFF)
+	return r != 0 && r != '"' && r != '\r' && r != '\n' && r != 0xFFFD && (r < 0xD800 || r > 0xDFFF)
 }
