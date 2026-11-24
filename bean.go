@@ -394,8 +394,6 @@ func NewEcho() (*echo.Echo, func() error, error) {
 	if config.Bean.HTTP.IsHttpsRedirect {
 		e.Pre(echomiddleware.HTTPSRedirect())
 	}
-	e.Use(echomiddleware.Recover())
-
 	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
 	// This will help us to integrate `bean's` health into `k8s`.
 	if config.Bean.Prometheus.On {
@@ -416,6 +414,11 @@ func NewEcho() (*echo.Echo, func() error, error) {
 		e.Use(echoprometheus.NewMiddlewareWithConfig(conf))
 		e.GET(metricsPath, echoprometheus.NewHandler())
 	}
+
+	// IMPORTANT: Register `Recover` after (= inside) the middlewares above, so that a panic is turned into an
+	// error before it reaches them. Otherwise the panic unwinds through e.g. the Prometheus middleware and the
+	// request is not counted in the metrics at all.
+	e.Use(echomiddleware.Recover())
 
 	// Register goroutine pool. Register the release first so the pools are released on error too.
 	closes = append(closes, gopool.ReleaseAllPools(config.Bean.AsyncPoolReleaseTimeout))

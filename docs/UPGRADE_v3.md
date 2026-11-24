@@ -315,6 +315,7 @@ e, closeEcho, err := bean.NewEcho()
    - 配置结构中 5 个相同的匿名结构体合并为 `config.ErrorPage` 类型，字段名不变。
 9. **`sentry.skipTracesEndpoints` 只配置一条时也生效**：v2 中只有配置两条及以上才会跳过采样（判断条件写成了 `> 1`）。
 10. **项目模板**：`bean init` 生成的项目已修正多处在 v2 中就无法编译的问题（引用了已不存在的 `bean.BeanConfig`、`bean.Logger()`、`bean.SentryCaptureException`、`bean.DefaultBeforeSend`、`bean.Cleanup`，以及使用模块名而不是模块路径作为 import 路径等），改为使用 `config.Bean`、`log.Logger()`、`trace.SentryCaptureException`、`trace.DefaultBeforeSend`。
+11. **发生 panic 的请求计入 Prometheus 指标**：v2 中 `Recover` 中间件注册在 Prometheus 中间件外层，panic 会直接穿过 Prometheus 中间件，导致这类请求在指标中完全缺失，5xx 错误率偏低。v3 把 `Recover` 移到 bean 内置中间件的最内层，panic 先被转换为 error，因此会以 `code="500"` 计入 `echo_requests_total` 等指标。
 
 ### 5.1 404 / 405 的处理方式
 
