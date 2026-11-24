@@ -81,40 +81,42 @@ func (h *userHandler) Get(c *echo.Context) error { ... }
 bean 中接收 Context 的公开函数签名同步变为 `*echo.Context`，用法不变：
 `trace.StartSpanWithEcho`、`trace.SentryCaptureExceptionWithEcho`、`trace.SentryCaptureMessageWithEcho`、`async.ExecuteWithContext`、`helpers.DecodeJWT`、`helpers.ExtractJWTFromHeader`、`helpers.PostDataStripTags`、`echoview.Render`。
 
-### 4.2 日志：`c.Logger()` / `e.Logger` 变为 `*slog.Logger`
+### 4.2 日志统一为 slog
 
-Echo v5 删除了 `echo.Logger` 接口，`e.Logger` 和 `c.Logger()` 现在是标准库的 `*slog.Logger`，没有 `Debugf`、`Errorf`、`Infoj` 这类方法。
+v2 中有三套日志：bean 的业务日志（gommon logger）、Echo 日志、访问日志，格式各不相同。v3 统一到标准库 `log/slog`：
 
-**推荐：业务代码统一使用 bean 的日志**（API 与 v2 完全一致）：
+- `log.Logger()`、`e.Logger`、`c.Logger()` 是**同一个** logger，所有日志（包括访问日志）都是同一种 JSON 格式。
+- 使用 `...Context` 方法并传入请求的 context 时，自动带上请求 ID（`id`）和 Sentry trace ID，不需要再手动拼接。
+- 不再依赖 `github.com/labstack/gommon`。
+
+**推荐写法（slog）：**
 
 ```go
 import "github.com/retail-ai-inc/bean/v3/log"
 
-log.Logger().Debugf("user %d logged in", userID)
-log.Logger().Errorj(elog.JSON{"message": "failed", "error": err.Error()})
-```
-
-如果继续用 `c.Logger()`，需要改成 slog 写法：
-
-```go
 // v2
+log.Logger().Debugf("user %d logged in", userID)
+log.Logger().Errorj(elog.JSON{"message": "failed to get user", "error": err.Error(), "id": reqID})
 c.Logger().Errorf("failed to get user: %v", err)
-c.Logger().Error(err)
 
 // v3
-c.Logger().Error("failed to get user", "error", err)
-c.Logger().Error(err.Error())
+log.Logger().DebugContext(ctx, "user logged in", "user_id", userID)
+log.Logger().ErrorContext(ctx, "failed to get user", "error", err) // id / trace 自动添加
+c.Logger().ErrorContext(c.Request().Context(), "failed to get user", "error", err)
 ```
 
-> bean 已把 echo 的 slog 输出指向与 bean 日志相同的目标（`debugLogPath` 或标准输出），格式为 JSON，消息字段为 `message`。
+**兼容层（已废弃）：** `log.Logger()` 上仍保留 v2 的 `Print*`、`Debugf/Debugj`、`Infof/Infoj`、`Warnf/Warnj`、`Errorf/Errorj`、`Fatal*`、`Panic*` 方法，底层同样输出新格式，可以逐步迁移，计划在 v4 删除。`*j` 方法的参数类型为 `map[string]any`，传入 `elog.JSON` 也能编译。
 
-`log` 包的相关变化：
+需要手工修改的写法：
 
 | v2 | v3 |
 | --- | --- |
-| `log.BeanLogger` 内嵌 `echo.Logger` | 内嵌 `log.LeveledLogger`（方法集与原 `echo.Logger` 相同） |
-| `log.Init(e.Logger) BeanLogger`（只生效一次，失败时 panic） | `log.Init(elog.New("echo")) (BeanLogger, error)`（`elog` 为 `github.com/labstack/gommon/log`）；再次调用会替换全局 logger |
-| `log.NewLogger(e.Logger, ...)` | `log.NewLogger(elog.New("echo"), ...)` |
+| `log.Logger().Debug(a, b)` / `Info(...)` / `Warn(...)` / `Error(err)` | 第一个参数必须是 string 消息，其后是键值对，例如 `Error("failed", "error", err)` |
+| `log.Logger().SetLevel(elog.INFO)` / `Level()` | `SetLevel(slog.LevelInfo)` / `Level()`，或使用 `debugLogLevel` 配置 |
+| `log.Logger().SetOutput(w)` / `Output()` / `SetPrefix` / `SetHeader` | 已删除；输出目标由 `debugLogPath` 决定，或用 `log.NewLogger(w, ...)` 创建 |
+| `log.BeanLogger`（接口） | `*log.BeanLogger`（结构体，内嵌 `*slog.Logger`） |
+| `log.Init(e.Logger)`（只生效一次，失败时 panic） | `log.Init(w io.Writer) (*log.BeanLogger, error)`；再次调用会替换全局 logger |
+| `log.NewLogger(e.Logger, opts...)` | `log.NewLogger(w io.Writer, opts...)`；新增 `log.WithLevel` |
 
 一般项目不会自己调用 `log.Init`（`bean.New()` 内部已初始化），主要影响测试代码：
 
@@ -122,9 +124,23 @@ c.Logger().Error(err.Error())
 // v2
 _ = log.Init(echo.New().Logger)
 
-// v3
-_, _ = log.Init(elog.New("echo"))
+// v3：输出到缓冲区以便断言
+var buf bytes.Buffer
+l, _ := log.NewLogger(&buf)
+log.SetLogger(l)
 ```
+
+**日志格式变化**（如果日志平台的解析规则或告警依赖字段名，需要同步调整）：
+
+| | v2 | v3 |
+| --- | --- | --- |
+| 业务日志 | `{"time":…,"level":"INFO","prefix":"echo","file":"x.go","line":"12","message":…}` | `{"timestamp":…,"severity":"INFO","message":…,"file":"pkg/x.go","line":12,…}` |
+| Echo / `c.Logger()` 日志 | `{"time":…,"level":"INFO","message":…}` | 同上 |
+| 访问日志 | `{"timestamp":…,"severity":"INFO","level":"ACCESS",…}` | 不变 |
+
+- `severity` 取值：`DEBUG`、`INFO`、`WARNING`（slog 的 Warn）、`ERROR`、`CRITICAL`（兼容层的 `Fatal*` / `Panic*`）。
+- 业务日志中的 `level` 字段不再出现；访问日志中的 `level` 仍是 `ACCESS` / `DUMP` / `OUTBOUND_API` 等分类。
+- 新配置项 `debugLogLevel`：业务日志的最低级别，`debug`（默认）/ `info` / `warn` / `error`，不影响访问日志。
 
 ### 4.3 `echo.HTTPError`
 
@@ -306,7 +322,7 @@ e, closeEcho, err := bean.NewEcho()
 3. **超时返回 504**：`http.timeout` 超时时返回 `echo.NewHTTPError(504, "gateway timeout").Wrap(context.DeadlineExceeded)`，上报到 Sentry 的仍是内部错误。
 4. **404 / 405 改由 Echo 路由判断**：详见 [5.1](#51-404--405-的处理方式)。
 5. **访问日志（body dump）内存有上限**：v2 会把整个请求体、响应体读入内存再截断，大文件上传/下载时内存占用与正文大小相同。v3 只在内存中保留前 `accessLog.bodyLimit + 1` 字节（默认 8KB），其余部分直接流式传给 handler / 客户端。日志字段和内容不变（截断本来就按 `accessLog.bodyLimit` 进行）。另外，客户端中途断开上传时，v2 会把已读到的部分当作完整请求体交给 handler，v3 中 handler 会收到读取错误；日志中的 `request_body_error` / `bytes_in_read` 照常记录。
-6. **Echo 自身日志**：Echo v5 的 slog 日志（含 `c.Logger()`）与 bean 日志输出到同一目标，格式为 JSON，但字段与 gommon 日志略有不同（slog 为 `time` / `level` / `message`，没有 `prefix` / `file` / `line`）。
+6. **日志统一**：业务日志、Echo 日志、访问日志使用同一种 JSON 格式，详见 [4.2](#42-日志统一为-slog)。`log.Shutdown` 只关闭访问日志的异步写入，之后业务日志仍可正常输出。
 7. **服务启停**：`ServeAt` 改用 Echo v5 的 `echo.StartConfig` 启动和优雅关闭，配置项（`http.keepAlive`、`http.shutdownTimeout`、`http.ssl.*`）含义不变；不设置读超时（与 v2 一致）；HTTPS 仍支持 HTTP/2，证书路径可以是绝对路径。`http.Server` 内部错误日志改为通过 Echo 的 slog 输出。`BeforeServe` 回调执行时，服务器的关闭函数已注册，可以在其中或之后安全地调用 `b.Shutdown()`。
 8. **错误处理**：
    - `berror.APIError`（状态码取 `HTTPStatusCode`）和校验错误（400）实现了 `echo.HTTPStatusCoder`。Prometheus 指标等 Echo 中间件会记录它们的真实状态码，v2 中一律记为 500。
@@ -350,7 +366,8 @@ v2 用一个全局中间件在每个请求上遍历全部路由、自行匹配�
 - [ ] Go 版本 ≥ 1.25
 - [ ] 执行第 3 节的批量替换
 - [ ] `go.mod` 中只保留 `bean/v3`、`echo/v5`、`echo-contrib/v5`，并执行 `go mod tidy`
-- [ ] `c.Logger().Xxxf(...)` 改为 `log.Logger().Xxxf(...)` 或 slog 写法
+- [ ] 日志改为 slog 写法（`Debugf` 等可暂时保留，已废弃）；`Error(err)` 这类非 string 消息的调用需要修改
+- [ ] 日志平台的解析规则、告警条件按新的日志字段调整（见 4.2）
 - [ ] 检查所有 `*echo.HTTPError` 类型断言，改用 `echo.StatusCode(err)` / `echo.HTTPStatusCoder`
 - [ ] 自定义 `b.Echo.HTTPErrorHandler` 调换参数顺序
 - [ ] `commands/route.go` 中 `b.Echo.Routes()` 改为 `b.Echo.Router().Routes()`

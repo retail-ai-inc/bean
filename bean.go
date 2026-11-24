@@ -28,6 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -44,8 +45,6 @@ import (
 	"github.com/labstack/echo-contrib/v5/echoprometheus"
 	"github.com/labstack/echo/v5"
 	echomiddleware "github.com/labstack/echo/v5/middleware"
-	"github.com/labstack/gommon/bytes"
-	elog "github.com/labstack/gommon/log"
 	pkgerrors "github.com/pkg/errors"
 	"github.com/retail-ai-inc/bean/v3/config"
 	"github.com/retail-ai-inc/bean/v3/echoview"
@@ -216,19 +215,22 @@ func NewEcho() (*echo.Echo, func() error, error) {
 		return nil, nil, ErrConfigNotLoaded
 	}
 
-	// IMPORTANT: Configure debug log.
-	// echo v5 uses `*slog.Logger` for `e.Logger`, so bean keeps its own leveled (gommon) logger for
-	// `bean.Logger()` and points echo's slog logger to the same output.
-	elogger := elog.New("echo")
+	// IMPORTANT: Configure the logger. Application logs go to `debugLogPath` (stdout if empty), the access log
+	// to `accessLog.path` (the same output if empty). `log.Logger()`, echo's logger and `c.Logger()` are the
+	// same slog logger, so every log has the same format.
+	var logOut io.Writer = os.Stdout
 	if config.Bean.DebugLogPath != "" {
-		if file, err := helpers.OpenFile(config.Bean.DebugLogPath); err != nil {
+		file, err := helpers.OpenFile(config.Bean.DebugLogPath)
+		if err != nil {
 			return nil, nil, fmt.Errorf("unable to open debug log file: %w", err)
-		} else {
-			elogger.SetOutput(file)
 		}
+		logOut = file
 	}
-	elogger.SetLevel(elog.DEBUG)
-	slogger := blog.NewSlogLogger(elogger.Output(), slog.LevelDebug)
+	blogger, err := blog.Init(logOut)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to initialize logger: %w", err)
+	}
+	slogger := blogger.Logger
 
 	// The router keeps bean's routing conventions (handler named routes, `http.allowedMethod`). Requests to
 	// unknown paths or methods are answered by the echo router with `echo.ErrNotFound` / `echo.ErrMethodNotAllowed`
@@ -275,16 +277,11 @@ func NewEcho() (*echo.Echo, func() error, error) {
 		e.IPExtractor = extractor
 	}
 
-	// Initialize `BeanLogger` global variable using `elogger`.
-	if _, err := blog.Init(elogger); err != nil {
-		return fail(fmt.Errorf("failed to initialize logger: %w", err))
-	}
-
 	// Adds a `Server` header to the response.
 	e.Use(middleware.ServerHeader(config.Bean.ProjectName, helpers.CurrVersion()))
 
 	// Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
-	bodyLimit, err := bytes.Parse(config.Bean.HTTP.BodyLimit)
+	bodyLimit, err := helpers.ParseByteSize(config.Bean.HTTP.BodyLimit)
 	if err != nil {
 		return fail(fmt.Errorf("invalid http.bodyLimit: %w", err))
 	}
@@ -319,7 +316,7 @@ func NewEcho() (*echo.Echo, func() error, error) {
 	if config.Bean.Sentry.On {
 		// Check the sentry client options is not nil
 		if config.Bean.Sentry.ClientOptions == nil {
-			elogger.Error("Sentry initialization failed: client options is empty")
+			slogger.Error("Sentry initialization failed: client options is empty")
 		} else {
 			clientOption := config.Bean.Sentry.ClientOptions
 			if clientOption.TracesSampleRate > 0 {
@@ -604,13 +601,13 @@ func (b *Bean) InitDB() error {
 	var masterMemoryDB memory.Cache
 	var cleanups []func() error
 
-	masterMySQLDB, masterMySQLDBName, close, err := dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL, blog.Logger())
+	masterMySQLDB, masterMySQLDBName, close, err := dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL, appLogger())
 	if err != nil {
 		return fmt.Errorf("failed to initialize master mysql db: %w", err)
 	}
 	cleanups = append(cleanups, close)
 
-	masterMongoDB, masterMongoDBName, close, err = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo, blog.Logger())
+	masterMongoDB, masterMongoDBName, close, err = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo, appLogger())
 	if err != nil {
 		return fmt.Errorf("failed to initialize master mongo db: %w", err)
 	}
@@ -626,13 +623,13 @@ func (b *Bean) InitDB() error {
 	if b.Config.Database.Tenant.On {
 		var closeDBs []func() error
 
-		tenantMySQLDBs, tenantMySQLDBNames, closeDBs, err = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, blog.Logger())
+		tenantMySQLDBs, tenantMySQLDBNames, closeDBs, err = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, appLogger())
 		if err != nil {
 			return fmt.Errorf("failed to initialize tenant mysql dbs: %w", err)
 		}
 		cleanups = append(cleanups, closeDBs...)
 
-		tenantMongoDBs, tenantMongoDBNames, closeDBs, err = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, blog.Logger())
+		tenantMongoDBs, tenantMongoDBNames, closeDBs, err = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, appLogger())
 		if err != nil {
 			return fmt.Errorf("failed to initialize tenant mongo dbs: %w", err)
 		}
@@ -785,4 +782,12 @@ func ContextTimeout(timeout time.Duration) echo.MiddlewareFunc {
 // Currently, it only supports a default validator.
 func NewValidator(v *validatorV10.Validate) (*validator.DefaultValidator, error) {
 	return validator.NewDefaultValidator(v)
+}
+
+// appLogger returns the application logger, or slog's default logger if bean's logger is not initialized.
+func appLogger() *slog.Logger {
+	if l := blog.Logger(); l != nil {
+		return l.Logger
+	}
+	return slog.Default()
 }

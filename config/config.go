@@ -17,8 +17,10 @@ type Config struct {
 	ProjectName  string
 	Environment  string
 	DebugLogPath string
-	Secret       string
-	AccessLog    struct {
+	// DebugLogLevel is the minimum level of the application logs: debug (default), info, warn or error.
+	DebugLogLevel string
+	Secret        string
+	AccessLog     struct {
 		On                bool
 		Async             bool
 		AsyncQueueSize    int

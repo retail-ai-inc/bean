@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/labstack/echo/v5"
-	elog "github.com/labstack/gommon/log"
 	"github.com/retail-ai-inc/bean/v3/config"
 	bctx "github.com/retail-ai-inc/bean/v3/context"
 	"github.com/retail-ai-inc/bean/v3/log"
@@ -25,15 +24,8 @@ func TestLogAndSentryCaptureWithRequestID(t *testing.T) {
 	config.Bean = &config.Config{}
 	t.Cleanup(func() { config.Bean = originalConf })
 
-	logger, err := log.Init(elog.New("echo"))
-	require.NoError(t, err)
-	originalLevel := logger.Level()
-	originalOutput := logger.Output()
-	logger.SetLevel(elog.DEBUG)
-	t.Cleanup(func() {
-		logger.SetLevel(originalLevel)
-		logger.SetOutput(originalOutput)
-	})
+	originalLogger := log.Logger()
+	t.Cleanup(func() { log.SetLogger(originalLogger) })
 
 	tests := []struct {
 		name          string
@@ -85,13 +77,15 @@ func TestLogAndSentryCaptureWithRequestID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			logger.SetOutput(&buf)
+			logger, err := log.NewLogger(&buf)
+			require.NoError(t, err)
+			log.SetLogger(logger)
 
 			tt.capture(tt.ctx())
 
 			var entry map[string]any
 			require.NoError(t, json.Unmarshal(buf.Bytes(), &entry), buf.String())
-			assert.Equal(t, tt.wantLevel, entry["level"])
+			assert.Equal(t, tt.wantLevel, entry["severity"])
 			assert.Equal(t, tt.wantMessage, entry["message"])
 			if tt.wantRequestID == "" {
 				assert.NotContains(t, entry, "id")
@@ -108,13 +102,13 @@ func TestSentryCaptureDoesNotLog(t *testing.T) {
 	config.Bean = &config.Config{}
 	t.Cleanup(func() { config.Bean = originalConf })
 
-	logger, err := log.Init(elog.New("echo"))
-	require.NoError(t, err)
-	originalOutput := logger.Output()
-	t.Cleanup(func() { logger.SetOutput(originalOutput) })
+	originalLogger := log.Logger()
+	t.Cleanup(func() { log.SetLogger(originalLogger) })
 
 	var buf bytes.Buffer
-	logger.SetOutput(&buf)
+	logger, err := log.NewLogger(&buf)
+	require.NoError(t, err)
+	log.SetLogger(logger)
 
 	ctx := bctx.SetRequestID(context.Background(), "req-1")
 	trace.SentryCaptureException(ctx, errors.New("boom"))

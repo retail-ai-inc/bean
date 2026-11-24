@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/labstack/echo/v5"
-	elog "github.com/labstack/gommon/log"
 	"github.com/retail-ai-inc/bean/v3/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -214,9 +213,7 @@ func TestAccessLoggerWithConfig_GzipResponseSize(t *testing.T) {
 func TestAccessLoggerWithConfig_LogOutputIsTruncated(t *testing.T) {
 	const limit = 8
 	var out bytes.Buffer
-	elogger := elog.New("test")
-	elogger.SetOutput(&out)
-	logger, err := log.NewLogger(elogger, log.WithBodyLimit(limit))
+	logger, err := log.NewLogger(&out, log.WithBodyLimit(limit))
 	require.NoError(t, err)
 
 	e := echo.New()

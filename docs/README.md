@@ -184,14 +184,42 @@ Bean has a pre-builtin logging system. If you open the `env.json` file from your
 | Outbound HTTP | `packages/bean/transport/http` (`LoggingTransport`)                                     | `OUTBOUND_API`: `request_body`, `response_body` (when the transport’s body dump option is on), `request_header` / `response_header` maps, etc. |
 | Elsewhere     | Any code calling `log.Logger()` (or the same `AccessLogger`) `TraceInfo` / `TraceError` | Same recursive masking on the `fields` map for that entry.                                                                                     |
 
-The logger in bean is an instance of log.Logger interface from the `github.com/labstack/gommon/log` package [compatible with the standard log.Logger interface], there are multiple levels of logging such as `Debug`, `Info`, `Warn`, `Error` and to customize the formatting of the log messages. The logger also supports like `Debugf`, `Infof`, `Warnf`, `Errorf`, `Debugj`, `Infoj`, `Warnj`, `Errorj`.
-The logger can be used in any of the layers `handler`, `service`, `repository`.
+### Application logs
 
-Example:-
+Bean's application logger is built on the standard library [`log/slog`](https://pkg.go.dev/log/slog). `log.Logger()` (package `github.com/retail-ai-inc/bean/v3/log`), echo's logger and `c.Logger()` in handlers are the **same** logger, so every log line has the same format as the access log:
 
-```sh
-log.Logger().Debugf("This is a debug message for request %s", c.Request().URL.Path)
+```json
+{"timestamp":"2026-11-24T09:23:57.08+08:00","severity":"ERROR","message":"failed to get user","user_id":42,"id":"req-123","logging.googleapis.com/trace":"...","file":"services/user.go","line":31}
 ```
+
+- `timestamp`, `severity` (`DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`) and `message` — Google Cloud Logging compatible.
+- `id` (request ID) and the trace ID (key selected by `accessLog.runtimePlatform`) are added automatically when you log with the request context (`...Context` methods).
+- `file` / `line` — the source location of the log call.
+
+Related `env.json` settings:
+
+```json
+"debugLogPath": "",
+"debugLogLevel": "debug"
+```
+
+- `debugLogPath` — file for the application logs; empty means stdout. The access log uses `accessLog.path`, or the same output if empty.
+- `debugLogLevel` — minimum level of the application logs: `debug` (default), `info`, `warn` or `error`. It does not affect the access log.
+
+The logger can be used in any of the layers `handler`, `service`, `repository`:
+
+```go
+import "github.com/retail-ai-inc/bean/v3/log"
+
+// Pass the request context to get the request ID / trace ID in the log.
+log.Logger().InfoContext(ctx, "user logged in", "user_id", user.ID)
+log.Logger().ErrorContext(ctx, "failed to get user", "user_id", id, "error", err)
+
+// In a handler, c.Logger() is the same logger.
+c.Logger().WarnContext(c.Request().Context(), "deprecated API called", "path", c.Path())
+```
+
+`Debugf`, `Infof`, `Warnf`, `Errorf`, `Debugj`, `Errorj`, ... from bean v2 are still available but **deprecated**; see [the upgrade guide](UPGRADE_v3.md#42-日志统一为-slog).
 
 ## Built-In testing
 
@@ -444,18 +472,20 @@ TraceInfo / TraceError
 
 #### Logger
 
-Application entry point. The public interface is `BeanLogger`, which extends `echo.Logger` and adds:
+Application entry point: `*log.BeanLogger`.
 
-- `TraceInfo(ctx context.Context, level string, fields map[string]any)` — structured info-level log with trace context
-- `TraceError(ctx context.Context, level string, fields map[string]any)` — structured error-level log with trace context
+- It embeds `*slog.Logger` for application logs. Records are converted to an `Entry` by a `slog.Handler` and written through a pipeline (without processors) to a synchronous sink, so application logs share the encoding of the access log. The handler adds the request ID, the trace ID and the source location.
+- `TraceInfo(ctx context.Context, level string, fields map[string]any)` — structured info-level access log with trace context
+- `TraceError(ctx context.Context, level string, fields map[string]any)` — structured error-level access log with trace context
 
-The logger builds an `Entry` (timestamp, severity, level, fields, trace), runs it through the pipeline, then writes to the sink.
+For the access log, the logger builds an `Entry` (timestamp, severity, level, fields, trace), runs it through the pipeline, then writes to the sink.
 
 Functional options for `NewLogger`:
 
 | Option | Description |
 |---|---|
-| `WithAccessLogPath(path)` | Log file path; empty = echo logger output |
+| `WithAccessLogPath(path)` | Access log file path; empty = the writer passed to `NewLogger` |
+| `WithLevel(level)` | Minimum `slog.Level` of the application logs (default debug) |
 | `WithMaskFields(fields)` | Field names to mask with `****` |
 | `WithRuntimePlatform(platform)` | Cloud platform hint (`gcp`/`aws`/`azure`) for trace key |
 | `WithSinkAsync(async, queueSize)` | Enable async writing with bounded queue |
@@ -497,19 +527,28 @@ Final output destination. Implement the `Sink` interface (`Write(entry Entry) er
 
 ### Example
 
-Initialize once with a leveled logger (`log.LeveledLogger`, e.g. a gommon logger), then call `TraceInfo` / `TraceError`:
+`bean.New()` initializes the global logger from `env.json` (`log.Init`). To create one yourself:
 
 ```go
-import (
-    elog "github.com/labstack/gommon/log"
-    "github.com/retail-ai-inc/bean/v3/log"
+import "github.com/retail-ai-inc/bean/v3/log"
+
+blogger, err := log.NewLogger(
+    os.Stdout,
+    log.WithLevel(slog.LevelInfo),
+    log.WithRuntimePlatform("gcp"),
+    log.WithMaskFields([]string{"password", "token"}),
+    log.WithSinkAsync(true, 4096),
+    log.WithBodyLimit(8192),
 )
+if err != nil {
+    return err
+}
+log.SetLogger(blogger) // optional: make it the global `log.Logger()`
 
-// At startup
-// NOTE: since echo v5, `e.Logger` is a `*slog.Logger`, so bean keeps its own gommon based logger.
-blogger := log.Init(elog.New("echo"))
+// Application logs (slog)
+blogger.InfoContext(ctx, "payment accepted", "order_id", orderID)
 
-// In handlers or services
+// Access style structured logs
 blogger.TraceInfo(ctx, "outbound_http", map[string]any{
     "method": "GET",
     "url":    "https://example.com",
@@ -517,19 +556,7 @@ blogger.TraceInfo(ctx, "outbound_http", map[string]any{
 blogger.TraceError(ctx, "payment_failed", map[string]any{"error": err.Error()})
 ```
 
-Custom logger with functional options:
-
-```go
-blogger, err := log.NewLogger(
-    elog.New("echo"),
-    log.WithRuntimePlatform("gcp"),
-    log.WithMaskFields([]string{"password", "token"}),
-    log.WithSinkAsync(true, 4096),
-    log.WithBodyLimit(8192),
-)
-```
-
-Internally, `NewLogger` builds: Sentry extractor → Pipeline(MaskProcessor, RemoveEscapeProcessor) → Sink(logger.Output(), projectID).
+Internally, `NewLogger` builds: Sentry extractor → Pipeline(TruncateBody, Mask, RemoveEscape) → Sink(access log output) for the access log, and a `slog.Handler` → Pipeline → Sink(w) for the application logs.
 
 **Sync vs Async (parallel):** Async is ~27% faster (1369 vs 1886 ns/op) because IO is offloaded to a single worker goroutine.
 
@@ -539,7 +566,7 @@ Internally, `NewLogger` builds: Sentry extractor → Pipeline(MaskProcessor, Rem
 
 - Separation of concerns (extraction → transformation → output)
 - Composable processor pipeline
-- Minimal framework coupling (gommon leveled logger + optional Sentry)
+- Minimal framework coupling (standard `log/slog` + optional Sentry)
 - Extensible via custom processors and sinks
 - Zero-copy async path with `sync.Pool` buffer reuse
 

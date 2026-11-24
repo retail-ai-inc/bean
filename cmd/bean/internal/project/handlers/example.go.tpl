@@ -41,7 +41,8 @@ func (handler *exampleHandler) JSONIndex(c *echo.Context) error {
 	// IMPORTANT: Panic inside a goroutine will crash the whole application.
 	// Example: How to execute some asynchronous code safely instead of plain goroutine.
 	async.ExecuteWithContext(func(asyncC context.Context) {
-		blog.Logger().Debug(dbName)
+		// Log with the async context: it carries the request ID / trace ID of the request.
+		blog.Logger().DebugContext(asyncC, dbName)
 		// IMPORTANT: Using sentry directly in goroutine may cause data race!
 		// Need to create a new hub by cloning the existing one.
 		// Example: How to use sentry safely in goroutine.

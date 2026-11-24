@@ -26,6 +26,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/retail-ai-inc/bean/v3/aes"
@@ -52,7 +53,7 @@ type MongoConfig struct {
 }
 
 // Init the mongo database connection map.
-func InitMongoTenantConns(config MongoConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger Logger,
+func InitMongoTenantConns(config MongoConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger *slog.Logger,
 ) (map[uint64]*mongo.Client, map[uint64]string, []func() error, error) {
 
 	tenantCfgs, err := GetAllTenantCfgs(master)
@@ -63,7 +64,7 @@ func InitMongoTenantConns(config MongoConfig, master *gorm.DB, tenantAlterDbHost
 	return getAllMongoTenantDB(config, tenantCfgs, tenantAlterDbHostParam, tenantDBPassPhraseKey, logger)
 }
 
-func InitMongoMasterConn(config MongoConfig, logger Logger) (*mongo.Client, string, func() error, error) {
+func InitMongoMasterConn(config MongoConfig, logger *slog.Logger) (*mongo.Client, string, func() error, error) {
 
 	masterCfg := config.Master
 	if masterCfg != nil && masterCfg.Database != "" {
@@ -77,7 +78,7 @@ func InitMongoMasterConn(config MongoConfig, logger Logger) (*mongo.Client, stri
 	return nil, "", noClose, nil
 }
 
-func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger Logger,
+func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger *slog.Logger,
 ) (map[uint64]*mongo.Client, map[uint64]string, []func() error, error) {
 
 	mongoConns := make(map[uint64]*mongo.Client, len(tenantCfgs))
@@ -143,7 +144,7 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 func connectMongoDB(userName, password, host, port, dbName string,
 	maxPoolSize, minPoolSize uint64,
 	connectTimeout, maxConnIdleTime time.Duration,
-	debug bool, ssl SSLConfig, logger Logger,
+	debug bool, ssl SSLConfig, logger *slog.Logger,
 ) (*mongo.Client, string, func() error, error) {
 
 	connStr := "mongodb://" + host + ":" + port
@@ -171,19 +172,23 @@ func connectMongoDB(userName, password, host, port, dbName string,
 		opts.SetAuth(credential)
 	}
 
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	// log monitor
 	var logMonitor = event.CommandMonitor{
 		Started: func(ctx context.Context, startedEvent *event.CommandStartedEvent) {
-			logger.Debugf("mongo reqId:%d start on db:%s cmd:%s sql:%+v", startedEvent.RequestID, startedEvent.DatabaseName,
-				startedEvent.CommandName, startedEvent.Command)
+			logger.DebugContext(ctx, "mongo command started", "mongo_request_id", startedEvent.RequestID,
+				"db", startedEvent.DatabaseName, "command", startedEvent.CommandName, "sql", startedEvent.Command.String())
 		},
 		Succeeded: func(ctx context.Context, succeededEvent *event.CommandSucceededEvent) {
-			logger.Debugf("mongo reqId:%d exec cmd:%s success duration %d ns", succeededEvent.RequestID,
-				succeededEvent.CommandName, succeededEvent.Duration)
+			logger.DebugContext(ctx, "mongo command succeeded", "mongo_request_id", succeededEvent.RequestID,
+				"command", succeededEvent.CommandName, "duration", succeededEvent.Duration)
 		},
 		Failed: func(ctx context.Context, failedEvent *event.CommandFailedEvent) {
-			logger.Debugf("mongo reqId:%d exec cmd:%s failed duration %d ns", failedEvent.RequestID,
-				failedEvent.CommandName, failedEvent.Duration)
+			logger.DebugContext(ctx, "mongo command failed", "mongo_request_id", failedEvent.RequestID,
+				"command", failedEvent.CommandName, "duration", failedEvent.Duration, "error", failedEvent.Failure)
 		},
 	}
 	if debug {

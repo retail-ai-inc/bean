@@ -1,6 +1,7 @@
 package bean
 
 import (
+	"log/slog"
 	"testing"
 
 	"github.com/retail-ai-inc/bean/v3/config"
@@ -105,4 +106,27 @@ func TestNew_ReinitializesLogger(t *testing.T) {
 	assert.NotSame(t, l1, l2, "a new bean instance must initialize a new logger")
 	require.NoError(t, b1.Shutdown())
 	require.NoError(t, b2.Shutdown())
+}
+
+func TestNewEcho_UsesBeanLoggerForEcho(t *testing.T) {
+	conf := validTestConfig()
+	conf.DebugLogLevel = "info"
+	useConfig(t, conf)
+
+	e, closeEcho, err := NewEcho()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = closeEcho() })
+
+	require.NotNil(t, blog.Logger())
+	assert.Same(t, blog.Logger().Logger, e.Logger, "c.Logger() and log.Logger() must be the same logger")
+	assert.Equal(t, slog.LevelInfo, blog.Logger().Level())
+}
+
+func TestNewEcho_InvalidLogLevel(t *testing.T) {
+	conf := validTestConfig()
+	conf.DebugLogLevel = "verbose"
+	useConfig(t, conf)
+
+	_, _, err := NewEcho()
+	assert.ErrorContains(t, err, "debugLogLevel")
 }

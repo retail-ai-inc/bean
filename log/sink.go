@@ -93,7 +93,9 @@ func (g *sink) Write(e Entry) error {
 	payload := payloadPool.Get().(map[string]any)
 	payload["timestamp"] = e.Timestamp.Format(time.RFC3339Nano)
 	payload["severity"] = e.Severity
-	payload["level"] = e.Level
+	if e.Level != "" {
+		payload["level"] = e.Level
+	}
 
 	for k, v := range e.Fields {
 		payload[k] = v

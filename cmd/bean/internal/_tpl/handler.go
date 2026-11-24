@@ -1,14 +1,16 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/labstack/echo/v5"
 	"github.com/retail-ai-inc/bean/v3/async"
 	berror "github.com/retail-ai-inc/bean/v3/error"
+	blog "github.com/retail-ai-inc/bean/v3/log"
 	"github.com/retail-ai-inc/bean/v3/trace"
 	{{if .ServiceExists}}"{{.ProjectObject.PkgPath}}/services"{{end}}
 )
@@ -48,7 +50,8 @@ func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c
 	// However there is a recoverPanic function inside the ExecuteWithContext that will
 	// prevent this from happening and not crash the app.
 	async.ExecuteWithContext(func(asyncC context.Context) {
-		c.Logger().Debug(output)
+		// Log with the async context: it carries the request ID / trace ID of the request.
+		blog.Logger().DebugContext(asyncC, output)
 		traceableContext, asyncFinish := trace.StartSpan(asyncC, "http.async")
 		defer asyncFinish()
 
@@ -59,10 +62,8 @@ func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c
 		}
 		// handling error
 		if err != nil {
-			fmt.Println(err)
-			// This is a global function to send sentry exception if you configure the sentry through env.json. 
-			// You cann pass a proper context or nil.
-			// async.CaptureException(traceableContext, err)
+			// Logs the error and sends it to Sentry if Sentry is configured in env.json.
+			trace.LogAndSentryCaptureException(traceableContext, err)
 		}
 
 	},c)

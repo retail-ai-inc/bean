@@ -49,7 +49,7 @@ func ValidationErrorHandlerFunc(e error, c *echo.Context) (bool, error) {
 		return false, nil
 	}
 
-	c.Logger().Error(ve.Error())
+	c.Logger().ErrorContext(c.Request().Context(), ve.Error())
 
 	err := c.JSON(http.StatusBadRequest, ErrorResp{
 		ErrorCode: API_DATA_VALIDATION_FAILED,
@@ -75,7 +75,7 @@ func APIErrorHandlerFunc(e error, c *echo.Context) (bool, error) {
 		captureException(c, ae)
 	} else {
 		// logs the stack trace for all errors when sentry is disabled.
-		c.Logger().Error(fmt.Sprintf("%+v", ae))
+		c.Logger().ErrorContext(c.Request().Context(), fmt.Sprintf("%+v", ae))
 	}
 
 	err := c.JSON(ae.HTTPStatusCode, ErrorResp{
@@ -106,7 +106,7 @@ func HTTPErrorHandlerFunc(e error, c *echo.Context) (bool, error) {
 
 	// Requests to unknown routes / methods are common (scanners, typos), do not log them as errors.
 	if !IsRouterError(c) {
-		c.Logger().Error(e.Error())
+		c.Logger().ErrorContext(c.Request().Context(), e.Error())
 	}
 
 	page := errorPageFor(he.Code)
@@ -137,10 +137,10 @@ func DefaultErrorHandlerFunc(err error, c *echo.Context) (bool, error) {
 
 	// Send error event to sentry if configured.
 	if sentryOn() {
-		c.Logger().Error(err.Error())
+		c.Logger().ErrorContext(c.Request().Context(), err.Error())
 		captureException(c, err)
 	} else {
-		c.Logger().Error(fmt.Sprintf("%+v", err))
+		c.Logger().ErrorContext(c.Request().Context(), fmt.Sprintf("%+v", err))
 	}
 
 	return true, renderErrorPage(c, http.StatusInternalServerError, defaultErrorPage(), err.Error(), err)

@@ -3,11 +3,11 @@ package async
 import (
 	"context"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	elog "github.com/labstack/gommon/log"
 	"github.com/retail-ai-inc/bean/v3/config"
 	bctx "github.com/retail-ai-inc/bean/v3/context"
 	"github.com/retail-ai-inc/bean/v3/internal/gopool"
@@ -24,7 +24,7 @@ func Test_Execute_Context(t *testing.T) {
 		TracesSampleRate: 0,
 	},
 	}
-	_, _ = log.Init(elog.New("echo"))
+	_, _ = log.Init(io.Discard)
 
 	task := func(ctx context.Context) error {
 		_, finish := trace.StartSpan(ctx, "test")
