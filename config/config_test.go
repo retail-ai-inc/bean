@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -52,4 +53,55 @@ func TestLoadConfigRemovedBodyDumpMaskParam(t *testing.T) {
 			assert.Equal(t, []string{"password"}, cfg.AccessLog.MaskFields)
 		})
 	}
+}
+
+func loadEnv(t *testing.T, env string) *Config {
+	t.Helper()
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+
+	file := filepath.Join(t.TempDir(), "env.json")
+	require.NoError(t, os.WriteFile(file, []byte(env), 0o600))
+	cfg, err := LoadConfig(file)
+	require.NoError(t, err)
+	return cfg
+}
+
+func TestLoadConfigHTTPDefaults(t *testing.T) {
+	// The whole "http" block omitted.
+	cfg := loadEnv(t, `{"projectName": "demo"}`)
+	assert.Equal(t, DefaultHTTPHost, cfg.HTTP.Host)
+	assert.Equal(t, DefaultHTTPPort, cfg.HTTP.Port)
+	assert.Equal(t, DefaultHTTPBodyLimit, cfg.HTTP.BodyLimit)
+	assert.True(t, cfg.HTTP.KeepAlive)
+
+	// Partially configured: the other keys still get their defaults.
+	cfg = loadEnv(t, `{"http": {"port": "9000"}}`)
+	assert.Equal(t, "9000", cfg.HTTP.Port)
+	assert.Equal(t, DefaultHTTPBodyLimit, cfg.HTTP.BodyLimit)
+	assert.True(t, cfg.HTTP.KeepAlive)
+
+	// Explicit values win, including false for keepAlive.
+	cfg = loadEnv(t, `{"http": {"host": "127.0.0.1", "port": "8080", "bodyLimit": "2M", "keepAlive": false}}`)
+	assert.Equal(t, "127.0.0.1", cfg.HTTP.Host)
+	assert.Equal(t, "8080", cfg.HTTP.Port)
+	assert.Equal(t, "2M", cfg.HTTP.BodyLimit)
+	assert.False(t, cfg.HTTP.KeepAlive)
+}
+
+// Projects may read env.json with viper directly instead of LoadConfig: the defaults registered by
+// SetDefaults (called when the package is initialized) must apply too.
+func TestHTTPDefaultsWithViperDirectly(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+	SetDefaults()
+
+	viper.SetConfigType("json")
+	require.NoError(t, viper.ReadConfig(strings.NewReader(`{"projectName": "demo"}`)))
+	cfg := &Config{}
+	require.NoError(t, viper.Unmarshal(cfg))
+
+	assert.Equal(t, DefaultHTTPPort, cfg.HTTP.Port)
+	assert.Equal(t, DefaultHTTPBodyLimit, cfg.HTTP.BodyLimit)
+	assert.True(t, cfg.HTTP.KeepAlive)
 }

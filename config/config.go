@@ -133,6 +133,7 @@ func LoadConfig(filename string) (*Config, error) {
 	path := filepath.Dir(absPath)
 	name := filepath.Base(filename[:len(filename)-len(ext)])
 
+	SetDefaults()
 	viper.AddConfigPath(path)
 	viper.SetConfigType(ext[1:])
 	viper.SetConfigName(name)
@@ -188,4 +189,34 @@ func CheckRemovedKeys() error {
 		return fmt.Errorf("config: accessLog.bodyDumpMaskParam has been removed, rename it to accessLog.maskFields")
 	}
 	return nil
+}
+
+// Defaults of the `http` settings used when they are omitted from env.json. They are the values of the
+// project template.
+const (
+	DefaultHTTPHost      = "0.0.0.0"
+	DefaultHTTPPort      = "8888"
+	DefaultHTTPBodyLimit = "1M"
+	DefaultHTTPKeepAlive = true
+)
+
+func init() {
+	SetDefaults()
+}
+
+// SetDefaults registers in viper the default values of the settings whose zero value would break the server,
+// so they can be omitted from env.json:
+//
+//   - `http.bodyLimit`: empty is invalid.
+//   - `http.port`: empty would listen on a random port.
+//   - `http.host`: empty listens on all interfaces; the default makes it explicit.
+//   - `http.keepAlive`: false would disable HTTP keep-alive.
+//
+// It is called when this package is initialized, so the defaults also apply to projects reading env.json with
+// viper directly, and by `LoadConfig` (`viper.Reset` removes them).
+func SetDefaults() {
+	viper.SetDefault("http.host", DefaultHTTPHost)
+	viper.SetDefault("http.port", DefaultHTTPPort)
+	viper.SetDefault("http.bodyLimit", DefaultHTTPBodyLimit)
+	viper.SetDefault("http.keepAlive", DefaultHTTPKeepAlive)
 }

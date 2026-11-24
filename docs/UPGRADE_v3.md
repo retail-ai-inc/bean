@@ -356,6 +356,7 @@ e, closeEcho, err := bean.NewEcho()
     - 通过 `StackTrace()` 提供 panic 现场的堆栈，Sentry 中最内层的帧就是发生 panic 的函数。
     - `Error()` 只返回 `[PANIC RECOVER] <panic 的值>`，不再包含整段 goroutine 堆栈，访问日志的 `error` 字段因此变短；需要本地堆栈时用 `%+v` 格式化（未开启 Sentry 时错误日志就是这样输出的）。
     - 如果项目中用 `errors.As` 判断过 Echo 的 `*middleware.PanicStackError`，需要改为 `*berror.PanicError`。
+13. **`env.json` 的 `http` 配置可以省略**：v2 中没有配置 `http.bodyLimit` 时启动会 panic。v3 为以下几项提供默认值（取自项目模板）：`http.host` = `0.0.0.0`、`http.port` = `8888`、`http.bodyLimit` = `1M`、`http.keepAlive` = `true`。注意：v2 中省略 `keepAlive` 等于 `false`（关闭 keep-alive），v3 中省略时为 `true`；如果确实要关闭，需要显式配置 `"keepAlive": false`。其它 `http` 配置项省略时的行为不变（例如不设置请求超时、`allowedMethod` 为空时允许所有方法）。
 
 ### 5.1 404 / 405 的处理方式
 

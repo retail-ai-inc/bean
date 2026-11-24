@@ -420,6 +420,15 @@ Bean provides the [`config.Config`](https://pkg.go.dev/github.com/retail-ai-inc/
 Bean configs default values are picked from the `env.json` file, but can be updated during runtime as well.
 <https://pkg.go.dev/github.com/retail-ai-inc/bean#Config>
 
+The `http` block of `env.json` is optional. These keys get a default value when omitted (the values of the project template); the other `http` keys work with their zero value (for example no request `timeout`, all HTTP methods allowed when `allowedMethod` is empty, `shutdownTimeout` 30s):
+
+| Key | Default |
+| --- | --- |
+| `http.host` | `0.0.0.0` |
+| `http.port` | `8888` |
+| `http.bodyLimit` | `1M` |
+| `http.keepAlive` | `true` |
+
 <details>
   <summary>config.Config</summary>
 

@@ -286,7 +286,11 @@ func NewEcho() (*echo.Echo, func() error, error) {
 	e.Use(middleware.ServerHeader(config.Bean.ProjectName, helpers.CurrVersion()))
 
 	// Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
-	bodyLimit, err := helpers.ParseByteSize(config.Bean.HTTP.BodyLimit)
+	bodyLimitStr := config.Bean.HTTP.BodyLimit
+	if bodyLimitStr == "" { // config.Bean built without viper (its defaults do not apply)
+		bodyLimitStr = config.DefaultHTTPBodyLimit
+	}
+	bodyLimit, err := helpers.ParseByteSize(bodyLimitStr)
 	if err != nil {
 		return fail(fmt.Errorf("invalid http.bodyLimit: %w", err))
 	}
@@ -446,6 +450,9 @@ func NewEcho() (*echo.Echo, func() error, error) {
 }
 
 func (b *Bean) ServeAt(host, port string) error {
+	if port == "" { // an empty port would listen on a random port
+		port = config.DefaultHTTPPort
+	}
 	b.Echo.Logger.Info("Starting " + b.Config.Environment + " " + b.Config.ProjectName + " at " + host + ":" + port + "...🚀")
 
 	b.UseErrorHandlerFuncs(berror.DefaultErrorHandlerFunc)

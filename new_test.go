@@ -3,10 +3,14 @@ package bean
 import (
 	"context"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/labstack/echo/v5"
 	"github.com/retail-ai-inc/bean/v3/config"
 	"github.com/retail-ai-inc/bean/v3/internal/gopool"
 	blog "github.com/retail-ai-inc/bean/v3/log"
@@ -164,4 +168,23 @@ func TestNewEcho_MaskFieldsAreApplied(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(out), "secret")
 	assert.Contains(t, string(out), "bob")
+}
+
+// config.Bean built in code (without viper) and without the http settings must still work.
+func TestNewEcho_WithoutHTTPConfig(t *testing.T) {
+	useConfig(t, &config.Config{})
+
+	e, closeEcho, err := NewEcho()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = closeEcho() })
+
+	e.POST("/x", func(c *echo.Context) error { return c.String(http.StatusOK, "ok") })
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/x", strings.NewReader("{}")))
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// The default body limit (1M) applies.
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(strings.Repeat("a", 1_000_001))))
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
 }
