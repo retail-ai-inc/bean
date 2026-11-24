@@ -36,8 +36,7 @@ import (
 	"time"
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/aes"
+	"github.com/retail-ai-inc/bean/v3/aes"
 	"gorm.io/datatypes"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -91,7 +90,7 @@ var (
 )
 
 // InitMysqlMasterConn returns mysql master db connection.
-func InitMysqlMasterConn(config SQLConfig, logger echo.Logger) (*gorm.DB, string, func() error, error) {
+func InitMysqlMasterConn(config SQLConfig, logger Logger) (*gorm.DB, string, func() error, error) {
 
 	masterCfg := config.Master
 
@@ -106,7 +105,7 @@ func InitMysqlMasterConn(config SQLConfig, logger echo.Logger) (*gorm.DB, string
 	return nil, "", noClose, nil
 }
 
-func InitMysqlTenantConns(config SQLConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger echo.Logger,
+func InitMysqlTenantConns(config SQLConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger Logger,
 ) (map[uint64]*gorm.DB, map[uint64]string, []func() error, error) {
 
 	err := createTenantConnectionsTableIfNotExist(master)
@@ -144,7 +143,7 @@ func GetAllTenantCfgs(db *gorm.DB) ([]*TenantConnections, error) {
 
 // getAllMysqlTenantDB returns all tenant db connection.
 func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
-	tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger echo.Logger,
+	tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger Logger,
 ) (mysqlConns map[uint64]*gorm.DB, mysqlDBNames map[uint64]string, resultClosers []func() error, err error) {
 
 	mysqlConns = make(map[uint64]*gorm.DB, len(tenantCfgs))
@@ -212,7 +211,7 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
 
 func connectMysqlDB(userName, password, host, port, dbName string, readHosts []string,
 	maxIdleConnections, maxOpenConnections int, maxConnectionLifeTime, maxIdleConnectionLifeTime time.Duration,
-	debug bool, ssl SSLConfig, logger echo.Logger) (*gorm.DB, string, func() error, error) {
+	debug bool, ssl SSLConfig, logger Logger) (*gorm.DB, string, func() error, error) {
 
 	readAddrs, err := parseReadAddrs(readHosts, port)
 	if err != nil {

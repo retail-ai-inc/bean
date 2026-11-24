@@ -30,9 +30,9 @@ import (
 	sentryecho "github.com/getsentry/sentry-go/echo"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/labstack/echo/v4"
-	berror "github.com/retail-ai-inc/bean/v2/error"
-	"github.com/retail-ai-inc/bean/v2/internal/validator"
+	"github.com/labstack/echo/v5"
+	berror "github.com/retail-ai-inc/bean/v3/error"
+	"github.com/retail-ai-inc/bean/v3/internal/validator"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/metadata"
 )
@@ -40,7 +40,7 @@ import (
 // StartSpanWithEcho starts a span and returns context containing the span and a function to finish the corresponding span.
 // It also carries over the sentry hub from the echo context to child context.
 // Make sure to call the returned function to finish the span.
-func StartSpanWithEcho(c echo.Context, operation string, spanOpts ...sentry.SpanOption) (context.Context, func()) {
+func StartSpanWithEcho(c *echo.Context, operation string, spanOpts ...sentry.SpanOption) (context.Context, func()) {
 
 	ctx := c.Request().Context()
 

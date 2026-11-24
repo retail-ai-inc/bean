@@ -25,13 +25,13 @@ package middleware
 import (
 	"path"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // ServerHeader middleware adds a `Server` header to the response.
 func ServerHeader(name, version string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) (err error) {
+		return func(c *echo.Context) (err error) {
 
 			c.Response().Header().Set(echo.HeaderServer, path.Join(name, version))
 			return next(c)

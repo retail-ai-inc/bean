@@ -8,9 +8,9 @@ import (
 	"{{ .PkgPath }}/validations"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/retail-ai-inc/bean/v2"
-	berror "github.com/retail-ai-inc/bean/v2/error"
-	"github.com/retail-ai-inc/bean/v2/helpers"
+	"github.com/retail-ai-inc/bean/v3"
+	berror "github.com/retail-ai-inc/bean/v3/error"
+	"github.com/retail-ai-inc/bean/v3/helpers"
 	"github.com/spf13/cobra"
 )
 
@@ -82,7 +82,7 @@ func start(cmd *cobra.Command, args []string) {
 		berror.APIErrorHandlerFunc, // You can use your own custom API error handler func.
 		berror.HTTPErrorHandlerFunc,
 		// Set your custom error handler func here, for example:
-		// func(e error, c echo.Context) (bool, error) {
+		// func(e error, c *echo.Context) (bool, error) {
 		// 	return false, nil
 		// },
 	)

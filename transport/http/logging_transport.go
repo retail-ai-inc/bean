@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/config"
-	bctx "github.com/retail-ai-inc/bean/v2/context"
-	blog "github.com/retail-ai-inc/bean/v2/log"
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/config"
+	bctx "github.com/retail-ai-inc/bean/v3/context"
+	blog "github.com/retail-ai-inc/bean/v3/log"
 )
 
 type LoggingTransport struct {

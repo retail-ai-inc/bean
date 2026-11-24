@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/retail-ai-inc/bean/v2/test"
+	"github.com/retail-ai-inc/bean/v3/test"
 )
 
 type report struct {

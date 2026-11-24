@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/config"
-	bctx "github.com/retail-ai-inc/bean/v2/context"
-	"github.com/retail-ai-inc/bean/v2/internal/gopool"
-	"github.com/retail-ai-inc/bean/v2/log"
-	"github.com/retail-ai-inc/bean/v2/trace"
+	elog "github.com/labstack/gommon/log"
+	"github.com/retail-ai-inc/bean/v3/config"
+	bctx "github.com/retail-ai-inc/bean/v3/context"
+	"github.com/retail-ai-inc/bean/v3/internal/gopool"
+	"github.com/retail-ai-inc/bean/v3/log"
+	"github.com/retail-ai-inc/bean/v3/trace"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,7 +24,7 @@ func Test_Execute_Context(t *testing.T) {
 		TracesSampleRate: 0,
 	},
 	}
-	_ = log.Init(echo.New().Logger)
+	_ = log.Init(elog.New("echo"))
 
 	task := func(ctx context.Context) error {
 		_, finish := trace.StartSpan(ctx, "test")

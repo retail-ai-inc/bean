@@ -1,16 +1,16 @@
 package middleware
 
 import (
-	bctx "github.com/retail-ai-inc/bean/v2/context"
+	bctx "github.com/retail-ai-inc/bean/v3/context"
 
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // SetHubToContext sets the sentry hub to the context.
 var SetHubToContext = func(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 
 		ctx := c.Request().Context()
 

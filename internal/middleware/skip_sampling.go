@@ -25,17 +25,17 @@ package middleware
 import (
 	"fmt"
 
-	"github.com/retail-ai-inc/bean/v2/internal/regex"
+	"github.com/retail-ai-inc/bean/v3/internal/regex"
 
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/helpers"
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/helpers"
 )
 
 // SkipSampling skips the sampling of the transaction if the request path is in the skip list.
 var SkipSampling = func(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 
 		span := sentryecho.GetSpanFromContext(c)
 		if span == nil {

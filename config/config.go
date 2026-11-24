@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/retail-ai-inc/bean/v2/internal/dbdrivers"
+	"github.com/retail-ai-inc/bean/v3/internal/dbdrivers"
 	"github.com/spf13/viper"
 )
 

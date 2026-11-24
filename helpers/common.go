@@ -27,7 +27,7 @@ import (
 	"os"
 	"path/filepath"
 
-	str "github.com/retail-ai-inc/bean/v2/string"
+	str "github.com/retail-ai-inc/bean/v3/string"
 )
 
 type CopyableMap map[string]interface{}

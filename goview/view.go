@@ -32,8 +32,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-
-	"github.com/labstack/echo/v4"
 )
 
 // HTMLContentType const templateEngineKey = "httpx_templateEngine"
@@ -123,9 +121,7 @@ func (e *ViewEngine) executeRender(out io.Writer, name string, data interface{})
 	var dataMap map[string]interface{}
 
 	switch v := data.(type) {
-	case echo.Map:
-		dataMap = v
-	case map[string]interface{}:
+	case map[string]any:
 		dataMap = v
 	default:
 		return fmt.Errorf("ViewEngine invalid data type in `Render` function: %v", v)

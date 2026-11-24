@@ -29,10 +29,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/pkg/errors"
-	"github.com/retail-ai-inc/bean/v2/helpers"
-	structure "github.com/retail-ai-inc/bean/v2/struct"
+	"github.com/retail-ai-inc/bean/v3/helpers"
+	structure "github.com/retail-ai-inc/bean/v3/struct"
 )
 
 // CustomBinder is an implementation of the Binder interface
@@ -41,7 +41,7 @@ type CustomBinder struct{}
 
 // Bind implements the `Echo#Binder#Bind` function. It only decodes the JSON body for now.
 // Extends it if you also need path or query params. Please reference the Echo#Binder to check how to do it.
-func (cb *CustomBinder) Bind(i interface{}, c echo.Context) (err error) {
+func (cb *CustomBinder) Bind(c *echo.Context, i interface{}) (err error) {
 
 	req := c.Request()
 	if req.ContentLength == 0 {

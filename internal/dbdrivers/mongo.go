@@ -28,8 +28,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/aes"
+	"github.com/retail-ai-inc/bean/v3/aes"
 	"go.mongodb.org/mongo-driver/event"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -53,7 +52,7 @@ type MongoConfig struct {
 }
 
 // Init the mongo database connection map.
-func InitMongoTenantConns(config MongoConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger echo.Logger,
+func InitMongoTenantConns(config MongoConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger Logger,
 ) (map[uint64]*mongo.Client, map[uint64]string, []func() error, error) {
 
 	tenantCfgs, err := GetAllTenantCfgs(master)
@@ -64,7 +63,7 @@ func InitMongoTenantConns(config MongoConfig, master *gorm.DB, tenantAlterDbHost
 	return getAllMongoTenantDB(config, tenantCfgs, tenantAlterDbHostParam, tenantDBPassPhraseKey, logger)
 }
 
-func InitMongoMasterConn(config MongoConfig, logger echo.Logger) (*mongo.Client, string, func() error, error) {
+func InitMongoMasterConn(config MongoConfig, logger Logger) (*mongo.Client, string, func() error, error) {
 
 	masterCfg := config.Master
 	if masterCfg != nil && masterCfg.Database != "" {
@@ -78,7 +77,7 @@ func InitMongoMasterConn(config MongoConfig, logger echo.Logger) (*mongo.Client,
 	return nil, "", noClose, nil
 }
 
-func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger echo.Logger,
+func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger Logger,
 ) (map[uint64]*mongo.Client, map[uint64]string, []func() error, error) {
 
 	mongoConns := make(map[uint64]*mongo.Client, len(tenantCfgs))
@@ -144,7 +143,7 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 func connectMongoDB(userName, password, host, port, dbName string,
 	maxPoolSize, minPoolSize uint64,
 	connectTimeout, maxConnIdleTime time.Duration,
-	debug bool, ssl SSLConfig, logger echo.Logger,
+	debug bool, ssl SSLConfig, logger Logger,
 ) (*mongo.Client, string, func() error, error) {
 
 	connStr := "mongodb://" + host + ":" + port

@@ -191,7 +191,7 @@ func (g *generator) Generate() error {
 	g.p("%q", "testing")
 	g.p("%q", "github.com/go-resty/resty/v2")
 	g.p("%q", "github.com/stretchr/testify/assert")
-	g.p("%q", "github.com/retail-ai-inc/bean/v2/test")
+	g.p("%q", "github.com/retail-ai-inc/bean/v3/test")
 
 	g.out()
 	g.p(")")

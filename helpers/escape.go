@@ -30,10 +30,10 @@ import (
 	"io"
 	"strings"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
-func PostDataStripTags(c echo.Context, trimSpace bool) (map[string]interface{}, error) {
+func PostDataStripTags(c *echo.Context, trimSpace bool) (map[string]interface{}, error) {
 
 	// Hold the POST json parameters as an interface
 	var data interface{}

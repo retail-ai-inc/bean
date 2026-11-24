@@ -9,12 +9,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	elog "github.com/labstack/gommon/log"
-	"github.com/retail-ai-inc/bean/v2/config"
-	bctx "github.com/retail-ai-inc/bean/v2/context"
-	"github.com/retail-ai-inc/bean/v2/log"
-	"github.com/retail-ai-inc/bean/v2/trace"
+	"github.com/retail-ai-inc/bean/v3/config"
+	bctx "github.com/retail-ai-inc/bean/v3/context"
+	"github.com/retail-ai-inc/bean/v3/log"
+	"github.com/retail-ai-inc/bean/v3/trace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +25,7 @@ func TestLogAndSentryCaptureWithRequestID(t *testing.T) {
 	config.Bean = &config.Config{}
 	t.Cleanup(func() { config.Bean = originalConf })
 
-	logger := log.Init(echo.New().Logger)
+	logger := log.Init(elog.New("echo"))
 	originalLevel := logger.Level()
 	originalOutput := logger.Output()
 	logger.SetLevel(elog.DEBUG)
@@ -107,7 +107,7 @@ func TestSentryCaptureDoesNotLog(t *testing.T) {
 	config.Bean = &config.Config{}
 	t.Cleanup(func() { config.Bean = originalConf })
 
-	logger := log.Init(echo.New().Logger)
+	logger := log.Init(elog.New("echo"))
 	originalOutput := logger.Output()
 	t.Cleanup(func() { logger.SetOutput(originalOutput) })
 

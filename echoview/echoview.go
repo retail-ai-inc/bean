@@ -25,8 +25,8 @@ package echoview
 import (
 	"io"
 
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/goview"
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/goview"
 )
 
 const templateEngineKey = "foolin-goview-echoview"
@@ -54,17 +54,17 @@ func Default() *ViewEngine {
 }
 
 // Render render template for echo interface
-func (e *ViewEngine) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
+func (e *ViewEngine) Render(c *echo.Context, w io.Writer, name string, data interface{}) error {
 	return e.RenderWriter(w, name, data)
 }
 
 // Render html render for template
 // You should use helper func `Middleware()` to set the supplied
 // TemplateEngine and make `Render()` work validly.
-func Render(ctx echo.Context, code int, name string, data interface{}) error {
+func Render(ctx *echo.Context, code int, name string, data interface{}) error {
 	if val := ctx.Get(templateEngineKey); val != nil {
 		if e, ok := val.(*ViewEngine); ok {
-			return e.Render(ctx.Response().Writer, name, data, ctx)
+			return e.Render(ctx, ctx.Response(), name, data)
 		}
 	}
 	return ctx.Render(code, name, data)
@@ -78,7 +78,7 @@ func NewMiddleware(config goview.Config) echo.MiddlewareFunc {
 // Middleware echo middleware wrapper
 func Middleware(e *ViewEngine) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			c.Set(templateEngineKey, e)
 			return next(c)
 		}

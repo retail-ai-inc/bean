@@ -12,7 +12,7 @@ import (
 	
 	"github.com/getsentry/sentry-go"
 	"github.com/olekukonko/tablewriter"
-	"github.com/retail-ai-inc/bean/v2"
+	"github.com/retail-ai-inc/bean/v3"
 	"github.com/spf13/cobra"
 )
 
@@ -73,7 +73,7 @@ func routeList(cmd *cobra.Command, args []string) {
 	header := []string{"Path", "Method", "Handler"}
 	table.SetHeader(header)
 
-	for _, r := range b.Echo.Routes() {
+	for _, r := range b.Echo.Router().Routes() {
 
 		// Do not output internal library-related handler info
 		if strings.Contains(r.Name, "glob..func1") || strings.Contains(r.Name, ".init.func1") {

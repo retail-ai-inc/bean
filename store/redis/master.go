@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/retail-ai-inc/bean/v2/internal/dbdrivers"
+	"github.com/retail-ai-inc/bean/v3/internal/dbdrivers"
 )
 
 const masterID uint64 = 0

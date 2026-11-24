@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/labstack/echo/v4"
-	bctx "github.com/retail-ai-inc/bean/v2/context"
+	"github.com/labstack/echo/v5"
+	bctx "github.com/retail-ai-inc/bean/v3/context"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

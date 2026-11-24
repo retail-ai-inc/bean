@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 
-	// "github.com/retail-ai-inc/bean/v2/trace"
+	// "github.com/retail-ai-inc/bean/v3/trace"
 	{{if .RepoExists}}"{{.ProjectObject.PkgPath}}/repositories"{{end}}
 )
 

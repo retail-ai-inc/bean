@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	bctx "github.com/retail-ai-inc/bean/v2/context"
+	bctx "github.com/retail-ai-inc/bean/v3/context"
 	"github.com/stretchr/testify/assert"
 )
 

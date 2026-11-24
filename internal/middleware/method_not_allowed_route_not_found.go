@@ -28,9 +28,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/labstack/echo/v4"
-	berror "github.com/retail-ai-inc/bean/v2/error"
-	broute "github.com/retail-ai-inc/bean/v2/internal/route"
+	"github.com/labstack/echo/v5"
+	berror "github.com/retail-ai-inc/bean/v3/error"
+	broute "github.com/retail-ai-inc/bean/v3/internal/route"
 	"github.com/spf13/viper"
 )
 
@@ -41,7 +41,7 @@ var sortAllowedMethodOnce sync.Once
 // This middleware will also return 404 if a page doesn't exist.
 func MethodNotAllowedAndRouteNotFound() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) (err error) {
+		return func(c *echo.Context) (err error) {
 			allowedMethod := sortedAllowedMethod()
 			isRouteMatched := false
 			isMethodMatched := false
@@ -77,7 +77,7 @@ func MethodNotAllowedAndRouteNotFound() echo.MiddlewareFunc {
 
 			if !isRouteMatched {
 				if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
-					return c.Render(http.StatusNotFound, "errors/html/404", echo.Map{"stacktrace": nil})
+					return c.Render(http.StatusNotFound, "errors/html/404", map[string]any{"stacktrace": nil})
 				} else {
 					return c.JSON(http.StatusNotFound, map[string]interface{}{
 						"errorCode": berror.RESOURCE_NOT_FOUND,
@@ -88,7 +88,7 @@ func MethodNotAllowedAndRouteNotFound() echo.MiddlewareFunc {
 			} else if isRouteMatched && !isMethodMatched {
 
 				if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
-					return c.Render(http.StatusMethodNotAllowed, "errors/html/405", echo.Map{"stacktrace": nil})
+					return c.Render(http.StatusMethodNotAllowed, "errors/html/405", map[string]any{"stacktrace": nil})
 				} else {
 					return c.JSON(http.StatusMethodNotAllowed, map[string]interface{}{
 						"errorCode": berror.METHOD_NOT_ALLOWED,

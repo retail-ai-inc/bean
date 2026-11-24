@@ -32,7 +32,6 @@ import (
 	"time"
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
-	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 )
 
@@ -49,7 +48,7 @@ type replicaConnPool struct {
 	host      string
 	replica   gorm.ConnPool
 	primary   gorm.ConnPool
-	logger    echo.Logger
+	logger    Logger
 	now       func() time.Time
 	downUntil atomic.Int64
 	probing   atomic.Bool
@@ -57,7 +56,7 @@ type replicaConnPool struct {
 
 var _ gorm.ConnPool = (*replicaConnPool)(nil)
 
-func newReplicaConnPool(host string, replica, primary gorm.ConnPool, logger echo.Logger) *replicaConnPool {
+func newReplicaConnPool(host string, replica, primary gorm.ConnPool, logger Logger) *replicaConnPool {
 	return &replicaConnPool{host: host, replica: replica, primary: primary, logger: logger, now: time.Now}
 }
 

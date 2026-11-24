@@ -30,8 +30,8 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
-	"github.com/retail-ai-inc/bean/v2/internal/dbdrivers"
-	"github.com/retail-ai-inc/bean/v2/trace"
+	"github.com/retail-ai-inc/bean/v3/internal/dbdrivers"
+	"github.com/retail-ai-inc/bean/v3/trace"
 )
 
 // TenantCache provides functions for tenant redis dbs

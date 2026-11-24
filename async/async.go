@@ -31,16 +31,16 @@ import (
 	"runtime"
 	"time"
 
-	bctx "github.com/retail-ai-inc/bean/v2/context"
-	"github.com/retail-ai-inc/bean/v2/internal/gopool"
-	"github.com/retail-ai-inc/bean/v2/internal/regex"
-	"github.com/retail-ai-inc/bean/v2/log"
-	"github.com/retail-ai-inc/bean/v2/trace"
+	bctx "github.com/retail-ai-inc/bean/v3/context"
+	"github.com/retail-ai-inc/bean/v3/internal/gopool"
+	"github.com/retail-ai-inc/bean/v3/internal/regex"
+	"github.com/retail-ai-inc/bean/v3/log"
+	"github.com/retail-ai-inc/bean/v3/trace"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/panjf2000/ants/v2"
-	"github.com/retail-ai-inc/bean/v2/config"
+	"github.com/retail-ai-inc/bean/v3/config"
 )
 
 type (
@@ -78,7 +78,7 @@ func Execute(fn func(), poolName ...string) {
 
 // ExecuteWithContext provides a safe way to execute a function asynchronously with a context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
-func ExecuteWithContext(fn Task, c echo.Context, poolName ...string) {
+func ExecuteWithContext(fn Task, c *echo.Context, poolName ...string) {
 	functionName := "unknown function"
 	if config.Bean.Sentry.On && config.Bean.Sentry.TracesSampleRate > 0.0 {
 		if pc, file, line, ok := runtime.Caller(1); ok {

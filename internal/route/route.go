@@ -23,8 +23,8 @@
 package route
 
 import (
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/internal/url"
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/internal/url"
 )
 
 // Route contains all the registered routes name, URI path, request method and URI path template.
@@ -39,9 +39,10 @@ type Route struct {
 var Routes = []Route{}
 
 func Init(e *echo.Echo) {
-	Routes = make([]Route, len(e.Routes()))
+	routes := e.Router().Routes()
+	Routes = make([]Route, len(routes))
 
-	for i, r := range e.Routes() {
+	for i, r := range routes {
 		Routes[i].Method = r.Method
 		Routes[i].Path = r.Path
 		Routes[i].Name = r.Name

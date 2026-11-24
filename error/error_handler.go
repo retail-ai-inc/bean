@@ -29,8 +29,8 @@ import (
 	"strings"
 
 	sentryecho "github.com/getsentry/sentry-go/echo"
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/internal/validator"
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/internal/validator"
 	"github.com/spf13/viper"
 )
 
@@ -41,15 +41,15 @@ type ErrorResp struct {
 	Errors    interface{} `json:"errors"`
 }
 
-type ErrorHandlerFunc func(err error, c echo.Context) (bool, error)
+type ErrorHandlerFunc func(err error, c *echo.Context) (bool, error)
 
-func ValidationErrorHandlerFunc(e error, c echo.Context) (bool, error) {
+func ValidationErrorHandlerFunc(e error, c *echo.Context) (bool, error) {
 	var ve *validator.ValidationError
 	if !errors.As(e, &ve) {
 		return false, nil
 	}
 
-	c.Logger().Error(ve)
+	c.Logger().Error(ve.Error())
 
 	err := c.JSON(http.StatusBadRequest, ErrorResp{
 		ErrorCode: API_DATA_VALIDATION_FAILED,
@@ -61,7 +61,7 @@ func ValidationErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 
 // Default JSON API error handler. The response pattern is like below:
 // `{"errorCode": "1000001", "errorMsg": "some message"}`. You can override this error handler from `start.go`
-func APIErrorHandlerFunc(e error, c echo.Context) (bool, error) {
+func APIErrorHandlerFunc(e error, c *echo.Context) (bool, error) {
 	var ae *APIError
 	if !errors.As(e, &ae) {
 		return false, nil
@@ -77,7 +77,7 @@ func APIErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 		}
 	} else {
 		// logs the stack trace for all errors when sentry is disabled.
-		c.Logger().Errorf("%+v", ae)
+		c.Logger().Error(fmt.Sprintf("%+v", ae))
 	}
 
 	err := c.JSON(ae.HTTPStatusCode, ErrorResp{
@@ -88,13 +88,17 @@ func APIErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 	return true, err
 }
 
-func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
-	var he *echo.HTTPError
-	if !errors.As(e, &he) {
+func HTTPErrorHandlerFunc(e error, c *echo.Context) (bool, error) {
+	// In echo v5 the predefined errors (e.g. `echo.ErrNotFound`, `echo.ErrMethodNotAllowed`) are no longer
+	// `*echo.HTTPError`; they only implement `echo.HTTPStatusCoder`. So match on the status coder instead.
+	var sc echo.HTTPStatusCoder
+	if !errors.As(e, &sc) {
 		return false, nil
 	}
 
-	c.Logger().Error(he)
+	he := newHTTPErrorInfo(sc)
+
+	c.Logger().Error(e.Error())
 
 	// Return different response based on some defined error.
 	var err error
@@ -104,9 +108,9 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 			// Get from env.json file.
 			html404File := viper.GetString("http.errorMessage.e404.html.file")
 			if html404File != "" {
-				err = c.Render(he.Code, html404File, echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+				err = c.Render(he.Code, html404File, map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
 			} else {
-				err = c.Render(he.Code, "errors/html/404", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+				err = c.Render(he.Code, "errors/html/404", map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
 			}
 		} else {
 			// Get from env.json file.
@@ -120,7 +124,7 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 
 	case http.StatusMethodNotAllowed:
 		if !strings.Contains(c.Request().Header.Get("Content-Type"), "application/json") {
-			err = c.Render(he.Code, "errors/html/405", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+			err = c.Render(he.Code, "errors/html/405", map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
 		} else {
 			// Get from env.json file.
 			e405 := viper.GetStringMap("http.errorMessage.e405")
@@ -135,7 +139,7 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 		// Send error event to sentry if configured.
 		if viper.GetBool("sentry.on") {
 			if hub := sentryecho.GetHubFromContext(c); hub != nil {
-				hub.CaptureException(he)
+				hub.CaptureException(he.err)
 			}
 		}
 
@@ -143,9 +147,9 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 			// Get from env.json file.
 			html500File := viper.GetString("http.errorMessage.e500.html.file")
 			if html500File != "" {
-				err = c.Render(he.Code, html500File, echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+				err = c.Render(he.Code, html500File, map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
 			} else {
-				err = c.Render(he.Code, "errors/html/500", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+				err = c.Render(he.Code, "errors/html/500", map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
 			}
 		} else {
 			// Get from env.json file.
@@ -168,9 +172,9 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 			// Get from env.json file.
 			html504File := viper.GetString("http.errorMessage.e504.html.file")
 			if html504File != "" {
-				err = c.Render(he.Code, html504File, echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+				err = c.Render(he.Code, html504File, map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
 			} else {
-				err = c.Render(he.Code, "errors/html/504", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+				err = c.Render(he.Code, "errors/html/504", map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
 			}
 		} else {
 			// Get from env.json file.
@@ -186,7 +190,7 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 		// Send error event to sentry if configured.
 		if viper.GetBool("sentry.on") {
 			if hub := sentryecho.GetHubFromContext(c); hub != nil {
-				hub.CaptureException(he)
+				hub.CaptureException(he.err)
 			}
 		}
 
@@ -194,9 +198,9 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 			// Get from env.json file.
 			html500File := viper.GetString("http.errorMessage.default.html.file")
 			if html500File != "" {
-				err = c.Render(he.Code, html500File, echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+				err = c.Render(he.Code, html500File, map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
 			} else {
-				err = c.Render(he.Code, "errors/html/500", echo.Map{"stacktrace": fmt.Sprintf("%+v", e)})
+				err = c.Render(he.Code, "errors/html/500", map[string]any{"stacktrace": fmt.Sprintf("%+v", e)})
 			}
 		} else {
 			// Get from env.json file.
@@ -214,7 +218,7 @@ func HTTPErrorHandlerFunc(e error, c echo.Context) (bool, error) {
 
 // If any other error handler doesn't catch the error then finally `DefaultErrorHandlerFunc` will
 // cactch the error and treat all those errors as `http.StatusInternalServerError`.
-func DefaultErrorHandlerFunc(err error, c echo.Context) (bool, error) {
+func DefaultErrorHandlerFunc(err error, c *echo.Context) (bool, error) {
 
 	if err == nil {
 		return false, nil
@@ -222,13 +226,13 @@ func DefaultErrorHandlerFunc(err error, c echo.Context) (bool, error) {
 
 	// Send error event to sentry if configured.
 	if viper.GetBool("sentry.on") {
-		c.Logger().Error(err)
+		c.Logger().Error(err.Error())
 
 		if hub := sentryecho.GetHubFromContext(c); hub != nil {
 			hub.CaptureException(err)
 		}
 	} else {
-		c.Logger().Errorf("%+v", err)
+		c.Logger().Error(fmt.Sprintf("%+v", err))
 	}
 
 	// Get Content-Type parameter from request header to identify the request content type. If the request is for
@@ -237,11 +241,11 @@ func DefaultErrorHandlerFunc(err error, c echo.Context) (bool, error) {
 		// Get from env.json file.
 		html500File := viper.GetString("http.errorMessage.default.html.file")
 		if html500File != "" {
-			return true, c.Render(http.StatusInternalServerError, html500File, echo.Map{
+			return true, c.Render(http.StatusInternalServerError, html500File, map[string]any{
 				"stacktrace": fmt.Sprintf("%+v", err),
 			})
 		} else {
-			return true, c.Render(http.StatusInternalServerError, "errors/html/500", echo.Map{
+			return true, c.Render(http.StatusInternalServerError, "errors/html/500", map[string]any{
 				"stacktrace": fmt.Sprintf("%+v", err),
 			})
 		}
@@ -277,4 +281,34 @@ func converter(data interface{}) interface{} {
 		message[m["key"].(string)] = m["value"]
 	}
 	return message
+}
+
+// httpErrorInfo holds the information extracted from an echo v5 HTTP error
+// (`*echo.HTTPError` or one of the predefined `echo.Err*` sentinels).
+type httpErrorInfo struct {
+	Code     int
+	Message  string
+	Internal error // the wrapped error, falls back to the HTTP error itself.
+	err      error // the HTTP error itself.
+}
+
+func newHTTPErrorInfo(sc echo.HTTPStatusCoder) httpErrorInfo {
+	code := sc.StatusCode()
+	info := httpErrorInfo{Code: code, Message: http.StatusText(code)}
+
+	if err, ok := sc.(error); ok {
+		info.err = err
+		info.Internal = err
+	}
+
+	if he, ok := sc.(*echo.HTTPError); ok {
+		if he.Message != "" {
+			info.Message = he.Message
+		}
+		if internal := he.Unwrap(); internal != nil {
+			info.Internal = internal
+		}
+	}
+
+	return info
 }

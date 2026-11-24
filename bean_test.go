@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/config"
-	"github.com/retail-ai-inc/bean/v2/internal/route"
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/config"
+	"github.com/retail-ai-inc/bean/v3/internal/route"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
@@ -27,7 +27,7 @@ func TestBean_UseErrorHandlerFuncs(t *testing.T) {
 	b := &Bean{}
 	assert.Empty(t, b.errorHandlerFuncs)
 
-	b.UseErrorHandlerFuncs(func(err error, c echo.Context) (bool, error) {
+	b.UseErrorHandlerFuncs(func(err error, c *echo.Context) (bool, error) {
 		return true, nil
 	})
 	assert.Equal(t, 1, len(b.errorHandlerFuncs))
@@ -38,7 +38,7 @@ func TestDefaultHTTPErrorHandler(t *testing.T) {
 	b.Echo = echo.New()
 
 	b.UseErrorHandlerFuncs(
-		func(err error, c echo.Context) (bool, error) {
+		func(err error, c *echo.Context) (bool, error) {
 			he, ok := err.(*fakeError)
 			if !ok {
 				return false, nil
@@ -49,7 +49,7 @@ func TestDefaultHTTPErrorHandler(t *testing.T) {
 			})
 			return ok, err
 		},
-		func(_ error, c echo.Context) (bool, error) {
+		func(_ error, c *echo.Context) (bool, error) {
 			err := c.JSON(http.StatusInternalServerError, map[string]interface{}{
 				"errorCode": "default code",
 				"errors":    "default catched!",
@@ -60,10 +60,10 @@ func TestDefaultHTTPErrorHandler(t *testing.T) {
 
 	b.Echo.HTTPErrorHandler = b.DefaultHTTPErrorHandler()
 
-	b.Echo.Any("/fake", func(c echo.Context) error {
+	b.Echo.Any("/fake", func(c *echo.Context) error {
 		return newFakeError("fake error")
 	})
-	b.Echo.Any("/default", func(c echo.Context) error {
+	b.Echo.Any("/default", func(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "default error")
 	})
 
@@ -145,7 +145,7 @@ func TestBean_ServeAt(t *testing.T) {
 			b.Config.HTTP.ShutdownTimeout = tt.fields.sdTimeout
 
 			sleepDur := 3 * time.Second
-			b.Echo.GET("/fake", func(c echo.Context) error {
+			b.Echo.GET("/fake", func(c *echo.Context) error {
 				ctx := c.Request().Context()
 				t.Logf("Sleeping for %v\n", sleepDur)
 				select {
@@ -160,7 +160,7 @@ func TestBean_ServeAt(t *testing.T) {
 			})
 
 			// for ping
-			b.Echo.GET("/", func(c echo.Context) error {
+			b.Echo.GET("/", func(c *echo.Context) error {
 				return c.String(http.StatusOK, "Pong")
 			})
 
@@ -339,7 +339,7 @@ func Test_NewEcho(t *testing.T) {
 			defer func() {
 				_ = closeEcho()
 			}()
-			e.GET("/", func(c echo.Context) error {
+			e.GET("/", func(c *echo.Context) error {
 				if err := c.Request().Context().Err(); err != nil {
 					return c.String(http.StatusInternalServerError, "unexpected error before sleep")
 				}
@@ -386,4 +386,24 @@ func setConf(t *testing.T, timeout time.Duration) func() {
 	return func() {
 		config.Bean = originalConf
 	}
+}
+
+func namedTestHandler(c *echo.Context) error { return c.NoContent(http.StatusOK) }
+
+func TestHandlerNamedRouter(t *testing.T) {
+	e := echo.NewWithConfig(echo.Config{
+		Router: handlerNamedRouter{Router: echo.NewRouter(echo.RouterConfig{AllowOverwritingRoute: true})},
+	})
+	e.GET("/named", namedTestHandler)
+	e.AddRoute(echo.Route{Method: http.MethodGet, Path: "/custom", Handler: namedTestHandler, Name: "custom"})
+
+	names := map[string]string{}
+	for _, r := range e.Router().Routes() {
+		names[r.Path] = r.Name
+	}
+	assert.Equal(t, "github.com/retail-ai-inc/bean/v3.namedTestHandler", names["/named"])
+	assert.Equal(t, "custom", names["/custom"])
+
+	code, _ := request(http.MethodGet, "/named", e)
+	assert.Equal(t, http.StatusOK, code)
 }

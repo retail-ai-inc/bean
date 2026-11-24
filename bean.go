@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -41,26 +42,27 @@ import (
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	validatorV10 "github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/labstack/echo-contrib/echoprometheus"
-	"github.com/labstack/echo/v4"
-	echomiddleware "github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo-contrib/v5/echoprometheus"
+	"github.com/labstack/echo/v5"
+	echomiddleware "github.com/labstack/echo/v5/middleware"
+	"github.com/labstack/gommon/bytes"
 	elog "github.com/labstack/gommon/log"
 	pkgerrors "github.com/pkg/errors"
-	"github.com/retail-ai-inc/bean/v2/config"
-	"github.com/retail-ai-inc/bean/v2/echoview"
-	berror "github.com/retail-ai-inc/bean/v2/error"
-	"github.com/retail-ai-inc/bean/v2/goview"
-	"github.com/retail-ai-inc/bean/v2/helpers"
-	"github.com/retail-ai-inc/bean/v2/internal/binder"
-	"github.com/retail-ai-inc/bean/v2/internal/dbdrivers"
-	"github.com/retail-ai-inc/bean/v2/internal/gopool"
-	"github.com/retail-ai-inc/bean/v2/internal/middleware"
-	"github.com/retail-ai-inc/bean/v2/internal/regex"
-	broute "github.com/retail-ai-inc/bean/v2/internal/route"
-	"github.com/retail-ai-inc/bean/v2/internal/validator"
-	blog "github.com/retail-ai-inc/bean/v2/log"
-	"github.com/retail-ai-inc/bean/v2/store/memory"
-	"github.com/retail-ai-inc/bean/v2/trace"
+	"github.com/retail-ai-inc/bean/v3/config"
+	"github.com/retail-ai-inc/bean/v3/echoview"
+	berror "github.com/retail-ai-inc/bean/v3/error"
+	"github.com/retail-ai-inc/bean/v3/goview"
+	"github.com/retail-ai-inc/bean/v3/helpers"
+	"github.com/retail-ai-inc/bean/v3/internal/binder"
+	"github.com/retail-ai-inc/bean/v3/internal/dbdrivers"
+	"github.com/retail-ai-inc/bean/v3/internal/gopool"
+	"github.com/retail-ai-inc/bean/v3/internal/middleware"
+	"github.com/retail-ai-inc/bean/v3/internal/regex"
+	broute "github.com/retail-ai-inc/bean/v3/internal/route"
+	"github.com/retail-ai-inc/bean/v3/internal/validator"
+	blog "github.com/retail-ai-inc/bean/v3/log"
+	"github.com/retail-ai-inc/bean/v3/store/memory"
+	"github.com/retail-ai-inc/bean/v3/trace"
 	"github.com/rs/dnscache"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
@@ -177,7 +179,7 @@ func New() *Bean {
 
 	// If `memory` database is on and `delKeyAPI` end point along with bearer token are properly set.
 	if config.Bean.Database.Memory.On && config.Bean.Database.Memory.DelKeyAPI.EndPoint != "" {
-		e.DELETE(config.Bean.Database.Memory.DelKeyAPI.EndPoint, func(c echo.Context) error {
+		e.DELETE(config.Bean.Database.Memory.DelKeyAPI.EndPoint, func(c *echo.Context) error {
 			// If you set empty `authBearerToken` string in env.json then bean will not check the `Authorization` header.
 			if config.Bean.Database.Memory.DelKeyAPI.AuthBearerToken != "" {
 				tokenString := helpers.ExtractJWTFromHeader(c)
@@ -206,11 +208,12 @@ func NewEcho() (*echo.Echo, func() error) {
 		log.Fatal("config is not loaded")
 	}
 
-	e := echo.New()
+	// Keep echo v4 behaviour of naming routes after their handler function (echo v5 defaults to
+	// "METHOD:/path"). `route list` and `gen spec` rely on the handler name.
+	e := echo.NewWithConfig(echo.Config{
+		Router: handlerNamedRouter{Router: echo.NewRouter(echo.RouterConfig{AllowOverwritingRoute: true})},
+	})
 	closes := []func() error{}
-
-	// Hide default `Echo` banner during startup.
-	e.HideBanner = true
 
 	// Set custom request binder
 	e.Binder = &binder.CustomBinder{}
@@ -228,31 +231,39 @@ func NewEcho() (*echo.Echo, func() error) {
 	})
 
 	// IMPORTANT: Configure debug log.
+	// echo v5 uses `*slog.Logger` for `e.Logger`, so bean keeps its own leveled (gommon) logger for
+	// `bean.Logger()` and points echo's slog logger to the same output.
+	elogger := elog.New("echo")
 	if config.Bean.DebugLogPath != "" {
 		if file, err := helpers.OpenFile(config.Bean.DebugLogPath); err != nil {
-			e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
+			elogger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
 		} else {
-			e.Logger.SetOutput(file)
+			elogger.SetOutput(file)
 		}
 	}
-	e.Logger.SetLevel(elog.DEBUG)
+	elogger.SetLevel(elog.DEBUG)
+	e.Logger = blog.NewSlogLogger(elogger.Output(), slog.LevelDebug)
 
 	extractor, err := middleware.NewIPExtractor(config.Bean.HTTP.TrustIPRange)
 	if err != nil {
-		e.Logger.Fatalf("Invalid http.trustIPRange: %v Server 🚀  crash landed. Exiting...\n", err)
+		elogger.Fatalf("Invalid http.trustIPRange: %v Server 🚀  crash landed. Exiting...\n", err)
 	}
 	if extractor != nil {
 		e.IPExtractor = extractor
 	}
 
-	// Initialize `BeanLogger` global variable using `e.Logger`.
-	_ = blog.Init(e.Logger)
+	// Initialize `BeanLogger` global variable using `elogger`.
+	_ = blog.Init(elogger)
 
 	// Adds a `Server` header to the response.
 	e.Use(middleware.ServerHeader(config.Bean.ProjectName, helpers.CurrVersion()))
 
 	// Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
-	e.Use(echomiddleware.BodyLimit(config.Bean.HTTP.BodyLimit))
+	bodyLimit, err := bytes.Parse(config.Bean.HTTP.BodyLimit)
+	if err != nil {
+		elogger.Fatalf("Invalid http.bodyLimit: %v Server 🚀  crash landed. Exiting...\n", err)
+	}
+	e.Use(echomiddleware.BodyLimit(bodyLimit))
 
 	// CORS initialization and support only HTTP methods which are configured under `http.allowedMethod` parameters in `env.json`.
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
@@ -287,14 +298,14 @@ func NewEcho() (*echo.Echo, func() error) {
 	if config.Bean.Sentry.On {
 		// Check the sentry client options is not nil
 		if config.Bean.Sentry.ClientOptions == nil {
-			e.Logger.Error("Sentry initialization failed: client options is empty")
+			elogger.Error("Sentry initialization failed: client options is empty")
 		} else {
 			clientOption := config.Bean.Sentry.ClientOptions
 			if clientOption.TracesSampleRate > 0 {
 				clientOption.EnableTracing = true
 			}
 			if err := sentry.Init(*clientOption); err != nil {
-				e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
+				elogger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
 			}
 			flushSentry = func() error {
 				notTimeout := sentry.Flush(config.Bean.Sentry.Timeout)
@@ -328,7 +339,7 @@ func NewEcho() (*echo.Echo, func() error) {
 	// Set the `X-Request-ID` header field if it doesn't exist.
 	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
 		// Whether to skip it depends on whether the `AccessLog.ReqHeaderParam` parameter contains `X-Request-Id`.
-		Skipper: func(c echo.Context) bool {
+		Skipper: func(c *echo.Context) bool {
 			return !slices.Contains(config.Bean.AccessLog.ReqHeaderParam, echo.HeaderXRequestID)
 		},
 		Generator:        uuid.NewString,
@@ -363,7 +374,7 @@ func NewEcho() (*echo.Echo, func() error) {
 		const metricsPath = "/metrics" // fixed path
 		skipper, err := regex.InitPrometheusPathSkipper(config.Bean.Prometheus.SkipEndpoints, metricsPath)
 		if err != nil {
-			e.Logger.Fatalf("Prometheus initialization failed: %v. Server 🚀  crash landed. Exiting...\n", err)
+			elogger.Fatalf("Prometheus initialization failed: %v. Server 🚀  crash landed. Exiting...\n", err)
 		}
 		conf := echoprometheus.MiddlewareConfig{
 			Skipper: skipper,
@@ -384,11 +395,11 @@ func NewEcho() (*echo.Echo, func() error) {
 
 			pool, err := gopool.NewPool(asyncPool.Size, asyncPool.BlockAfter)
 			if err != nil {
-				e.Logger.Fatal(err, ". Server 🚀  crash landed. Exiting...")
+				elogger.Fatal(err, ". Server 🚀  crash landed. Exiting...")
 			}
 
 			if err := gopool.Register(asyncPool.Name, pool); err != nil {
-				e.Logger.Fatal(err, ". Server 🚀  crash landed. Exiting...")
+				elogger.Fatal(err, ". Server 🚀  crash landed. Exiting...")
 			}
 		}
 	}
@@ -507,14 +518,14 @@ func (b *Bean) UseErrorHandlerFuncs(errHdlrFuncs ...berror.ErrorHandlerFunc) {
 func (b *Bean) UseValidation(validateFuncs ...validator.ValidatorFunc) {
 	for _, validateFunc := range validateFuncs {
 		if err := validateFunc(b.Validate); err != nil {
-			b.Echo.Logger.Error(err)
+			b.Echo.Logger.Error(err.Error())
 		}
 	}
 }
 
 func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
-	return func(err error, c echo.Context) {
-		if c.Response().Committed {
+	return func(c *echo.Context, err error) {
+		if r, _ := echo.UnwrapResponse(c.Response()); r != nil && r.Committed {
 			return
 		}
 
@@ -706,14 +717,10 @@ func closer(closers []func() error) func() error {
 
 // ContextTimeout return custom context timeout middleware
 func ContextTimeout(timeout time.Duration) echo.MiddlewareFunc {
-	timeoutErrorHandler := func(err error, c echo.Context) error {
+	timeoutErrorHandler := func(c *echo.Context, err error) error {
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
-				return &echo.HTTPError{
-					Code:     http.StatusGatewayTimeout,
-					Message:  "gateway timeout",
-					Internal: err,
-				}
+				return echo.NewHTTPError(http.StatusGatewayTimeout, "gateway timeout").Wrap(err)
 			}
 			return err
 		}
@@ -730,4 +737,17 @@ func ContextTimeout(timeout time.Duration) echo.MiddlewareFunc {
 // Currently, it only supports a default validator.
 func NewValidator(v *validatorV10.Validate) (*validator.DefaultValidator, error) {
 	return validator.NewDefaultValidator(v)
+}
+
+// handlerNamedRouter wraps an echo router and names unnamed routes after their handler function,
+// which was the default route name in echo v4.
+type handlerNamedRouter struct {
+	echo.Router
+}
+
+func (r handlerNamedRouter) Add(route echo.Route) (echo.RouteInfo, error) {
+	if route.Name == "" && route.Handler != nil {
+		route.Name = echo.HandlerName(route.Handler)
+	}
+	return r.Router.Add(route)
 }

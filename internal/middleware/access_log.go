@@ -32,10 +32,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 
-	"github.com/retail-ai-inc/bean/v2/log"
+	"github.com/retail-ai-inc/bean/v3/log"
 )
 
 type LoggerConfig struct {
@@ -62,7 +62,7 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 	}
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) (err error) {
+		return func(c *echo.Context) (err error) {
 			if config.Skipper(c) {
 				return next(c)
 			}
@@ -92,17 +92,20 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 
 			if config.BodyDump {
 				resBody = new(bytes.Buffer)
-				mw := io.MultiWriter(res.Writer, resBody)
+				mw := io.MultiWriter(res, resBody)
 				writer = &bodyDumpResponseWriter{
 					Writer:         mw,
-					ResponseWriter: res.Writer,
+					ResponseWriter: res,
 				}
-				res.Writer = writer
+				c.SetResponse(writer)
+				defer c.SetResponse(res)
 			}
 
 			// ---- Execute handler ----
 			if err = next(c); err != nil {
-				c.Error(err)
+				// Let the global error handler write the error response now so that the
+				// response status/body can be logged. (echo v5 removed `c.Error()`.)
+				c.Echo().HTTPErrorHandler(c, err)
 			}
 
 			stop := time.Now()
@@ -117,7 +120,7 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 	}
 }
 
-func logAccess(config LoggerConfig, c echo.Context) {
+func logAccess(config LoggerConfig, c *echo.Context) {
 	req := c.Request()
 
 	fields := map[string]any{
@@ -149,7 +152,7 @@ func logAccess(config LoggerConfig, c echo.Context) {
 
 func logBodyDump(
 	config LoggerConfig,
-	c echo.Context,
+	c *echo.Context,
 	reqBody []byte,
 	reqBodyErr error,
 	resBody *bytes.Buffer,
@@ -167,7 +170,10 @@ func logBodyDump(
 		"latency":       int64(stop.Sub(start)),
 		"latency_human": stop.Sub(start).String(),
 		"bytes_in":      req.Header.Get(echo.HeaderContentLength),
-		"bytes_out":     res.Size,
+	}
+
+	if r, _ := echo.UnwrapResponse(res); r != nil {
+		fields["bytes_out"] = r.Size
 	}
 
 	if handlerErr != nil {
@@ -239,6 +245,12 @@ func (w *bodyDumpResponseWriter) WriteHeader(code int) {
 
 func (w *bodyDumpResponseWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
+}
+
+// Unwrap returns the original http.ResponseWriter so that `echo.UnwrapResponse` and
+// `http.ResponseController` can reach the underlying writer.
+func (w *bodyDumpResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func (w *bodyDumpResponseWriter) Flush() {

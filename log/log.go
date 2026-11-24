@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/config"
-	"github.com/retail-ai-inc/bean/v2/helpers"
+	elog "github.com/labstack/gommon/log"
+	"github.com/retail-ai-inc/bean/v3/config"
+	"github.com/retail-ai-inc/bean/v3/helpers"
 )
 
 type Severity string
@@ -22,8 +22,44 @@ const (
 	Critical Severity = "CRITICAL"
 )
 
+// LeveledLogger defines the leveled logging interface used by bean.
+// It keeps the method set of echo v4 `echo.Logger`, which was removed in echo v5
+// (echo v5 uses `*slog.Logger`). It is satisfied by `*github.com/labstack/gommon/log.Logger`.
+type LeveledLogger interface {
+	Output() io.Writer
+	SetOutput(w io.Writer)
+	Prefix() string
+	SetPrefix(p string)
+	Level() elog.Lvl
+	SetLevel(v elog.Lvl)
+	SetHeader(h string)
+	Print(i ...interface{})
+	Printf(format string, args ...interface{})
+	Printj(j elog.JSON)
+	Debug(i ...interface{})
+	Debugf(format string, args ...interface{})
+	Debugj(j elog.JSON)
+	Info(i ...interface{})
+	Infof(format string, args ...interface{})
+	Infoj(j elog.JSON)
+	Warn(i ...interface{})
+	Warnf(format string, args ...interface{})
+	Warnj(j elog.JSON)
+	Error(i ...interface{})
+	Errorf(format string, args ...interface{})
+	Errorj(j elog.JSON)
+	Fatal(i ...interface{})
+	Fatalj(j elog.JSON)
+	Fatalf(format string, args ...interface{})
+	Panic(i ...interface{})
+	Panicj(j elog.JSON)
+	Panicf(format string, args ...interface{})
+}
+
+var _ LeveledLogger = (*elog.Logger)(nil)
+
 type BeanLogger interface {
-	echo.Logger
+	LeveledLogger
 	AccessLogger
 }
 
@@ -46,7 +82,7 @@ type Entry struct {
 }
 
 type logger struct {
-	echo.Logger
+	LeveledLogger
 	traceExtractor TraceExtractor
 	pipeline       *Pipeline
 }
@@ -96,7 +132,7 @@ func tracePayloadKey(platform string) string {
 	}
 }
 
-func NewLogger(elogger echo.Logger, options ...LoggerOptions) (*logger, error) {
+func NewLogger(elogger LeveledLogger, options ...LoggerOptions) (*logger, error) {
 	cfg := &Config{maskFields: []string{}}
 
 	for _, option := range options {
@@ -133,7 +169,7 @@ func NewLogger(elogger echo.Logger, options ...LoggerOptions) (*logger, error) {
 	processors = append(processors, NewRemoveEscapeProcessor())
 
 	return &logger{
-		Logger:         elogger,
+		LeveledLogger:  elogger,
 		traceExtractor: NewSentryExtractor(),
 		pipeline:       NewPipeline(s, processors...),
 	}, nil
@@ -162,7 +198,7 @@ var (
 	once    sync.Once
 )
 
-func Init(logger echo.Logger) BeanLogger {
+func Init(logger LeveledLogger) BeanLogger {
 	once.Do(func() {
 		var err error
 		blogger, err = NewLogger(logger,

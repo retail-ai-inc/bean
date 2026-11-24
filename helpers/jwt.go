@@ -26,7 +26,7 @@ import (
 	"errors"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 var (
@@ -43,7 +43,7 @@ func EncodeJWT(claims jwt.Claims, secret string) (string, error) {
 }
 
 // DecodeJWT will decode JWT string into `claims` structure using a secret string.
-func DecodeJWT(c echo.Context, claims jwt.Claims, secret string, opts ...jwt.ParserOption) error {
+func DecodeJWT(c *echo.Context, claims jwt.Claims, secret string, opts ...jwt.ParserOption) error {
 
 	if len(opts) == 0 {
 		// Add default options if not provided.
@@ -76,7 +76,7 @@ func DecodeJWT(c echo.Context, claims jwt.Claims, secret string, opts ...jwt.Par
 }
 
 // ExtractJWTFromHeader will extract JWT from `Authorization` HTTP header and returns as string.
-func ExtractJWTFromHeader(c echo.Context) string {
+func ExtractJWTFromHeader(c *echo.Context) string {
 
 	var tokenString string
 

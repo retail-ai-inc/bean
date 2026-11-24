@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/retail-ai-inc/bean/v2/helpers"
+	"github.com/retail-ai-inc/bean/v3/helpers"
 )
 
 // httpClientWithRetry and httpClientWithoutRetry represent resty http client connections provided as singletons

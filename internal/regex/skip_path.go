@@ -4,8 +4,8 @@ import (
 	"errors"
 	"regexp"
 
-	"github.com/labstack/echo/v4"
-	echomiddleware "github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	echomiddleware "github.com/labstack/echo/v5/middleware"
 )
 
 var skipSampling func(path string) bool = func(path string) bool {
@@ -43,7 +43,7 @@ func SetSamplingPathSkipper(skipPaths []string) {
 	}
 }
 
-func InitAccessLogPathSkipper(skipPaths []string) func(c echo.Context) bool {
+func InitAccessLogPathSkipper(skipPaths []string) func(c *echo.Context) bool {
 	uniquePaths := make(map[string]struct{})
 	for _, path := range skipPaths {
 		uniquePaths[path] = struct{}{}
@@ -58,10 +58,10 @@ func InitAccessLogPathSkipper(skipPaths []string) func(c echo.Context) bool {
 	return pathSkipper(accessLogSkipPaths)
 }
 
-func InitPrometheusPathSkipper(skipPaths []string, metricsPath string) (func(c echo.Context) bool, error) {
+func InitPrometheusPathSkipper(skipPaths []string, metricsPath string) (func(c *echo.Context) bool, error) {
 
 	if metricsPath == "" {
-		return func(c echo.Context) bool { return false }, errors.New("metrics path is empty")
+		return func(c *echo.Context) bool { return false }, errors.New("metrics path is empty")
 	}
 
 	uniquePaths := make(map[string]struct{})
@@ -78,13 +78,13 @@ func InitPrometheusPathSkipper(skipPaths []string, metricsPath string) (func(c e
 	return pathSkipper(prometheusSkipPaths), nil
 }
 
-func pathSkipper(skipPathRegexes []*regexp.Regexp) func(c echo.Context) bool {
+func pathSkipper(skipPathRegexes []*regexp.Regexp) func(c *echo.Context) bool {
 
 	if len(skipPathRegexes) == 0 {
 		return echomiddleware.DefaultSkipper
 	}
 
-	return func(c echo.Context) bool {
+	return func(c *echo.Context) bool {
 		path := c.Request().URL.Path
 		for _, r := range skipPathRegexes {
 			if r.MatchString(path) {

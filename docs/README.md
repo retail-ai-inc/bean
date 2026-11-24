@@ -13,6 +13,8 @@
 
 A web framework written in GO on-top of `echo` to ease your application development. Our main goal is not to compete with other `Go` framework instead we are mainly focusing on `tooling` and `structuring` a project to make developers life a bit easier and less stressful to maintain their project more in a lean way.
 
+> **Upgrading from bean v2?** Bean v3 is built on Echo v5 and changes the module path to `github.com/retail-ai-inc/bean/v3`. See the [v2 → v3 upgrade guide](UPGRADE_v3.md).
+
 - [BEAN (豆)](#bean-豆)
   - [How to use](#how-to-use)
     - [Initialize a project](#initialize-a-project)
@@ -60,7 +62,7 @@ A web framework written in GO on-top of `echo` to ease your application developm
 1. Install the package by
 
 ```sh
-go install github.com/retail-ai-inc/bean/v2/cmd/bean@latest
+go install github.com/retail-ai-inc/bean/v3/cmd/bean@latest
 ```
 
 2. Create a project directory
@@ -267,8 +269,8 @@ import (
  "errors"
  "fmt"
 
- "github.com/retail-ai-inc/bean/v2"
- "github.com/retail-ai-inc/bean/v2/trace"
+ "github.com/retail-ai-inc/bean/v3"
+ "github.com/retail-ai-inc/bean/v3/trace"
  "github.com/spf13/cobra"
 )
 
@@ -326,7 +328,7 @@ Now, compile your project and run the command as `./myproject gopher helloworld`
 How to use in the code:
 
 ```go
-import "github.com/retail-ai-inc/bean/v2/store/memory"
+import "github.com/retail-ai-inc/bean/v3/store/memory"
 
 // Initialize the local memory store with key type `string` and value type `any`
 m := memory.NewMemory()
@@ -349,7 +351,7 @@ On Sentry's monitoring platform, you will see the number of users affected by th
 
 How to use in the code:
 ```go
-import "github.com/retail-ai-inc/bean/v2/trace"
+import "github.com/retail-ai-inc/bean/v3/trace"
 ctx := trace.SetUser(c.Request().Context(), sentry.User{
 	    ID:        "12345", // such as userID, deviceID, etc.
 	    Email:     "user@example.com",
@@ -362,11 +364,11 @@ ctx := trace.SetUser(c.Request().Context(), sentry.User{
 
 ## Useful Helper Functions
 
-Please refer to the [`helpers` package](helpers/) in this codebase or [go doc](https://pkg.go.dev/github.com/retail-ai-inc/bean/v2/helpers) for more information.
+Please refer to the [`helpers` package](helpers/) in this codebase or [go doc](https://pkg.go.dev/github.com/retail-ai-inc/bean/v3/helpers) for more information.
 
 ## Bean Config
 
-Bean provides the [`config.Config`](https://pkg.go.dev/github.com/retail-ai-inc/bean/v2/config#Config) struct to enable the user to tweak the configuration of their consumer project as per their requirement .
+Bean provides the [`config.Config`](https://pkg.go.dev/github.com/retail-ai-inc/bean/v3/config#Config) struct to enable the user to tweak the configuration of their consumer project as per their requirement .
 Bean configs default values are picked from the `env.json` file, but can be updated during runtime as well.
 <https://pkg.go.dev/github.com/retail-ai-inc/bean#Config>
 
@@ -415,7 +417,7 @@ Some of the configurable parameters are:
 
 ## Logging Module
 
-The `log` package (`github.com/retail-ai-inc/bean/v2/log`) provides a structured, pipeline-based access logging system with sync/async writing, field masking, escape cleanup, and distributed trace correlation.
+The `log` package (`github.com/retail-ai-inc/bean/v3/log`) provides a structured, pipeline-based access logging system with sync/async writing, field masking, escape cleanup, and distributed trace correlation.
 
 ### Architecture
 
@@ -495,17 +497,17 @@ Final output destination. Implement the `Sink` interface (`Write(entry Entry) er
 
 ### Example
 
-Initialize once with Echo logger, then call `TraceInfo` / `TraceError`:
+Initialize once with a leveled logger (`log.LeveledLogger`, e.g. a gommon logger), then call `TraceInfo` / `TraceError`:
 
 ```go
 import (
-    "github.com/labstack/echo/v4"
-    "github.com/retail-ai-inc/bean/v2/log"
+    elog "github.com/labstack/gommon/log"
+    "github.com/retail-ai-inc/bean/v3/log"
 )
 
 // At startup
-e := echo.New()
-blogger := log.Init(e.Logger)
+// NOTE: since echo v5, `e.Logger` is a `*slog.Logger`, so bean keeps its own gommon based logger.
+blogger := log.Init(elog.New("echo"))
 
 // In handlers or services
 blogger.TraceInfo(ctx, "outbound_http", map[string]any{
@@ -519,7 +521,7 @@ Custom logger with functional options:
 
 ```go
 blogger, err := log.NewLogger(
-    e.Logger,
+    elog.New("echo"),
     log.WithRuntimePlatform("gcp"),
     log.WithMaskFields([]string{"password", "token"}),
     log.WithSinkAsync(true, 4096),
@@ -527,7 +529,7 @@ blogger, err := log.NewLogger(
 )
 ```
 
-Internally, `NewLogger` builds: Sentry extractor → Pipeline(MaskProcessor, RemoveEscapeProcessor) → Sink(echo.Logger.Output(), projectID).
+Internally, `NewLogger` builds: Sentry extractor → Pipeline(MaskProcessor, RemoveEscapeProcessor) → Sink(logger.Output(), projectID).
 
 **Sync vs Async (parallel):** Async is ~27% faster (1369 vs 1886 ns/op) because IO is offloaded to a single worker goroutine.
 
@@ -537,7 +539,7 @@ Internally, `NewLogger` builds: Sentry extractor → Pipeline(MaskProcessor, Rem
 
 - Separation of concerns (extraction → transformation → output)
 - Composable processor pipeline
-- Minimal framework coupling (Echo logger + optional Sentry)
+- Minimal framework coupling (gommon leveled logger + optional Sentry)
 - Extensible via custom processors and sinks
 - Zero-copy async path with `sync.Pool` buffer reuse
 
@@ -576,8 +578,8 @@ It captures:
 
 ```go
 import (
-    "github.com/retail-ai-inc/bean/v2/log"
-    "github.com/retail-ai-inc/bean/v2/transport/http"
+    "github.com/retail-ai-inc/bean/v3/log"
+    "github.com/retail-ai-inc/bean/v3/transport/http"
 )
 
 // logger is a log.AccessLogger (e.g. from log.Init(e.Logger) or log.Logger())
