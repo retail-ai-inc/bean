@@ -275,9 +275,32 @@ c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 1. **路由名保持 v4 行为**：Echo v5 默认路由名为 `GET:/path`，bean 通过自定义 Router 仍以 handler 函数名命名（如 `myapp/handlers.(*userHandler).Get-fm`），`route list` 和 `gen spec` 的输出与 v2 一致。显式指定 `Name` 的路由不受影响。
 2. **`http.bodyLimit` 配置格式不变**：仍可写 `"1M"`、`"512K"` 等，bean 会换算成字节数。配置值无法解析时启动失败。
 3. **超时返回 504**：`http.timeout` 超时时返回 `echo.NewHTTPError(504, "gateway timeout").Wrap(context.DeadlineExceeded)`，上报到 Sentry 的仍是内部错误。
-4. **404 / 405**：`berror.HTTPErrorHandlerFunc` 能正确识别 Echo v5 的预定义错误，返回的 HTML / JSON 与 v2 一致。
+4. **404 / 405 改由 Echo 路由判断**：详见 [5.1](#51-404--405-的处理方式)。
 5. **访问日志（body dump）**：响应体、状态码、`bytes_out` 的记录方式已适配 v5，日志字段不变。
 6. **Echo 自身日志**：Echo v5 的 slog 日志（含 `c.Logger()`）与 bean 日志输出到同一目标，格式为 JSON，但字段与 gommon 日志略有不同（slog 为 `time` / `level` / `message`，没有 `prefix` / `file` / `line`）。
+
+### 5.1 404 / 405 的处理方式
+
+v2 用一个全局中间件在每个请求上遍历全部路由、自行匹配路径来判断 404 / 405。v3 删除了这个中间件，改为由 Echo 路由直接判断（返回 `echo.ErrNotFound` / `echo.ErrMethodNotAllowed`），再交给 bean 的错误处理器输出。
+
+状态码规则与 v2 相同：
+
+| 请求 | 结果 |
+| --- | --- |
+| 路径不存在 | 404 |
+| 路径存在，但方法未注册 | 405（v3 起同时返回 `Allow` 头） |
+| 路由的方法不在 `http.allowedMethod` 中 | 该路由**不会被注册**（启动时打印 WARN 日志），请求按上面两条返回 404 / 405 |
+| `e.Any(...)` / `g.Any(...)` | 只为 `http.allowedMethod` 中的方法注册，其它方法返回 405；`route list` 中按方法逐条列出 |
+| Group 下路径存在、方法不对 | 405（Echo v5 默认会因 Group 的兜底路由返回 404，bean 已关闭该行为） |
+
+需要注意的变化：
+
+1. **JSON 响应体**：增加了 `errorMsg` 字段，例如 404 为 `{"errorCode":"100003","errorMsg":"Not Found","errors":null}`（v2 为 `{"errorCode":"100003","errors":null}`）。`env.json` 中 `http.errorMessage.e404` / `e405` 的自定义 JSON **现在也对路由产生的 404 / 405 生效**（v2 中不生效）。
+2. **HTML 响应**：同样使用 `errors/html/404`、`errors/html/405` 模板（或 `http.errorMessage.e404.html.file` 指定的文件），模板中的 `stacktrace` 变量为 `Not Found` / `Method Not Allowed`，v2 为空。
+3. **即使没有注册 `berror.HTTPErrorHandlerFunc`**，路由产生的 404 / 405 也会按上述格式返回，不会变成 500。如果项目注册了自己的全局错误处理函数，它现在也会收到这类错误，可以用 `berror.IsRouterError(c)` 区分。
+4. **404 / 405 请求会经过全局中间件**：v2 中这类请求在中间件处直接返回，不会进入访问日志、Request ID、Sentry、Prometheus 等中间件；v3 中会正常经过，因此访问日志中能看到 404 / 405 请求。Prometheus 中所有路由产生的 404 共用同一个 `url` 标签，避免扫描请求造成指标数量膨胀。这类请求不会再作为 ERROR 写入日志。
+5. **Group 中间件不会对未知路径执行**：例如 `/api` Group 上的鉴权中间件，对 `/api/unknown` 不会执行，直接返回 404，与 v2 行为一致。
+6. **`OPTIONS` 请求**：非 CORS 预检的 `OPTIONS` 请求，在路径存在时返回 `204` 并带 `Allow` 头（v2 中返回 405）。CORS 预检仍由 CORS 中间件处理。
 
 ## 6. 升级检查清单
 
@@ -291,4 +314,6 @@ c.SetPathValues(echo.PathValues{{Name: "id", Value: "1"}})
 - [ ] 自定义 Binder / Renderer 调整签名
 - [ ] 测试中的 `log.Init(echo.New().Logger)`、`echo.NewResponse(w, e)` 等改为 v3 写法
 - [ ] `go build ./... && go test ./...` 通过
+- [ ] 检查启动日志中是否有 `route is not registered because its method is not listed in http.allowedMethod` 警告
+- [ ] 如果有客户端依赖 404 / 405 的 JSON 响应格式，确认新增的 `errorMsg` 字段没有影响
 - [ ] 启动服务，验证 404 / 405 / 500 / 超时的响应和访问日志

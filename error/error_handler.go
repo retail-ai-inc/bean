@@ -98,7 +98,10 @@ func HTTPErrorHandlerFunc(e error, c *echo.Context) (bool, error) {
 
 	he := newHTTPErrorInfo(sc)
 
-	c.Logger().Error(e.Error())
+	// Requests to unknown routes / methods are common (scanners, typos), do not log them as errors.
+	if !IsRouterError(c) {
+		c.Logger().Error(e.Error())
+	}
 
 	// Return different response based on some defined error.
 	var err error
@@ -224,6 +227,12 @@ func DefaultErrorHandlerFunc(err error, c *echo.Context) (bool, error) {
 		return false, nil
 	}
 
+	// 404 / 405 produced by the router are always rendered as 404 / 405, even when
+	// `HTTPErrorHandlerFunc` is not registered.
+	if IsRouterError(c) {
+		return HTTPErrorHandlerFunc(err, c)
+	}
+
 	// Send error event to sentry if configured.
 	if viper.GetBool("sentry.on") {
 		c.Logger().Error(err.Error())
@@ -311,4 +320,14 @@ func newHTTPErrorInfo(sc echo.HTTPStatusCoder) httpErrorInfo {
 	}
 
 	return info
+}
+
+// IsRouterError reports whether the request did not match any route (404) or matched a path but not the
+// method (405). In these cases the error was produced by the echo router, not by a handler.
+func IsRouterError(c *echo.Context) bool {
+	switch c.RouteInfo().Name {
+	case echo.NotFoundRouteName, echo.MethodNotAllowedRouteName:
+		return true
+	}
+	return false
 }

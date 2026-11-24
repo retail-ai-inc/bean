@@ -18,7 +18,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v5"
 	"github.com/retail-ai-inc/bean/v3/config"
-	"github.com/retail-ai-inc/bean/v3/internal/route"
+	berror "github.com/retail-ai-inc/bean/v3/error"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
@@ -349,7 +349,6 @@ func Test_NewEcho(t *testing.T) {
 				}
 				return c.String(http.StatusOK, "success")
 			})
-			route.Init(e)
 			e.ServeHTTP(rec, req)
 
 			// Assert
@@ -388,22 +387,46 @@ func setConf(t *testing.T, timeout time.Duration) func() {
 	}
 }
 
-func namedTestHandler(c *echo.Context) error { return c.NoContent(http.StatusOK) }
+func TestNewEcho_RouterNotFoundAndMethodNotAllowed(t *testing.T) {
+	reset := setConf(t, 0) // allowedMethod: ["GET"]
+	defer reset()
 
-func TestHandlerNamedRouter(t *testing.T) {
-	e := echo.NewWithConfig(echo.Config{
-		Router: handlerNamedRouter{Router: echo.NewRouter(echo.RouterConfig{AllowOverwritingRoute: true})},
-	})
-	e.GET("/named", namedTestHandler)
-	e.AddRoute(echo.Route{Method: http.MethodGet, Path: "/custom", Handler: namedTestHandler, Name: "custom"})
+	e, closeEcho := NewEcho()
+	defer func() { _ = closeEcho() }()
 
-	names := map[string]string{}
-	for _, r := range e.Router().Routes() {
-		names[r.Path] = r.Name
+	b := &Bean{Echo: e}
+	// Same as `ServeAt`: only the default error handler is registered.
+	b.UseErrorHandlerFuncs(berror.DefaultErrorHandlerFunc)
+	e.HTTPErrorHandler = b.DefaultHTTPErrorHandler()
+
+	ok := func(c *echo.Context) error { return c.String(http.StatusOK, "ok") }
+	e.GET("/users", ok)
+	e.POST("/users", ok) // POST is not in allowedMethod: not registered
+	g := e.Group("/api", func(next echo.HandlerFunc) echo.HandlerFunc { return next })
+	g.GET("/items", ok)
+
+	tests := []struct {
+		method, path string
+		wantCode     int
+		wantErrCode  berror.ErrorCode
+	}{
+		{http.MethodGet, "/users", http.StatusOK, ""},
+		{http.MethodGet, "/unknown", http.StatusNotFound, berror.RESOURCE_NOT_FOUND},
+		{http.MethodPost, "/users", http.StatusMethodNotAllowed, berror.METHOD_NOT_ALLOWED},
+		{http.MethodPost, "/api/items", http.StatusMethodNotAllowed, berror.METHOD_NOT_ALLOWED},
+		{http.MethodGet, "/api/unknown", http.StatusNotFound, berror.RESOURCE_NOT_FOUND},
 	}
-	assert.Equal(t, "github.com/retail-ai-inc/bean/v3.namedTestHandler", names["/named"])
-	assert.Equal(t, "custom", names["/custom"])
+	for _, tt := range tests {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
 
-	code, _ := request(http.MethodGet, "/named", e)
-	assert.Equal(t, http.StatusOK, code)
+			assert.Equal(t, tt.wantCode, rec.Code)
+			if tt.wantErrCode != "" {
+				assert.Contains(t, rec.Body.String(), `"errorCode":"`+string(tt.wantErrCode)+`"`)
+			}
+		})
+	}
 }

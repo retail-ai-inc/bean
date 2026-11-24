@@ -58,7 +58,7 @@ import (
 	"github.com/retail-ai-inc/bean/v3/internal/gopool"
 	"github.com/retail-ai-inc/bean/v3/internal/middleware"
 	"github.com/retail-ai-inc/bean/v3/internal/regex"
-	broute "github.com/retail-ai-inc/bean/v3/internal/route"
+	"github.com/retail-ai-inc/bean/v3/internal/router"
 	"github.com/retail-ai-inc/bean/v3/internal/validator"
 	blog "github.com/retail-ai-inc/bean/v3/log"
 	"github.com/retail-ai-inc/bean/v3/store/memory"
@@ -208,10 +208,33 @@ func NewEcho() (*echo.Echo, func() error) {
 		log.Fatal("config is not loaded")
 	}
 
-	// Keep echo v4 behaviour of naming routes after their handler function (echo v5 defaults to
-	// "METHOD:/path"). `route list` and `gen spec` rely on the handler name.
+	// IMPORTANT: Configure debug log.
+	// echo v5 uses `*slog.Logger` for `e.Logger`, so bean keeps its own leveled (gommon) logger for
+	// `bean.Logger()` and points echo's slog logger to the same output.
+	elogger := elog.New("echo")
+	if config.Bean.DebugLogPath != "" {
+		if file, err := helpers.OpenFile(config.Bean.DebugLogPath); err != nil {
+			elogger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
+		} else {
+			elogger.SetOutput(file)
+		}
+	}
+	elogger.SetLevel(elog.DEBUG)
+	slogger := blog.NewSlogLogger(elogger.Output(), slog.LevelDebug)
+
+	// The router keeps bean's routing conventions (handler named routes, `http.allowedMethod`). Requests to
+	// unknown paths or methods are answered by the echo router with `echo.ErrNotFound` / `echo.ErrMethodNotAllowed`
+	// and rendered by the HTTP error handler.
 	e := echo.NewWithConfig(echo.Config{
-		Router: handlerNamedRouter{Router: echo.NewRouter(echo.RouterConfig{AllowOverwritingRoute: true})},
+		Logger: slogger,
+		// Do not let `Group.Use` register catch-all 404 routes, otherwise a wrong method on a grouped route
+		// would get 404 instead of 405. Unknown paths are handled by the router's 404 instead.
+		NoGroupAutoRegister404Routes: true,
+		Router: router.New(
+			echo.NewRouter(echo.RouterConfig{AllowOverwritingRoute: true}),
+			config.Bean.HTTP.AllowedMethod,
+			slogger,
+		),
 	})
 	closes := []func() error{}
 
@@ -229,20 +252,6 @@ func NewEcho() (*echo.Echo, func() error) {
 		DisableCache: !viewsTemplateCache,
 		Delims:       goview.Delims{Left: "{{", Right: "}}"},
 	})
-
-	// IMPORTANT: Configure debug log.
-	// echo v5 uses `*slog.Logger` for `e.Logger`, so bean keeps its own leveled (gommon) logger for
-	// `bean.Logger()` and points echo's slog logger to the same output.
-	elogger := elog.New("echo")
-	if config.Bean.DebugLogPath != "" {
-		if file, err := helpers.OpenFile(config.Bean.DebugLogPath); err != nil {
-			elogger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
-		} else {
-			elogger.SetOutput(file)
-		}
-	}
-	elogger.SetLevel(elog.DEBUG)
-	e.Logger = blog.NewSlogLogger(elogger.Output(), slog.LevelDebug)
 
 	extractor, err := middleware.NewIPExtractor(config.Bean.HTTP.TrustIPRange)
 	if err != nil {
@@ -280,10 +289,6 @@ func NewEcho() (*echo.Echo, func() error) {
 		ContentSecurityPolicy: config.Bean.Security.HTTP.Header.ContentSecurityPolicy, // Allows the Content-Security-Policy header value to be set with a custom value.
 		ReferrerPolicy:        config.Bean.Security.HTTP.Header.ReferrerPolicy,        // To determine how your service share information about the source page (referrer URL) when users click on links or visit new pages. Optional. Default value "".
 	}))
-
-	// Return `405 Method Not Allowed` if a wrong HTTP method been called for an API route.
-	// Return `404 Not Found` if a wrong API route been called.
-	e.Use(middleware.MethodNotAllowedAndRouteNotFound())
 
 	// Add context timeout.
 	// If no timeout is set or timeout=0, skip adding the timeout middleware.
@@ -378,6 +383,9 @@ func NewEcho() (*echo.Echo, func() error) {
 		}
 		conf := echoprometheus.MiddlewareConfig{
 			Skipper: skipper,
+			// 404 requests (unknown routes) now pass through the middleware chain; use one `url` label for
+			// all of them instead of the request path to avoid unbounded label cardinality.
+			DoNotUseRequestPathFor404: true,
 		}
 		if config.Bean.Prometheus.Subsystem != "" {
 			conf.Subsystem = config.Bean.Prometheus.Subsystem
@@ -433,9 +441,6 @@ func (b *Bean) ServeAt(host, port string) error {
 	if b.BeforeServe != nil {
 		b.BeforeServe()
 	}
-
-	// Keep all the route information in route.Routes
-	broute.Init(b.Echo)
 
 	// Start the server
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -737,17 +742,4 @@ func ContextTimeout(timeout time.Duration) echo.MiddlewareFunc {
 // Currently, it only supports a default validator.
 func NewValidator(v *validatorV10.Validate) (*validator.DefaultValidator, error) {
 	return validator.NewDefaultValidator(v)
-}
-
-// handlerNamedRouter wraps an echo router and names unnamed routes after their handler function,
-// which was the default route name in echo v4.
-type handlerNamedRouter struct {
-	echo.Router
-}
-
-func (r handlerNamedRouter) Add(route echo.Route) (echo.RouteInfo, error) {
-	if route.Name == "" && route.Handler != nil {
-		route.Name = echo.HandlerName(route.Handler)
-	}
-	return r.Router.Add(route)
 }
