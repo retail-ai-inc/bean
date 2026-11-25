@@ -1,5 +1,7 @@
 # Bean v2 → v3 升级指南
 
+[English](UPGRADE_v3.en.md) | 中文
+
 Bean v3 的核心变化是把底层 Web 框架从 **Echo v4** 升级到 **Echo v5**。Echo v5 本身有大量不兼容改动（`Context` 从接口变为结构体、日志改用 `log/slog`、错误类型调整等），因此 bean 也随之升级大版本，模块路径改为 `github.com/retail-ai-inc/bean/v3`。
 
 本文列出基于 bean v2 的项目升级到 v3 需要做的改动。

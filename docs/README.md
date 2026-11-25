@@ -13,7 +13,7 @@
 
 A web framework written in GO on-top of `echo` to ease your application development. Our main goal is not to compete with other `Go` framework instead we are mainly focusing on `tooling` and `structuring` a project to make developers life a bit easier and less stressful to maintain their project more in a lean way.
 
-> **Upgrading from bean v2?** Bean v3 is built on Echo v5 and changes the module path to `github.com/retail-ai-inc/bean/v3`. See the [v2 → v3 upgrade guide](UPGRADE_v3.md).
+> **Upgrading from bean v2?** Bean v3 is built on Echo v5 and changes the module path to `github.com/retail-ai-inc/bean/v3`. See the [v2 → v3 upgrade guide](UPGRADE_v3.en.md) ([中文](UPGRADE_v3.md)).
 
 - [BEAN (豆)](#bean-豆)
   - [How to use](#how-to-use)
@@ -226,7 +226,7 @@ log.Logger().ErrorContext(ctx, "failed to get user", "user_id", id, "error", err
 c.Logger().WarnContext(c.Request().Context(), "deprecated API called", "path", c.Path())
 ```
 
-`Debugf`, `Infof`, `Warnf`, `Errorf`, `Debugj`, `Errorj`, ... from bean v2 are still available but **deprecated**; see [the upgrade guide](UPGRADE_v3.md#42-日志统一为-slog).
+`Debugf`, `Infof`, `Warnf`, `Errorf`, `Debugj`, `Errorj`, ... from bean v2 are still available but **deprecated**; see [the upgrade guide](UPGRADE_v3.en.md#42-unified-logging-with-slog).
 
 ## Built-In testing
 
