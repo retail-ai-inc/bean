@@ -399,6 +399,7 @@ v2 用一个全局中间件在每个请求上遍历全部路由、自行匹配�
 - [ ] 自定义 Binder / Renderer 调整签名
 - [ ] `bean.New()` / `bean.NewEcho()` 处理返回的 error
 - [ ] `env.json` 中的 `accessLog.bodyDumpMaskParam` 改名为 `accessLog.maskFields`
+- [ ] `env.json` 中没有配置 `http.keepAlive` 的项目：v3 默认开启 keep-alive（v2 默认关闭），需要关闭时显式配置 `"keepAlive": false`（见第 5 节第 13 条）
 - [ ] 测试中的 `log.Init(echo.New().Logger)`、`echo.NewResponse(w, e)` 等改为 v3 写法
 - [ ] `go build ./... && go test ./...` 通过
 - [ ] 检查启动日志中是否有 `route is not registered because its method is not listed in http.allowedMethod` 警告
