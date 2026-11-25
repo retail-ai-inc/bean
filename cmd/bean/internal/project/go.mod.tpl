@@ -24,7 +24,7 @@ require (
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/go-playground/locales v0.14.0 // indirect
 	github.com/go-playground/universal-translator v0.18.0 // indirect
-	github.com/go-redis/redis/v8 v8.11.4 // indirect
+	github.com/redis/go-redis/v9 v9.24.0 // indirect
 	github.com/go-sql-driver/mysql v1.6.0 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect

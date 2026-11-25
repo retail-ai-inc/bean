@@ -2,11 +2,12 @@ package dbdrivers
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -69,49 +70,16 @@ func TestRedisDBConn_SetNX_afterExpiry(t *testing.T) {
 	assert.Equal(t, "v2", got)
 }
 
-
+// Test_connectRedisDB connects to a real Redis cluster, given by BEAN_TEST_REDIS_CLUSTER_HOSTS (comma separated
+// hosts) and BEAN_TEST_REDIS_CLUSTER_PASSWORD; it is skipped when they are not set.
 func Test_connectRedisDB(t *testing.T) {
-	type args struct {
-		password           string
-		host               string
-		port               string
-		dbName             int
-		maxretries         int
-		poolsize           int
-		minIdleConnections int
-		dialTimeout        time.Duration
-		readTimeout        time.Duration
-		writeTimeout       time.Duration
-		poolTimeout        time.Duration
-		readOnly           bool
-		ssl                SSLConfig
+	hosts := os.Getenv("BEAN_TEST_REDIS_CLUSTER_HOSTS")
+	if hosts == "" {
+		t.Skip("BEAN_TEST_REDIS_CLUSTER_HOSTS is not set")
 	}
-	tests := []struct {
-		name string
-		args args
-	}{
-		{
-			name: "success",
-			args: args{
-				password:           "AqNUe43qWL",
-				host:               "34.84.56.20,35.200.65.32,35.243.97.67,35.243.119.218,35.187.198.109,104.198.85.119",
-				port:               "6379",
-				dbName:             0,
-				maxretries:         -2,
-				poolsize:           0,
-				minIdleConnections: 0,
-				dialTimeout:        0,
-				readTimeout:        0,
-				writeTimeout:       0,
-				poolTimeout:        0,
-				readOnly:           false,
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, _, _, err := connectRedisDB(tt.args.password, tt.args.host, tt.args.port, tt.args.dbName, tt.args.maxretries, tt.args.poolsize, tt.args.minIdleConnections, tt.args.dialTimeout, tt.args.readTimeout, tt.args.writeTimeout, tt.args.poolTimeout, tt.args.readOnly, tt.args.ssl)
-			assert.NoError(t, err)
-		})
-	}
+
+	_, _, closeDB, err := connectRedisDB(os.Getenv("BEAN_TEST_REDIS_CLUSTER_PASSWORD"), hosts, "6379", 0,
+		-2, 0, 0, 0, 0, 0, 0, false, SSLConfig{})
+	require.NoError(t, err)
+	assert.NoError(t, closeDB())
 }

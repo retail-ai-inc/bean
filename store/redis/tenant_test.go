@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	goredis "github.com/go-redis/redis/v8"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/retail-ai-inc/bean/v3/internal/dbdrivers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

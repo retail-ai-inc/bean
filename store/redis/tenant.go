@@ -31,7 +31,7 @@ import (
 
 	"errors"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/retail-ai-inc/bean/v3/internal/dbdrivers"
 	"github.com/retail-ai-inc/bean/v3/stacktrace"
 	"github.com/retail-ai-inc/bean/v3/trace"

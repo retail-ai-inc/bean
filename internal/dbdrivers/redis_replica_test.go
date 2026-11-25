@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -62,12 +62,18 @@ func TestReadWithFallback_ReplicaDown(t *testing.T) {
 	})
 	conn := newReplicaConn(t, primary, replica)
 
+	got, err := conn.GetString(ctx, "k")
+	require.NoError(t, err)
+	assert.Equal(t, "from-primary", got)
+	afterFirst := dials.Load() // go-redis may retry the dial a few times
+	require.Positive(t, afterFirst)
+
 	for range 3 {
 		got, err := conn.GetString(ctx, "k")
 		require.NoError(t, err)
 		assert.Equal(t, "from-primary", got)
 	}
-	assert.Equal(t, int32(1), dials.Load(), "the replica must be skipped after the first connection error")
+	assert.Equal(t, afterFirst, dials.Load(), "the replica must be skipped after the first connection error")
 }
 
 func TestShouldReadFromPrimary(t *testing.T) {
