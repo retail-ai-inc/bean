@@ -23,26 +23,18 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
-	"io"
-	"io/fs"
-	"os"
+	"path/filepath"
 	"strings"
-	"text/template"
-	"unicode"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-var repoFlag []string
-
 func init() {
 	serviceCmd.DisableFlagsInUseLine = true
 
-	serviceCmd.Flags().StringSliceVarP(&repoFlag, "repo", "r", []string{}, "Repository name i.e. --repo login --repo logout --repo profile,settings")
+	serviceCmd.Flags().StringSliceP("repo", "r", []string{}, "Repository name i.e. --repo login --repo logout --repo profile,settings")
 
 	createCmd.AddCommand(serviceCmd)
 }
@@ -56,133 +48,69 @@ type Service struct {
 }
 
 // serviceCmd represents the service command
-var (
-	serviceValidationRule = `A service name must satisfy the following requirements:-
-	1. The serviceName should not start or end with slash (/).
-	2. The serviceName should not start with any digit.
-	3. The serviceName should not begin or end with a dot (., U+002E).
-	4. The serviceName is a non-empty string made of up ASCII letters, ASCII digits, and limited ASCII punctuation (-, ., _).
-	`
-	serviceCmd = &cobra.Command{
-		Use:   "service <service-name>",
-		Short: "Create a new service file of your choice",
-		Long: `Command takes one argument that is the name of user-defined service
+var serviceCmd = &cobra.Command{
+	Use:   "service <service-name>",
+	Short: "Create a new service file of your choice",
+	Long: `Command takes one argument that is the name of user-defined service
+(1 to 100 ASCII letters or digits, not starting with a digit).
 Example :- "bean create service post" will create a service Post in the services folder.
 
 Without --repo, the repository with the same name (repositories/post.go) is injected into the service if it exists.
 With --repo, the given repositories are injected instead (and created if they do not exist):
   bean create service post --repo post,user`,
-		Args: cobra.ExactArgs(1),
-		Run:  service,
-	}
-)
+	Args: cobra.ExactArgs(1),
+	RunE: service,
+}
 
-func service(cmd *cobra.Command, args []string) {
-	beanCheck := beanInitialisationCheck() // This function will display an error message on the terminal.
-	if !beanCheck {
-		os.Exit(1)
-	}
-
-	wd, err := os.Getwd()
+func service(cmd *cobra.Command, args []string) error {
+	p, err := loadProject()
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return err
 	}
 
-	userServiceName := args[0]
-	serviceName, err := getServiceName(userServiceName)
+	name, err := getServiceName(args[0])
 	if err != nil {
-		fmt.Println(serviceValidationRule)
-		os.Exit(1)
+		return err
 	}
-
-	serviceFilesPath := wd + "/services/"
-	serviceFileName := strings.ToLower(serviceName)
-
-	// check if service already exists.
-	_, err = os.Stat(serviceFilesPath + serviceFileName + ".go")
-	if err == nil {
-		fmt.Println("Service with name " + serviceFileName + " already exists.")
-		os.Exit(1)
+	lower := strings.ToLower(name)
+	if fileExists(p.RootDir, "services", lower+".go") {
+		return fmt.Errorf("services/%s.go already exists", lower)
 	}
 
 	// The repositories injected into the service: the `--repo` ones (created if missing) or, without `--repo`,
 	// the repository with the same name as the service if it exists.
-	repos, err := serviceRepos(serviceFileName, repoFlag, checkRepoExists)
+	repoFlag, err := cmd.Flags().GetStringSlice("repo")
 	if err != nil {
-		fmt.Println(err)
-		fmt.Println(repoValidationRule)
-		os.Exit(1)
+		return err
+	}
+	repos, err := serviceRepos(lower, repoFlag, func(name string) bool {
+		return fileExists(p.RootDir, "repositories", name+".go")
+	})
+	if err != nil {
+		return err
 	}
 	for _, r := range repos {
-		if !checkRepoExists(r.Lower) {
-			repo(cmd, []string{r.Lower})
+		if !fileExists(p.RootDir, "repositories", r.Lower+".go") {
+			if err := createRepo(p, r.Upper); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "repository with name %s and repository file %s.go created\n", r.Upper, r.Lower)
 		}
 	}
 
-	p := &Project{
-		Copyright: copyright,
-		RootDir:   wd,
+	data := Service{ProjectObject: *p, ServiceNameUpper: name, ServiceNameLower: lower, Repos: repos}
+	if err := generateFile(p, "service.go", filepath.Join("services", lower+".go"), data); err != nil {
+		return err
+	}
+	if err := wireRoute(p.RootDir, "Services",
+		lower+"Svc services."+name+"Service",
+		lower+"Svc: services.New"+name+"Service("+serviceConstructorArgs(repos)+")",
+	); err != nil {
+		return err
 	}
 
-	// Set the relative root path of the internal templates folder.
-	if p.RootFS, err = fs.Sub(InternalFS, "internal/_tpl"); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	p.PkgPath, err = getPackagePathNameFromEnv(p)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	// Reading the base service file.
-	baseServiceFilePath := "service.go"
-
-	file, err := p.RootFS.Open(baseServiceFilePath)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	fileData, err := io.ReadAll(file)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	tmpl, err := template.New("").Parse(string(fileData))
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	service := Service{
-		ProjectObject:    *p,
-		ServiceNameUpper: serviceName,
-		ServiceNameLower: strings.ToLower(serviceName),
-		Repos:            repos,
-	}
-
-	serviceFileCreate, err := os.Create(serviceFilesPath + serviceFileName + ".go")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	err = tmpl.Execute(serviceFileCreate, service)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	_ = serviceFileCreate.Close()
-
-	wireRoute(wd, "Services",
-		service.ServiceNameLower+"Svc services."+service.ServiceNameUpper+"Service",
-		service.ServiceNameLower+"Svc: services.New"+service.ServiceNameUpper+"Service("+serviceConstructorArgs(repos)+")",
-	)
-
-	fmt.Printf("service with name %s and service file %s.go created\n", serviceName, serviceFileName)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "service with name %s and service file %s.go created\n", name, lower)
+	return nil
 }
 
 // ServiceRepo is a repository injected into a generated service.
@@ -211,7 +139,7 @@ func serviceRepos(serviceFileName string, repoNames []string, repoExists func(st
 		}
 		repoName, err := getRepoName(name)
 		if err != nil {
-			return nil, fmt.Errorf("invalid repository name %q", name)
+			return nil, err
 		}
 		lower := strings.ToLower(repoName)
 		if seen[lower] {
@@ -232,37 +160,9 @@ func serviceConstructorArgs(repos []ServiceRepo) string {
 	return strings.Join(args, ", ")
 }
 
+// getServiceName validates a service name and returns it like `Post`.
 func getServiceName(serviceName string) (string, error) {
-	validate := validator.New()
-
-	if unicode.IsDigit(rune(serviceName[0])) {
-		fmt.Println("serviceName starts with digit")
-		return "", errors.New("service name can not start with a digit")
-	}
-
-	if errs := validate.Var(serviceName, "required,max=100,startsnotwith=/,endsnotwith=/,alphanum,startsnotwith=.,endsnotwith=."); errs != nil {
-		if errs, ok := errs.(validator.ValidationErrors); ok {
-			fmt.Println(errs.Error())
-			return "", errs
-		}
-		fmt.Println(errs)
-		os.Exit(1)
-	}
-
-	serviceName = strings.ToUpper(serviceName[:1]) + strings.ToLower(serviceName[1:])
-
-	return serviceName, nil
-}
-
-func checkRepoExists(repoName string) bool {
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	repoFilesPath := wd + "/repositories/"
-	_, err = os.Stat(repoFilesPath + repoName + ".go")
-	return err == nil
+	return componentName("service", serviceName)
 }
 
 func getPackagePathNameFromEnv(p *Project) (string, error) {

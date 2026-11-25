@@ -22,10 +22,6 @@
 package cmd
 
 import (
-	"errors"
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 )
 
@@ -40,12 +36,4 @@ var createCmd = &cobra.Command{
 func init() {
 	createCmd.DisableFlagsInUseLine = true
 	rootCmd.AddCommand(createCmd)
-}
-
-func beanInitialisationCheck() bool {
-	if _, err := os.Stat("env.json"); errors.Is(err, os.ErrNotExist) {
-		fmt.Println("Your application env.json is not found!")
-		return false
-	}
-	return true
 }

@@ -23,7 +23,10 @@
 package cmd
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"go/format"
 	"io"
 	"io/fs"
 	"os"
@@ -53,39 +56,39 @@ var (
 directory. the suffix of the package_name should match the current directory.`,
 		Example: "bean init github.com/retail-ai-inc/bean/v3",
 		Args:    cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			pkgPath := args[0]
 			pkgName, err := getProjectName(pkgPath)
 			if err != nil {
-				fmt.Println(validationRule)
-				os.Exit(1)
+				return fmt.Errorf("invalid module path %q: %w\n%s", pkgPath, err, validationRule)
+			}
+
+			// Do not overwrite an existing project (Makefile, .gitignore... would be truncated before failing).
+			if _, err := os.Stat("env.json"); err == nil {
+				return errors.New("env.json already exists: bean init must run in an empty project directory")
 			}
 
 			wd, err := os.Getwd()
 			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
+				return err
 			}
 
 			// Generate a 32 character long random secret string.
 			secret, err := str.GenerateRandomString(32, false)
 			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
+				return err
 			}
 
 			// Generate a 24 character long random JWT secret string.
 			jwtSecret, err := str.GenerateRandomString(24, false)
 			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
+				return err
 			}
 
 			// Generate a 36 character long random token string.
 			bearerToken, err := str.GenerateRandomString(36, false)
 			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
+				return err
 			}
 
 			p := &Project{
@@ -100,14 +103,12 @@ directory. the suffix of the package_name should match the current directory.`,
 
 			// Set the relative root path of the internal FS.
 			if p.RootFS, err = fs.Sub(InternalFS, "internal/project"); err != nil {
-				fmt.Println(err)
-				os.Exit(1)
+				return err
 			}
 
 			fmt.Println("initializing " + p.PkgName + "...")
 			if err := fs.WalkDir(p.RootFS, ".", p.generateProjectFiles); err != nil {
-				fmt.Println(err)
-				os.Exit(1)
+				return err
 			}
 
 			fmt.Println("\ntidying go mod...")
@@ -115,9 +116,10 @@ directory. the suffix of the package_name should match the current directory.`,
 			goModTidyCmd.Stdout = os.Stdout
 			goModTidyCmd.Stderr = os.Stderr
 			if err := goModTidyCmd.Run(); err != nil {
-				fmt.Println(err)
-				os.Exit(1)
+				return err
 			}
+
+			return nil
 		},
 	}
 )
@@ -134,8 +136,7 @@ func getProjectName(pkgPath string) (string, error) {
 		if errs, ok := errs.(validator.ValidationErrors); ok {
 			return "", errs
 		}
-		fmt.Println(errs)
-		os.Exit(1)
+		return "", errs
 	}
 
 	pathElements := strings.Split(pkgPath, "/")
@@ -144,8 +145,7 @@ func getProjectName(pkgPath string) (string, error) {
 			if errs, ok := errs.(validator.ValidationErrors); ok {
 				return "", errs
 			}
-			fmt.Println(errs)
-			os.Exit(1)
+			return "", errs
 		}
 	}
 
@@ -155,8 +155,7 @@ func getProjectName(pkgPath string) (string, error) {
 			if errs, ok := errs.(validator.ValidationErrors); ok {
 				return "", errs
 			}
-			fmt.Println(errs)
-			os.Exit(1)
+			return "", errs
 		}
 	}
 
@@ -227,10 +226,18 @@ func (p *Project) generateProjectFiles(path string, d fs.DirEntry, err error) er
 			_ = f.Close()
 		}(file)
 
-		// Parse the template and write to the files.
-		fileTemplate := template.Must(temp, err)
-		err = fileTemplate.Execute(file, p)
-		if err != nil {
+		// Parse the template and write to the files (gofmt'ed for Go files).
+		var buf bytes.Buffer
+		if err := temp.Execute(&buf, p); err != nil {
+			return err
+		}
+		content := buf.Bytes()
+		if strings.HasSuffix(fileName, ".go") {
+			if content, err = format.Source(content); err != nil {
+				return fmt.Errorf("generated %s is not valid Go: %w", fileName, err)
+			}
+		}
+		if _, err := file.Write(content); err != nil {
 			return err
 		}
 	}

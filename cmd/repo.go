@@ -23,16 +23,10 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
-	"io"
-	"io/fs"
-	"os"
+	"path/filepath"
 	"strings"
-	"text/template"
-	"unicode"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/spf13/cobra"
 )
 
@@ -48,130 +42,48 @@ type Repo struct {
 }
 
 // repoCmd represents the repo command
-var (
-	repoValidationRule = `A repo name must satisfy the following requirements:-
-	1. The repoName should not start or end with slash (/).
-	2. The repoName should not start with any digit.
-	3. The repoName should not begin or end with a dot (., U+002E).
-	4. The repoName is a non-empty string made of up ASCII letters, ASCII digits, and limited ASCII punctuation (-, ., _).
-	`
-
-	repoCmd = &cobra.Command{
-		Use:   "repo <repo-name>",
-		Short: "Create a new repository file of your choice",
-		Long: `Command takes one argument that is the name of user-defined repository
+var repoCmd = &cobra.Command{
+	Use:   "repo <repo-name>",
+	Short: "Create a new repository file of your choice",
+	Long: `Command takes one argument that is the name of user-defined repository
+(1 to 100 ASCII letters or digits, not starting with a digit).
 Example :- "bean create repo post" will create a repository Post in repositories folder.`,
-		Args: cobra.ExactArgs(1),
-		Run:  repo,
-	}
-)
-
-func repo(cmd *cobra.Command, args []string) {
-	beanCheck := beanInitialisationCheck() // This function will display an error message on the terminal.
-	if !beanCheck {
-		os.Exit(1)
-	}
-
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	userRepoName := args[0]
-	repoName, err := getRepoName(userRepoName)
-	if err != nil {
-		fmt.Println(repoValidationRule)
-		os.Exit(1)
-	}
-
-	repoFilesPath := wd + "/repositories/"
-	repoFileName := strings.ToLower(repoName)
-
-	// check if repo already exists.
-	_, err = os.Stat(repoFilesPath + repoFileName + ".go")
-	if err == nil {
-		fmt.Println("Repo with name " + repoFileName + " already exists.")
-		os.Exit(1)
-	}
-
-	p := &Project{
-		Copyright: copyright,
-		RootDir:   wd,
-	}
-
-	// Set the relative root path of the internal templates folder.
-	if p.RootFS, err = fs.Sub(InternalFS, "internal/_tpl"); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	// Reading the base repo file.
-	baseRepoFilePath := "repo.go"
-
-	file, err := p.RootFS.Open(baseRepoFilePath)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	fileData, err := io.ReadAll(file)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	tmpl, err := template.New("").Parse(string(fileData))
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	var repo Repo
-	repo.ProjectObject = *p
-	repo.RepoNameLower = strings.ToLower(repoName)
-	repo.RepoNameUpper = repoName
-
-	repoFileCreate, err := os.Create(repoFilesPath + repoFileName + ".go")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	defer func(file2 *os.File) {
-		_ = file2.Close()
-	}(repoFileCreate)
-
-	err = tmpl.Execute(repoFileCreate, repo)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	wireRoute(wd, "Repositories",
-		repo.RepoNameLower+"Repo repositories."+repo.RepoNameUpper+"Repository",
-		repo.RepoNameLower+"Repo: repositories.New"+repo.RepoNameUpper+"Repository(b.DBConn)",
-	)
-
-	fmt.Printf("repository with name %s and repository file %s.go created\n", repoName, repoFileName)
+	Args: cobra.ExactArgs(1),
+	RunE: repo,
 }
 
+func repo(cmd *cobra.Command, args []string) error {
+	p, err := loadProject()
+	if err != nil {
+		return err
+	}
+
+	name, err := getRepoName(args[0])
+	if err != nil {
+		return err
+	}
+	if err := createRepo(p, name); err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "repository with name %s and repository file %s.go created\n", name, strings.ToLower(name))
+	return nil
+}
+
+// createRepo generates the repository `repositories/<name>.go` and wires it into routers/route.go.
+func createRepo(p *Project, name string) error {
+	lower := strings.ToLower(name)
+	data := Repo{ProjectObject: *p, RepoNameUpper: name, RepoNameLower: lower}
+	if err := generateFile(p, "repo.go", filepath.Join("repositories", lower+".go"), data); err != nil {
+		return err
+	}
+	return wireRoute(p.RootDir, "Repositories",
+		lower+"Repo repositories."+name+"Repository",
+		lower+"Repo: repositories.New"+name+"Repository(b.DBConn)",
+	)
+}
+
+// getRepoName validates a repository name and returns it like `Post`.
 func getRepoName(repoName string) (string, error) {
-	validate := validator.New()
-
-	if unicode.IsDigit(rune(repoName[0])) {
-		fmt.Println("repoName starts with digit")
-		return "", errors.New("repo name can not start with a digit")
-	}
-
-	if errs := validate.Var(repoName, "required,max=100,startsnotwith=/,endsnotwith=/,alphanum,startsnotwith=.,endsnotwith=."); errs != nil {
-		if errs, ok := errs.(validator.ValidationErrors); ok {
-			fmt.Println(errs.Error())
-			return "", errs
-		}
-		fmt.Println(errs)
-		os.Exit(1)
-	}
-
-	repoName = strings.ToUpper(repoName[:1]) + strings.ToLower(repoName[1:])
-
-	return repoName, nil
+	return componentName("repository", repoName)
 }

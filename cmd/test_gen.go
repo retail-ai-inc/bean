@@ -45,7 +45,7 @@ var (
 		Short: "generate client and interface golang file",
 		Long:  ``,
 		Args:  cobra.NoArgs,
-		Run:   genTest,
+		RunE:  genTest,
 	}
 	host string
 )
@@ -58,20 +58,20 @@ func init() {
 	TestCmd.AddCommand(genTestCmd)
 }
 
-func genTest(cmd *cobra.Command, _ []string) {
+func genTest(cmd *cobra.Command, _ []string) error {
 	source, err := cmd.Flags().GetString("source")
 	if err != nil {
-		log.Fatalf("Failed to get source arguments: %v", err)
+		return fmt.Errorf("failed to get source arguments: %w", err)
 	}
 
 	destination, err := cmd.Flags().GetString("destination")
 	if err != nil {
-		log.Fatalf("Failed to get destination: %v", err)
+		return fmt.Errorf("failed to get destination: %w", err)
 	}
 
 	pkgName, err := cmd.Flags().GetString("package")
 	if err != nil {
-		log.Fatalf("Failed to get package: %v", err)
+		return fmt.Errorf("failed to get package: %w", err)
 	}
 
 	if pkgName == "" {
@@ -80,35 +80,36 @@ func genTest(cmd *cobra.Command, _ []string) {
 
 	host, err = cmd.Flags().GetString("host")
 	if err != nil {
-		log.Fatalf("Failed to get host: %v", err)
+		return fmt.Errorf("failed to get host: %w", err)
 	}
 
 	if _, err := os.Stat(source); os.IsNotExist(err) {
-		log.Fatalf("Source path: %v", err)
+		return fmt.Errorf("source path: %w", err)
 	}
 
 	data, err := os.ReadFile(source)
 	if err != nil {
-		log.Fatalf("Source file %s read: %v", source, err)
+		return fmt.Errorf("source file %s read: %w", source, err)
 	}
 
 	var specMap = make(map[string]map[string]spec)
 	err = json.Unmarshal(data, &specMap)
 	if err != nil {
-		log.Fatalf("Source data %s unmarshal: %v", data, err)
+		return fmt.Errorf("source data %s unmarshal: %w", data, err)
 	}
 
 	g := NewGenerator(pkgName, source, destination, specMap)
 	if err := g.GenSpecInterface(); err != nil {
-		log.Fatalf("Failed generating interface: %v", err)
+		return fmt.Errorf("failed generating interface: %w", err)
 	}
 
 	log.Printf("Generate %q completed.\n", path.Join(path.Dir(destination), "interface.go"))
 
 	if err := g.Generate(); err != nil {
-		log.Fatalf("Failed generating client: %v", err)
+		return fmt.Errorf("failed generating client: %w", err)
 	}
 	log.Printf("Generate %q completed.\n", destination)
+	return nil
 }
 
 func (g *generator) GenSpecInterface() error {
@@ -218,7 +219,7 @@ func (g *generator) Generate() error {
 	return write(g.destination, bs)
 }
 
-func write(destination string, bs []byte) error {
+func write(destination string, bs []byte) (err error) {
 	output := os.Stdout
 	if destination != "" {
 		if err := os.MkdirAll(filepath.Dir(destination), os.ModePerm); err != nil {
@@ -229,8 +230,8 @@ func write(destination string, bs []byte) error {
 			return fmt.Errorf("failed opening destination file: %w", err)
 		}
 		defer func(file *os.File) {
-			if err := file.Close(); err != nil {
-				log.Fatalf("Failed to close destination file: %v", err)
+			if closeErr := file.Close(); closeErr != nil && err == nil {
+				err = fmt.Errorf("failed to close destination file: %w", closeErr)
 			}
 		}(destinationFile)
 		output = destinationFile
@@ -391,7 +392,7 @@ func (g *generator) GenerateMethod(mockType string, m spec) error {
 			}
 		}
 	} else {
-		log.Fatalf("%q not exist", strings.Join([]string{g.restoreMockName(mockType), m.Name}, "."))
+		return fmt.Errorf("%q not exist", strings.Join([]string{g.restoreMockName(mockType), m.Name}, "."))
 	}
 	g.p("")
 	g.p("assert.NoError(c.t,err)")

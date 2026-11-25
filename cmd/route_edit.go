@@ -133,12 +133,12 @@ func stripComments(src []byte) []byte {
 	return out
 }
 
-// wireRoute calls `addRouteEntry` and, on failure, tells the user what to add to routers/route.go by hand and
-// exits with an error (the generated file is kept).
-func wireRoute(projectDir, typeName, field, element string) {
+// wireRoute calls `addRouteEntry`; on failure, the error says what to add to routers/route.go by hand (the
+// generated file is kept).
+func wireRoute(projectDir, typeName, field, element string) error {
 	if err := addRouteEntry(projectDir, typeName, field, element); err != nil {
-		fmt.Fprintf(os.Stderr, "could not update routers/route.go: %v\n", err)
-		fmt.Fprintf(os.Stderr, "add it by hand:\n\tin `type %s struct`: %s\n\tin `&%s{...}`: %s,\n", typeName, field, typeName, element)
-		os.Exit(1)
+		return fmt.Errorf("could not update routers/route.go: %w\nadd it by hand:\n\tin `type %s struct`: %s\n\tin `&%s{...}`: %s,",
+			err, typeName, field, typeName, element)
 	}
+	return nil
 }

@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -61,7 +62,7 @@ var (
 		Short: "generate spec.json file",
 		Long:  ``,
 		Args:  cobra.NoArgs,
-		Run:   genSpec,
+		RunE:  genSpec,
 	}
 )
 
@@ -71,17 +72,17 @@ func init() {
 	rootCmd.AddCommand(genCmd)
 }
 
-func genSpec(cmd *cobra.Command, args []string) {
+func genSpec(cmd *cobra.Command, args []string) error {
 	var out bytes.Buffer
 	routeCmd := exec.Command("go", "run", "main.go", "route", "list", "-j")
 	routeCmd.Stdout = &out
 	routeCmd.Stderr = os.Stderr
 	if err := routeCmd.Run(); err != nil {
-		log.Fatalf("Failed to execute route list command: %v", err)
+		return fmt.Errorf("failed to execute route list command: %w", err)
 	}
 	routeList, err := parseRouteList(out.Bytes())
 	if err != nil {
-		log.Fatalf("Failed to unmarshal route list: %v", err)
+		return fmt.Errorf("failed to unmarshal route list: %w", err)
 	}
 
 	var specMap = make(map[string]map[string]spec)
@@ -126,17 +127,17 @@ func genSpec(cmd *cobra.Command, args []string) {
 
 	destination, err := cmd.Flags().GetString("destination")
 	if err != nil {
-		log.Fatalf("Failed to get destination arguments: %v", err)
+		return fmt.Errorf("failed to get destination arguments: %w", err)
 	}
 
 	var writer = os.Stdout
 	if destination != "" {
 		if err := os.MkdirAll(filepath.Dir(destination), os.ModePerm); err != nil {
-			log.Fatalf("Unable to create directory: %v", err)
+			return fmt.Errorf("unable to create directory: %w", err)
 		}
 		specJSONFile, err := os.Create(destination)
 		if err != nil {
-			log.Fatalf("Failed opening destination file: %v", err)
+			return fmt.Errorf("failed opening destination file: %w", err)
 		}
 		defer func(f *os.File) {
 			if err := f.Close(); err != nil {
@@ -148,14 +149,15 @@ func genSpec(cmd *cobra.Command, args []string) {
 
 	bs, err := json.MarshalIndent(specMap, "", "\t")
 	if err != nil {
-		log.Fatalf("Failed to marshal specMap: %v", err)
+		return fmt.Errorf("failed to marshal specMap: %w", err)
 	}
 
 	_, err = io.CopyBuffer(writer, bytes.NewReader(bs), nil)
 	if err != nil {
-		log.Fatalf("Failed to write specJSONFile: %v", err)
+		return fmt.Errorf("failed to write specJSONFile: %w", err)
 	}
 	log.Printf("Generate %q completed.\n", destination)
+	return nil
 }
 
 // handlerNameParts splits a route name like `example.com/demo/handlers.(*exampleHandler).JSONIndex-fm` (the

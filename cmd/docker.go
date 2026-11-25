@@ -23,14 +23,11 @@
 package cmd
 
 import (
-	"bytes"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"text/template"
 
 	"github.com/retail-ai-inc/bean/v3/config"
 	"github.com/spf13/cobra"
@@ -44,7 +41,7 @@ var dockerfileCmd = &cobra.Command{
 	Long: `This command will create a Dockerfile and docker-compose.yml to help you run and test your application locally.
 Example :- "bean create dockerfile".`,
 	Args: cobra.ExactArgs(0),
-	Run:  docker,
+	RunE: docker,
 }
 
 type Dockerfile struct {
@@ -64,45 +61,13 @@ func init() {
 	createCmd.AddCommand(dockerfileCmd)
 }
 
-func docker(cmd *cobra.Command, args []string) {
-	beanCheck := beanInitialisationCheck() // This function will display an error message on the terminal.
-	if !beanCheck {
-		os.Exit(1)
-	}
-
-	wd, err := os.Getwd()
+func docker(cmd *cobra.Command, args []string) error {
+	p, err := loadProject()
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return err
 	}
 
-	dockerfilePath := wd + "/Dockerfile"
-	// Check if Dockerfile already exists or not.
-	_, err = os.Stat(dockerfilePath)
-	if err == nil {
-		fmt.Println("Dockerfile already exists!")
-		os.Exit(1)
-	}
-
-	p := &Project{
-		Copyright: copyright,
-		RootDir:   wd,
-	}
-
-	// Set the relative root path of the internal templates folder.
-	if p.RootFS, err = fs.Sub(InternalFS, "internal/_tpl"); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	// Set the PkgPath to replace the `{{.ProjectObject.PkgPath}}` placeholder in the Dockerfile.
-	p.PkgPath, err = getPackagePathNameFromEnv(p)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	appPort := viper.GetString("http.port") // env.json was read by getPackagePathNameFromEnv
+	appPort := viper.GetString("http.port") // env.json was read by loadProject
 	if appPort == "" {
 		appPort = config.DefaultHTTPPort
 	}
@@ -111,38 +76,21 @@ func docker(cmd *cobra.Command, args []string) {
 		tpl, path string
 		data      any
 	}{
-		{"Dockerfile", dockerfilePath, Dockerfile{ProjectObject: *p, GoVersion: projectGoVersion(wd), AppPort: appPort}},
-		{"docker-compose.yml", filepath.Join(wd, "docker-compose.yml"), DockerComposefile{ProjectObject: *p, ServiceName: dockerName(p.PkgPath), AppPort: appPort}},
-		{"air.toml", filepath.Join(wd, ".air.toml"), nil},
+		{"Dockerfile", "Dockerfile", Dockerfile{ProjectObject: *p, GoVersion: projectGoVersion(p.RootDir), AppPort: appPort}},
+		{"docker-compose.yml", "docker-compose.yml", DockerComposefile{ProjectObject: *p, ServiceName: dockerName(p.PkgPath), AppPort: appPort}},
+		{"air.toml", ".air.toml", nil},
 	}
 	for _, f := range files {
-		if _, err := os.Stat(f.path); err == nil {
-			fmt.Printf("%s already exists, not overwritten.\n", filepath.Base(f.path))
+		if fileExists(p.RootDir, f.path) {
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s already exists, not overwritten.\n", f.path)
 			continue
 		}
-		if err := renderTemplateFile(p.RootFS, f.tpl, f.path, f.data); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+		if err := generateFile(p, f.tpl, f.path, f.data); err != nil {
+			return err
 		}
-		fmt.Printf("Your %s has been created.\n", filepath.Base(f.path))
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Your %s has been created.\n", f.path)
 	}
-}
-
-// renderTemplateFile renders the template tpl of fsys to the file path.
-func renderTemplateFile(fsys fs.FS, tpl, path string, data any) error {
-	content, err := fs.ReadFile(fsys, tpl)
-	if err != nil {
-		return err
-	}
-	tmpl, err := template.New(tpl).Parse(string(content))
-	if err != nil {
-		return err
-	}
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return err
-	}
-	return os.WriteFile(path, buf.Bytes(), 0o644)
+	return nil
 }
 
 // projectGoVersion returns the `major.minor` Go version of the project's go.mod (the golang image tag), or of the

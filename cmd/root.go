@@ -106,6 +106,9 @@ func Execute(ctx context.Context, internalFS fs.FS) {
 		os.Exit(1)
 	}
 
+	// The commands return their errors (printed by cobra as `Error: ...`); the usage is only useful for wrong
+	// arguments, which cobra reports before running the command.
+	rootCmd.SilenceUsage = true
 	err := rootCmd.ExecuteContext(ctx)
 	if err != nil {
 		os.Exit(1)
