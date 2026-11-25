@@ -177,18 +177,10 @@ func service(cmd *cobra.Command, args []string) {
 	}
 	_ = serviceFileCreate.Close()
 
-	routerFilesPath := wd + "/routers/"
-	lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(routerFilesPath+"route.go", "type Services struct {")
-	if err == nil && lineNumber > 0 {
-		textToInsert := `	` + service.ServiceNameLower + `Svc services.` + service.ServiceNameUpper + `Service` + ` // added by bean`
-		_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
-
-		lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(routerFilesPath+"route.go", "svcs := &Services{")
-		if err == nil && lineNumber > 0 {
-			textToInsert := `		` + service.ServiceNameLower + `Svc: services.New` + service.ServiceNameUpper + `Service(` + serviceConstructorArgs(repos) + `),` + ` // added by bean`
-			_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
-		}
-	}
+	wireRoute(wd, "Services",
+		service.ServiceNameLower+"Svc services."+service.ServiceNameUpper+"Service",
+		service.ServiceNameLower+"Svc: services.New"+service.ServiceNameUpper+"Service("+serviceConstructorArgs(repos)+")",
+	)
 
 	fmt.Printf("service with name %s and service file %s.go created\n", serviceName, serviceFileName)
 }

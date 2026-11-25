@@ -243,7 +243,7 @@ func execute(opts *testOptions) error {
 			return err
 		}
 		log.Printf("report generated successfully at %s\n", filePath)
-		return nil
+		return report.testErr // a failed test fails the command, like the CLI output
 
 	case HTML:
 		log.Println("output you want is on HTML.")
@@ -257,7 +257,7 @@ func execute(opts *testOptions) error {
 			return err
 		}
 		log.Printf("report generated successfully at %s\n", filePath)
-		return nil
+		return report.testErr // a failed test fails the command, like the CLI output
 
 	default:
 		return fmt.Errorf("output type '%s' is not a valid output type. it must be one of '%s'", opts.oType, helpers.Join(outputs, "', '"))
@@ -288,9 +288,9 @@ func runTestAndOrganizeResult(opts *testOptions) (*report, error) {
 	cmd.Stderr = &stderr
 
 	executedAt := time.Now() // record the time when the test command is executed for the report
-	err := cmd.Run()
-	if err != nil {
-		log.Printf("tests failed (%s)\n", err)
+	testErr := cmd.Run()
+	if testErr != nil {
+		log.Printf("tests failed (%s)\n", testErr)
 	} else {
 		log.Printf("all tests passed.\n")
 	}
@@ -314,6 +314,9 @@ func runTestAndOrganizeResult(opts *testOptions) (*report, error) {
 		ExecutedAt: reportTime{Time: executedAt},
 		Stats:      stats,
 		PkgResults: pkgRlts,
+	}
+	if testErr != nil {
+		repo.testErr = fmt.Errorf("tests failed: %w", testErr)
 	}
 
 	return repo, nil
@@ -581,7 +584,7 @@ func outputReportJSON(repo *report, outputPath string) (string, error) {
 		return "", err
 	}
 
-	filePath := filepath.Join(outputPath, fmt.Sprintf("test_report_%s_%s.json", repo.Project, repo.ExecutedAt.toSuffix()))
+	filePath := filepath.Join(outputPath, fmt.Sprintf("test_report_%s_%s.json", reportFileProject(repo.Project), repo.ExecutedAt.toSuffix()))
 	err = os.WriteFile(filePath, reportJSON, 0644)
 	if err != nil {
 		return "", fmt.Errorf("failed to output report to %s: %w", filePath, err)
@@ -607,7 +610,7 @@ func outputReportHTML(repo *report, outputPath string) (string, error) {
 		return "", err
 	}
 
-	filePath := filepath.Join(outputPath, fmt.Sprintf("test_report_%s_%s.html", repo.Project, repo.ExecutedAt.toSuffix()))
+	filePath := filepath.Join(outputPath, fmt.Sprintf("test_report_%s_%s.html", reportFileProject(repo.Project), repo.ExecutedAt.toSuffix()))
 	file, err := os.Create(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create HTML file: %w", err)
@@ -743,4 +746,10 @@ func calcRowSpans(repo *report) map[string]map[string]map[string]rowSpans {
 	}
 
 	return rowSpanMap
+}
+
+// reportFileProject returns the module path usable in a file name: `example.com/demo` becomes
+// `example.com_demo` (a "/" would be a directory separator).
+func reportFileProject(project string) string {
+	return strings.NewReplacer("/", "_", "\\", "_", ":", "_").Replace(project)
 }

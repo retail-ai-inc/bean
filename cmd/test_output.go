@@ -15,6 +15,8 @@ type report struct {
 	ExecutedAt reportTime       `json:"executed_at"`
 	Stats      stats            `json:"stats"`
 	PkgResults []*packageResult `json:"results"`
+
+	testErr error // the error of `go test` (failed tests), returned by the command after writing the report
 }
 
 type reportTime struct {

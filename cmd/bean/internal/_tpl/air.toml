@@ -1,0 +1,12 @@
+# Config of air (https://github.com/air-verse/air), the live-reload tool used by docker-compose.yml.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/app ."
+  bin = "./tmp/app"
+  # Arguments of the binary: the bean application is started by its `start` command.
+  args_bin = ["start"]
+  include_ext = ["go", "html", "json"]
+  exclude_dir = ["tmp", "vendor", "logs"]
+  delay = 1000

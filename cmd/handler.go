@@ -22,7 +22,6 @@
 package cmd
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -168,25 +167,14 @@ func handler(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	routerFilesPath := wd + "/routers/"
-	lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(routerFilesPath+"route.go", "type Handlers struct {")
-	if err == nil && lineNumber > 0 {
-		textToInsert := `	` + handler.HandlerNameLower + `Hdlr handlers.` + handler.HandlerNameUpper + `Handler` + ` // added by bean`
-		_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
-
-		lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(routerFilesPath+"route.go", "hdlrs := &Handlers{")
-		if err == nil && lineNumber > 0 {
-			var textToInsert string
-
-			if handler.ServiceExists {
-				textToInsert = `		` + handler.HandlerNameLower + `Hdlr: handlers.New` + handler.HandlerNameUpper + `Handler(svcs.` + handler.HandlerNameLower + `Svc),` + ` // added by bean`
-			} else {
-				textToInsert = `		` + handler.HandlerNameLower + `Hdlr: handlers.New` + handler.HandlerNameUpper + `Handler(),` + ` // added by bean`
-			}
-
-			_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
-		}
+	svcArg := ""
+	if handler.ServiceExists {
+		svcArg = "svcs." + handler.HandlerNameLower + "Svc"
 	}
+	wireRoute(wd, "Handlers",
+		handler.HandlerNameLower+"Hdlr handlers."+handler.HandlerNameUpper+"Handler",
+		handler.HandlerNameLower+"Hdlr: handlers.New"+handler.HandlerNameUpper+"Handler("+svcArg+")",
+	)
 
 	fmt.Printf("handler with name %s and handler file %s.go created\n", handlerName, handlerFileName)
 }
@@ -224,67 +212,4 @@ func checkServiceExists(repoName string) bool {
 	_, err = os.Stat(serviceFilesPath + repoName + ".go")
 
 	return err == nil
-}
-
-func matchTextInFileAndReturnFirstOccurrenceLineNumber(filePath string, needle string) (int, error) {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return 0, err
-	}
-	defer func(f *os.File) {
-		if err := f.Close(); err != nil {
-			log.Println(err)
-		}
-	}(f)
-
-	line := 1
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		if strings.Contains(scanner.Text(), needle) {
-			return line, nil
-		}
-
-		line++
-	}
-
-	if err := scanner.Err(); err != nil {
-		return 0, err
-	}
-
-	return 0, nil
-}
-
-// Insert sting to n-th line of file.
-func insertStringToNthLineOfFile(filePath, textToInsert string, lineNumber int) error {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	defer func(fl *os.File) {
-		if err := fl.Close(); err != nil {
-			log.Println(err)
-		}
-	}(f)
-
-	var lines []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-
-	if err := scanner.Err(); err != nil {
-		return err
-	}
-
-	fileContent := ""
-	for i, line := range lines {
-		if i == lineNumber {
-			fileContent += textToInsert + "\n"
-		}
-		fileContent += line
-		fileContent += "\n"
-	}
-
-	return os.WriteFile(filePath, []byte(fileContent), 0644)
 }
