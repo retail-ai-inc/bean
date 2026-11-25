@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -198,8 +199,8 @@ func (clients *RedisDBConn) TTL(c context.Context, key string) (ttl time.Duratio
 func (clients *RedisDBConn) Keys(c context.Context, pattern string) (keys []string, err error) {
 
 	if clients.isCluster {
-		// If client is cluster mode then just hit the primary server.
-		keys, err = clients.Primary.Keys(c, pattern).Result()
+		// KEYS is not routed by key in a cluster (go-redis sends it to a random node): run it on every master.
+		keys, err = clusterKeys(c, clients.Primary, pattern)
 	} else {
 		// Check the read replicas are available or not.
 		if clients.readCount == 1 {
@@ -628,7 +629,11 @@ func (clients *RedisDBConn) HSet(c context.Context, key string, args ...interfac
 }
 
 func (clients *RedisDBConn) RPush(c context.Context, key string, valueList []string) error {
-	if err := clients.Primary.RPush(c, key, &valueList).Err(); err != nil {
+	if len(valueList) == 0 {
+		return nil
+	}
+	// go-redis expands a single []string argument into the values.
+	if err := clients.Primary.RPush(c, key, valueList).Err(); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -660,6 +665,21 @@ func (clients *RedisDBConn) SRem(c context.Context, key string, elements interfa
 }
 
 func (clients *RedisDBConn) DelKey(c context.Context, keys ...string) error {
+	if clients.isCluster && len(keys) > 1 {
+		// A multi-key DEL fails with CROSSSLOT when the keys are in different slots: delete them one by one in a
+		// pipeline (go-redis routes each command to the node of its key).
+		_, err := clients.Primary.Pipelined(c, func(pipe redis.Pipeliner) error {
+			for _, key := range keys {
+				pipe.Del(c, key)
+			}
+			return nil
+		})
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		return nil
+	}
+
 	if err := clients.Primary.Del(c, keys...).Err(); err != nil {
 		return errors.WithStack(err)
 	}
@@ -779,38 +799,75 @@ func wrapMSet(ctx context.Context, clients redis.UniversalClient, ttl time.Durat
 	if len(dst) == 0 || len(dst)%2 != 0 {
 		return ErrRedisInvalidParameter
 	}
+	for i := 0; i < len(dst); i += 2 {
+		if _, ok := dst[i].(string); !ok {
+			return fmt.Errorf("%w: key %v is not a string", ErrRedisInvalidParameter, dst[i])
+		}
+	}
 	_, err := clients.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 		for i := 0; i < len(dst); i += 2 {
-			cmd := pipe.Set(ctx, dst[i].(string), dst[i+1], ttl)
-			if cmd.Err() != nil {
-				return cmd.Err()
-			}
+			pipe.Set(ctx, dst[i].(string), dst[i+1], ttl)
 		}
 		return nil
 	})
 	return err
 }
 
+// wrapMGet is MGET for a cluster: one GET per key in a pipeline (go-redis routes each command to the node of its
+// key). Like MGET, the result has one entry per key: the string value, or nil if the key does not exist.
 func wrapMGet(ctx context.Context, clients redis.UniversalClient, keys ...string) ([]interface{}, error) {
-	var results = make([]interface{}, 0, len(keys))
-	cmder, err := clients.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-		for i := 0; i < len(keys); i++ {
-			_, err := pipe.Get(ctx, keys[i]).Result()
-			if err != nil {
-				return err
-			}
+	cmds := make([]*redis.StringCmd, len(keys))
+	_, err := clients.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		for i, key := range keys {
+			cmds[i] = pipe.Get(ctx, key)
 		}
 		return nil
 	})
-	if errors.Is(err, redis.Nil) {
-		return nil, nil
-	} else if err != nil {
+	// Pipelined returns the first command error, which is redis.Nil for a missing key: check each command instead.
+	if err != nil && !errors.Is(err, redis.Nil) {
 		return nil, err
 	}
-	for _, cmdRes := range cmder {
-		results = append(results, cmdRes.(*redis.StringCmd).Val())
+
+	results := make([]interface{}, len(keys))
+	for i, cmd := range cmds {
+		val, err := cmd.Result()
+		switch {
+		case errors.Is(err, redis.Nil):
+			results[i] = nil
+		case err != nil:
+			return nil, err
+		default:
+			results[i] = val
+		}
 	}
 	return results, nil
+}
+
+// clusterKeys runs KEYS on every master of a cluster and returns all the matching keys.
+func clusterKeys(ctx context.Context, client redis.UniversalClient, pattern string) ([]string, error) {
+	cluster, ok := client.(*redis.ClusterClient)
+	if !ok {
+		return client.Keys(ctx, pattern).Result()
+	}
+
+	var (
+		mu   sync.Mutex
+		keys []string
+	)
+	err := cluster.ForEachMaster(ctx, func(ctx context.Context, master *redis.Client) error {
+		masterKeys, err := master.Keys(ctx, pattern).Result()
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		keys = append(keys, masterKeys...)
+		mu.Unlock()
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return keys, nil
 }
 
 // getAllRedisTenantDB returns a singleton tenant db connection for each tenant.
