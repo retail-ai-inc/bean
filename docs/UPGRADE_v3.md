@@ -358,6 +358,10 @@ e, closeEcho, err := bean.NewEcho()
     - 如果项目中用 `errors.As` 判断过 Echo 的 `*middleware.PanicStackError`，需要改为 `*berror.PanicError`。
 13. **`env.json` 的 `http` 配置可以省略**：v2 中没有配置 `http.bodyLimit` 时启动会 panic。v3 为以下几项提供默认值（取自项目模板）：`http.host` = `0.0.0.0`、`http.port` = `8888`、`http.bodyLimit` = `1M`、`http.keepAlive` = `true`。注意：v2 中省略 `keepAlive` 等于 `false`（关闭 keep-alive），v3 中省略时为 `true`；如果确实要关闭，需要显式配置 `"keepAlive": false`。其它 `http` 配置项省略时的行为不变（例如不设置请求超时、`allowedMethod` 为空时允许所有方法）。
 14. **`bean create service` 正确注入 repository**：v2 中 `bean create repo post` 后再执行 `bean create service post`，生成的 `NewPostService` 需要 repository 参数，但 `routers/route.go` 里写入的是无参调用 `services.NewPostService()`，导致编译失败；只传一个 `--repo` 且名字与 service 不同时，生成的 service 忽略了该 repository，`route.go` 却传入了它，同样无法编译。v3 中：不加 `--repo` 时注入同名 repository（存在的话）；加 `--repo` 时注入指定的 repository（不存在则先创建，重名自动去重），service 文件与 `route.go` 的调用始终一致。已生成的项目不受影响。
+15. **HTML 模板渲染（`goview` / `echoview`）并发安全**：v2 的模板引擎在请求之间共享可变状态。并发渲染时，`{{include "..."}}` 可能拿**其他请求的数据**渲染（跨用户数据泄露）；`data["template"]` 指定的布局会写进共享配置，影响后续请求；同一个模板换一个布局渲染会报 `"templates/xxx" is undefined`。v3 中布局按请求区分，缓存按布局分开，每次渲染使用独立的模板副本，模板写法不变。另外：渲染出错时不再写出状态码和半截页面；`goview.M` 可以作为数据传入；`echoview.Render` 在中间件模式下使用传入的状态码（v2 总是 200）。
+16. **`aes.BeanAESDecrypt` 校验 MAC**：v2 解密时不校验密文中的 `mac`，被篡改的密文也能"成功"解密（存在填充预言攻击的条件）。v3 会在解密前用常量时间比较校验 MAC，不匹配时返回 `aes.ErrInvalidMAC`。密文格式不变，`BeanAESEncrypt`（以及 Laravel `Encrypter`）生成的已有密文（例如租户数据库密码）可以照常解密；只有 `mac` 不正确的密文会被拒绝。格式不正确的输入返回 error 而不是 panic，空字符串也可以加密。
+17. **数据库 TLS `hotReload` 校验服务器主机名**：v2 开启 `ssl.hotReload` 后不校验证书的主机名（MySQL 总是不校验；Redis / Mongo 用 IP 地址连接时不校验），任何受信任 CA 签发的证书都会被接受。v3 要求证书对连接使用的主机名有效；用 IP 地址连接时，证书需要对配置中的某个 `host` 有效（IP 匹配证书的 IP SAN）。如果数据库证书与配置的 `host` 不匹配，开启 `hotReload` 后会连接失败，需要修正证书或 `host`。注意：Redis 集群中运行时发现、以 IP 访问且不在配置 `host` 中的节点，其证书需要对配置的某个 `host` 有效。
+18. **`helpers.DecodeJWT` 的默认校验始终生效**：v2 中只要传入任意 `opts`（例如 `jwt.WithAudience`），默认的"只允许 HS256""必须有 `exp`""严格解码"就全部失效，没有 `exp` 的 token 会永久有效。v3 中默认选项始终生效，`opts` 追加在后面（仍可用 `jwt.WithValidMethods` 覆盖允许的算法）；需要接受没有 `exp` 的 token 时请直接使用 `jwt.ParseWithClaims`。`helpers.ExtractJWTFromHeader` 要求 `Bearer` 后有空格（v2 中 `Bearerxabc` 也会取出 `abc`），scheme 不区分大小写。
 
 ### 5.1 404 / 405 的处理方式
 
@@ -400,3 +404,5 @@ v2 用一个全局中间件在每个请求上遍历全部路由、自行匹配�
 - [ ] 检查启动日志中是否有 `route is not registered because its method is not listed in http.allowedMethod` 警告
 - [ ] 如果有客户端依赖 404 / 405 的 JSON 响应格式，确认新增的 `errorMsg` 字段没有影响
 - [ ] 启动服务，验证 404 / 405 / 500 / 超时的响应和访问日志
+- [ ] 开启了数据库 `ssl.hotReload` 的环境：确认证书对配置的 `host` 有效（见第 5 节第 17 条）
+- [ ] 调用 `helpers.DecodeJWT` 并传入了 `opts` 的地方：确认 token 都带 `exp`（见第 5 节第 18 条）
