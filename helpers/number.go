@@ -25,6 +25,8 @@ package helpers
 // FloatInRange will return the floating point number provided in `i` if the number is between min and max.
 // If `i` is less than `min` then it will return min number. If `i` is greater than `max` then it will return
 // max.
+//
+// Deprecated: use the built-in functions: min(max(i, minimum), maximum).
 func FloatInRange(i, min, max float64) float64 {
 	switch {
 	case i < min:
@@ -36,16 +38,20 @@ func FloatInRange(i, min, max float64) float64 {
 	}
 }
 
+// Deprecated: use cmp.Ordered (or a constraint of your own).
 type Int interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
 }
 
+// Deprecated: use cmp.Ordered (or a constraint of your own).
 type Float interface {
 	~float32 | ~float64
 }
 
 // Max returns a greater number of x and y, otherwise y.
 // It supports only type parameters comparable with order operators (`<`, `<=`, `>` and `>=`).
+//
+// Deprecated: use the built-in max.
 func Max[T Int | Float](x, y T) T {
 	if x > y {
 		return x

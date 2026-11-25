@@ -3,12 +3,12 @@ package test
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/retail-ai-inc/bean/v3/helpers"
 )
 
 // httpClientWithRetry and httpClientWithoutRetry represent resty http client connections provided as singletons
@@ -106,5 +106,5 @@ func isTestInSkipList(t *testing.T, testName string) bool {
 		t.Log("skip list is empty")
 		return false
 	}
-	return helpers.HasTargetInSlice(TestCfg.Skip, testName)
+	return slices.Contains(TestCfg.Skip, testName)
 }

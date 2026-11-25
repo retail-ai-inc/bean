@@ -52,6 +52,8 @@ func IsNotEmpty(str string) bool {
 }
 
 // IsEqualsAny tests whether a string equals any string provided.
+//
+// Deprecated: use slices.Contains(vals, val).
 func IsEqualsAny(val string, vals ...string) bool {
 
 	for _, v := range vals {
@@ -102,6 +104,9 @@ func DefaultIfBlank(str, defaultStr string) string {
 	return str
 }
 
+// StringToPointer returns a pointer to a copy of str.
+//
+// Deprecated: use new(str) (Go 1.26).
 func StringToPointer(str string) *string {
 	s := &str
 	return s
@@ -190,6 +195,8 @@ func MatchAllSubstringsInAString(str string, subs ...string) (bool, int) {
 
 // This function just check an element is present in a slice or not. It's a linear search (O(n)) but after finding
 // the result it will return immidiately.
+//
+// Deprecated: use slices.Contains.
 func Contains(s []string, str string) bool {
 
 	for _, v := range s {

@@ -12,7 +12,6 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/retail-ai-inc/bean/v3"
 	"github.com/retail-ai-inc/bean/v3/config"
-	"github.com/retail-ai-inc/bean/v3/helpers"
 	"github.com/spf13/cobra"
 )
 
@@ -49,7 +48,7 @@ func initBean(isInitDB ...bool) *bean.Bean {
 				Environment: config.Bean.Environment,
 				//BeforeSend:       msentry.CustomBeforeSend, // Default beforeSend function. You can initialize your own custom function.
 				AttachStacktrace: true,
-				TracesSampleRate: helpers.FloatInRange(config.Bean.Sentry.TracesSampleRate, 0.0, 1.0),
+				TracesSampleRate: min(max(config.Bean.Sentry.TracesSampleRate, 0.0), 1.0),
 			}
 		}
 

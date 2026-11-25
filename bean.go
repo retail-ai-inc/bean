@@ -354,7 +354,7 @@ func NewEcho() (*echo.Echo, func() error, error) {
 			}))
 			e.Use(middleware.SetHubToContext)
 
-			if helpers.FloatInRange(config.Bean.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
+			if min(max(config.Bean.Sentry.TracesSampleRate, 0.0), 1.0) > 0.0 {
 				if err := regex.SetSamplingPathSkipper(config.Bean.Sentry.SkipTracesEndpoints); err != nil {
 					return fail(err)
 				}

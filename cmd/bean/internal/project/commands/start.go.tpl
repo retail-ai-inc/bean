@@ -12,7 +12,6 @@ import (
 	"github.com/retail-ai-inc/bean/v3"
 	"github.com/retail-ai-inc/bean/v3/config"
 	berror "github.com/retail-ai-inc/bean/v3/error"
-	"github.com/retail-ai-inc/bean/v3/helpers"
 	"github.com/retail-ai-inc/bean/v3/trace"
 	"github.com/spf13/cobra"
 )
@@ -52,7 +51,7 @@ func start(cmd *cobra.Command, args []string) {
 			Environment:      config.Bean.Environment,
 			BeforeSend:       trace.DefaultBeforeSend, // Default beforeSend function. You can initialize your own custom function.
 			AttachStacktrace: true,
-			TracesSampleRate: helpers.FloatInRange(config.Bean.Sentry.TracesSampleRate, 0.0, 1.0),
+			TracesSampleRate: min(max(config.Bean.Sentry.TracesSampleRate, 0.0), 1.0),
 		}
 
 		// Example of setting a global scope, if you want to set the scope per event,

@@ -31,6 +31,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -176,7 +177,7 @@ func (o *testOptions) validateTestPath() error {
 }
 
 func (o *testOptions) validateOutputType() error {
-	if !helpers.HasTargetInSlice(outputs, o.oType) {
+	if !slices.Contains(outputs, o.oType) {
 		return fmt.Errorf("output type '%s' is not a valid output type. it must be one of '%s'", o.oType, helpers.Join(outputs, "', '"))
 	}
 
@@ -705,13 +706,13 @@ func calcRowSpans(repo *report) map[string]map[string]map[string]rowSpans {
 			for _, sr := range tr.Subs {
 				// count sub test rows
 				subCount := uint(len(sr.Details))
-				subCount = helpers.Max(subCount, 1) // fix sub count
+				subCount = max(subCount, 1) // fix sub count
 				testCount += subCount
 				// set row span for sub test
 				subMap[sr.Sub] = rowSpans{SubTest: subCount}
 			}
 
-			testCount = helpers.Max(testCount, 1) // fix test count
+			testCount = max(testCount, 1) // fix test count
 			pkgCount += testCount
 
 			// retroactively set row span for test in return
@@ -726,7 +727,7 @@ func calcRowSpans(repo *report) map[string]map[string]map[string]rowSpans {
 			testMap[tr.Test] = subMap
 		}
 
-		pkgCount = helpers.Max(pkgCount, 1) // fix package count
+		pkgCount = max(pkgCount, 1) // fix package count
 		rowSpanMap[pr.Package] = testMap
 
 		// retroactively set row span for package

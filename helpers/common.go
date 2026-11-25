@@ -26,8 +26,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-
-	str "github.com/retail-ai-inc/bean/v3/string"
+	"slices"
 )
 
 type CopyableMap map[string]interface{}
@@ -119,7 +118,7 @@ func IsFilesExistInDirectory(dir string, filesToCheck []string) (bool, error) {
 	for _, file := range files {
 
 		if !file.IsDir() {
-			isMatch := str.Contains(filesToCheck, file.Name())
+			isMatch := slices.Contains(filesToCheck, file.Name())
 			if isMatch {
 				matchCount++
 			}

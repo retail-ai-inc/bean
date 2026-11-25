@@ -37,6 +37,8 @@ import (
 
 // if !slice.HasStringInSlice(src, "ee", modifier) {
 // }
+//
+// Deprecated: use slices.Contains, or slices.ContainsFunc with a modifier.
 func HasStringInSlice(slice []string, str string, modifier func(str string) string) bool {
 
 	for _, i := range slice {
@@ -54,6 +56,8 @@ func HasStringInSlice(slice []string, str string, modifier func(str string) stri
 }
 
 // HasTargetInSlice tells whether slice contains target or false
+//
+// Deprecated: use slices.Contains, or slices.ContainsFunc with modifiers.
 func HasTargetInSlice[T comparable](slice []T, target T, modifiers ...func(T) T) bool {
 
 	for _, v := range slice {
@@ -77,6 +81,8 @@ func HasTargetInSlice[T comparable](slice []T, target T, modifiers ...func(T) T)
 }
 
 // FindStringInSlice returns the smallest index at which str == slice[index], or -1 if there is no such index.
+//
+// Deprecated: use slices.Index.
 func FindStringInSlice(slice []string, str string) int {
 
 	for index, item := range slice {
@@ -90,6 +96,8 @@ func FindStringInSlice(slice []string, str string) int {
 }
 
 // DeleteStringFromSlice will delete a string from a specific index of a slice.
+//
+// Deprecated: use slices.Delete(slice, index, index+1).
 func DeleteStringFromSlice(slice []string, index int) []string {
 	return append(slice[:index], slice[index+1:]...)
 }
