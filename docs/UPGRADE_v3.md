@@ -370,7 +370,7 @@ e, closeEcho, err := bean.NewEcho()
 24. **数据库初始化**：初始化中途失败时（某个租户连接失败、Redis 读副本连接失败、ping 失败等），已经建立的连接会先关闭再返回 error（v2 中会泄漏）。`TenantConnections.Connections` 中的字段类型不正确或缺失时，启动返回带租户 ID 的 error，而不是 panic；`"port": 3306` 这样的数字也被接受。开启 `ssl.hotReload` 时，同一证书文件的所有连接共用一个文件监听，连接关闭时停止（v2 中每个连接各起一个，永不停止）。
 25. **Mongo**：初次连接和 ping 使用 `mongo.connectTimeout`（未设置时为 10s；v2 固定为 10s，如果配置了较小的值，启动时会更早超时）；`host` 为多个主机（`a,b`）时每个主机都使用配置的端口（v2 中只有最后一个）；关闭时能正常结束会话。`maxConnectionLifeTime` 仍对应驱动的最大空闲时间（mongo 驱动没有连接最长寿命的选项）。
 26. **Redis 读副本**：在读副本上未命中（`redis.Nil`）不再到主库重查（v2 中每次未命中都会多查一次主库）；`WRONGTYPE` 等服务端错误直接返回，不再被主库的结果掩盖；只有连接错误才转到主库，并且该副本在 10 秒内不再使用（v2 中副本宕机时每次读取都要先等拨号超时）。`HGets` 不再因为某个字段不存在而掩盖其它命令的网络错误。
-27. **出站请求日志**：开启 `DumpBody` 时，`OUTBOUND_API` 日志改为在响应体读到末尾、读取出错或被关闭时输出（v2 在返回响应前先读取最多 `BodyLimit` 字节，SSE / 长轮询等流式响应会被阻塞）。因此**响应体必须被读完或关闭**才会输出这条日志（不关闭响应体本身就会泄漏连接）；读取出错时增加 `response_body_error` 字段。
+27. **出站请求日志**：开启 `DumpBody` 时，`OUTBOUND_API` 日志改为在响应体读到末尾、读取出错或被关闭时输出（v2 在返回响应前先读取最多 `BodyLimit` 字节，SSE / 长轮询等流式响应会被阻塞）。因此**响应体必须被读完或关闭**才会输出这条日志（不关闭响应体本身就会泄漏连接）；读取出错时增加 `response_body_error` 字段。另外，`Authorization`、`Proxy-Authorization`、`Cookie`、`Set-Cookie` 以及名称包含 token / secret / password / api-key / apikey / session 的请求头和响应头，即使配置在允许记录的头列表中，日志中的值也会替换为 `[REDACTED]`。
 28. **其它**：`CloseMemory` 可以重复调用（v2 第二次调用会永久阻塞），关闭后再调用 `memory.NewMemoryCache()` 会得到新的缓存；通配符删除（`DelMemory("prefix*")`）改为线性时间。`str.Substring` 按字符（rune）计算长度；`str.LeftPadToLength` / `RightPadToLength`、`helpers.JitterBackoff` 在边界输入下不再 panic；`helpers.StructStripTags` 不再丢失大整数的精度。
 
 ### 5.1 404 / 405 的处理方式

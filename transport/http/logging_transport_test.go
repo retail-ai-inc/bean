@@ -178,3 +178,37 @@ func TestLoggingTransport_StreamingResponseIsNotBlocked(t *testing.T) {
 	require.Len(t, logger.fields, 1)
 	assert.Equal(t, "data: 1\n\n", logger.fields[0]["response_body"])
 }
+
+// Credentials are not logged in clear text, even when their header is in the allowed headers.
+func TestLoggingTransport_RedactsSensitiveHeaders(t *testing.T) {
+	base := roundTripFunc(func(*http.Request) (*http.Response, error) {
+		h := http.Header{}
+		h.Set("Set-Cookie", "session=s3cr3t")
+		h.Set("Content-Type", "application/json")
+		return &http.Response{StatusCode: http.StatusOK, Header: h, Body: http.NoBody}, nil
+	})
+	logger := &fakeLogger{}
+	rt := NewLoggingTransport(base, logger, LoggingOptions{
+		AllowedReqHeaders:  []string{"Authorization", "X-Api-Key", "X-Auth-Token", "User-Agent"},
+		AllowedRespHeaders: []string{"Set-Cookie", "Content-Type"},
+	})
+
+	req, err := http.NewRequest(http.MethodGet, "http://example.test/", nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer secret-token")
+	req.Header.Set("X-Api-Key", "k")
+	req.Header.Set("X-Auth-Token", "t")
+	req.Header.Set("User-Agent", "bean")
+	_, err = rt.RoundTrip(req)
+	require.NoError(t, err)
+
+	reqHeader := logger.fields[0]["request_header"].(map[string]any)
+	assert.Equal(t, "[REDACTED]", reqHeader["Authorization"])
+	assert.Equal(t, "[REDACTED]", reqHeader["X-Api-Key"])
+	assert.Equal(t, "[REDACTED]", reqHeader["X-Auth-Token"])
+	assert.Equal(t, "bean", reqHeader["User-Agent"])
+
+	respHeader := logger.fields[0]["response_header"].(map[string]any)
+	assert.Equal(t, "[REDACTED]", respHeader["Set-Cookie"])
+	assert.Equal(t, "application/json", respHeader["Content-Type"])
+}

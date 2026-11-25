@@ -2,9 +2,11 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -76,7 +78,7 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	}
 	for _, h := range t.opt.AllowedReqHeaders {
 		if v := req.Header.Get(h); v != "" {
-			reqHeader[h] = v
+			reqHeader[h] = redactHeader(h, v)
 		}
 	}
 
@@ -95,7 +97,7 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		respHeader := make(map[string]any)
 		for _, h := range t.opt.AllowedRespHeaders {
 			if v := resp.Header.Get(h); v != "" {
-				respHeader[h] = v
+				respHeader[h] = redactHeader(h, v)
 			}
 		}
 
@@ -118,21 +120,50 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 				if readErr != nil {
 					fields["response_body_error"] = readErr.Error()
 				}
-				t.logger.TraceInfo(ctx, "OUTBOUND_API", fields)
+				t.log(ctx, fields, nil)
 			},
 		}
 		return resp, nil
 	}
 
+	t.log(req.Context(), fields, err)
+	return resp, err
+}
+
+// log writes the OUTBOUND_API entry, as an error if err is not nil.
+func (t *LoggingTransport) log(ctx context.Context, fields map[string]any, err error) {
 	if err != nil {
 		fields["error"] = err.Error()
-		t.logger.TraceError(req.Context(), "OUTBOUND_API", fields)
-		return resp, err
+		t.logger.TraceError(ctx, "OUTBOUND_API", fields)
+		return
 	}
+	t.logger.TraceInfo(ctx, "OUTBOUND_API", fields)
+}
 
-	t.logger.TraceInfo(req.Context(), "OUTBOUND_API", fields)
+// redactedValue replaces the value of a sensitive header in the log.
+const redactedValue = "[REDACTED]"
 
-	return resp, nil
+// sensitiveHeaders are never logged in clear text, even if they are in the allowed headers.
+var sensitiveHeaders = map[string]bool{
+	"Authorization":       true,
+	"Proxy-Authorization": true,
+	"Cookie":              true,
+	"Set-Cookie":          true,
+}
+
+// redactHeader returns the value of the header to log: `[REDACTED]` for a credential (the headers above, and the
+// headers whose name contains token, secret, password, api-key / apikey or session), the value otherwise.
+func redactHeader(name, value string) string {
+	if sensitiveHeaders[http.CanonicalHeaderKey(name)] {
+		return redactedValue
+	}
+	lower := strings.ToLower(name)
+	for _, word := range []string{"token", "secret", "password", "api-key", "apikey", "session"} {
+		if strings.Contains(lower, word) {
+			return redactedValue
+		}
+	}
+	return value
 }
 
 // dumpRequestBody returns the first `BodyLimit` bytes of the request body, and the request to send.
