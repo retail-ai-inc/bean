@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -127,4 +128,53 @@ func TestLoggingTransport_RequestBodyReadError(t *testing.T) {
 	assert.EqualError(t, err, "disk error")
 	assert.False(t, called)
 	assert.True(t, body.closed)
+}
+
+// A streaming response (SSE, long polling) must be returned to the caller without waiting for its body; it is
+// logged once read to the end or closed.
+func TestLoggingTransport_StreamingResponseIsNotBlocked(t *testing.T) {
+	pr, pw := io.Pipe()
+	base := roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: pr}, nil
+	})
+	logger := &fakeLogger{}
+	rt := NewLoggingTransport(base, logger, LoggingOptions{DumpBody: true, BodyLimit: 1024})
+
+	req, err := http.NewRequest(http.MethodGet, "http://example.test/events", nil)
+	require.NoError(t, err)
+
+	type result struct {
+		resp *http.Response
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		resp, err := rt.RoundTrip(req)
+		done <- result{resp, err}
+	}()
+
+	var resp *http.Response
+	select {
+	case r := <-done:
+		require.NoError(t, r.err)
+		resp = r.resp
+	case <-time.After(time.Second):
+		t.Fatal("RoundTrip blocked on the response body")
+	}
+
+	go func() { _, _ = pw.Write([]byte("data: 1\n\n")) }()
+	buf := make([]byte, 64)
+	n, err := resp.Body.Read(buf)
+	require.NoError(t, err)
+	assert.Equal(t, "data: 1\n\n", string(buf[:n]))
+
+	logger.mu.Lock()
+	assert.Empty(t, logger.fields, "logged when the body ends or is closed")
+	logger.mu.Unlock()
+
+	require.NoError(t, resp.Body.Close())
+	logger.mu.Lock()
+	defer logger.mu.Unlock()
+	require.Len(t, logger.fields, 1)
+	assert.Equal(t, "data: 1\n\n", logger.fields[0]["response_body"])
 }

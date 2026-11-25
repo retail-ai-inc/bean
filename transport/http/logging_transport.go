@@ -2,8 +2,10 @@ package http
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -102,18 +104,24 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		}
 	}
 
-	// A 101 response body is the upgraded connection (an io.ReadWriteCloser): it must not be wrapped.
-	if t.opt.DumpBody && resp != nil && resp.Body != nil && resp.StatusCode != http.StatusSwitchingProtocols {
-		respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, t.opt.BodyLimit))
-		// The caller reads the logged prefix and then the rest of the body; closing it closes the original body
-		// (otherwise the connection is never released).
-		rest := io.Reader(resp.Body)
-		if readErr != nil {
-			rest = errReader{readErr}
+	// The response body is logged as the caller reads it, when it reaches the end or is closed: reading it here
+	// would block streaming responses (SSE, long polling) until BodyLimit bytes or the end. A 101 response body is
+	// the upgraded connection (an io.ReadWriteCloser): it must not be wrapped.
+	if t.opt.DumpBody && err == nil && resp != nil && resp.Body != nil && resp.Body != http.NoBody &&
+		resp.StatusCode != http.StatusSwitchingProtocols {
+		ctx := req.Context()
+		resp.Body = &loggingBody{
+			body:  resp.Body,
+			limit: t.opt.BodyLimit,
+			log: func(respBody string, readErr error) {
+				fields["response_body"] = respBody
+				if readErr != nil {
+					fields["response_body_error"] = readErr.Error()
+				}
+				t.logger.TraceInfo(ctx, "OUTBOUND_API", fields)
+			},
 		}
-		resp.Body = readCloser{Reader: io.MultiReader(bytes.NewReader(respBody), rest), Closer: resp.Body}
-
-		fields["response_body"] = string(respBody)
+		return resp, nil
 	}
 
 	if err != nil {
@@ -161,7 +169,52 @@ type readCloser struct {
 	io.Closer
 }
 
-// errReader returns err on every read.
-type errReader struct{ err error }
+// loggingBody records the first `limit` bytes read from body and calls log once, when the body is read to the end,
+// fails, or is closed.
+type loggingBody struct {
+	body  io.ReadCloser
+	limit int64
+	log   func(respBody string, readErr error)
 
-func (r errReader) Read([]byte) (int, error) { return 0, r.err }
+	mu     sync.Mutex // Close may be called concurrently with Read
+	buf    bytes.Buffer
+	logged bool
+}
+
+func (b *loggingBody) Read(p []byte) (int, error) {
+	n, err := b.body.Read(p)
+
+	b.mu.Lock()
+	if remaining := b.limit - int64(b.buf.Len()); remaining > 0 && n > 0 {
+		b.buf.Write(p[:min(int64(n), remaining)])
+	}
+	b.mu.Unlock()
+
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			b.finish(nil)
+		} else {
+			b.finish(err)
+		}
+	}
+	return n, err
+}
+
+func (b *loggingBody) Close() error {
+	err := b.body.Close()
+	b.finish(nil)
+	return err
+}
+
+func (b *loggingBody) finish(readErr error) {
+	b.mu.Lock()
+	if b.logged {
+		b.mu.Unlock()
+		return
+	}
+	b.logged = true
+	respBody := b.buf.String()
+	b.mu.Unlock()
+
+	b.log(respBody, readErr)
+}
