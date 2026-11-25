@@ -62,7 +62,7 @@ import (
 	"github.com/retail-ai-inc/bean/v3/store/memory"
 	"github.com/retail-ai-inc/bean/v3/trace"
 	"github.com/rs/dnscache"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	"gorm.io/gorm"
 )
 

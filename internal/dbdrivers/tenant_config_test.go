@@ -2,6 +2,7 @@ package dbdrivers
 
 import (
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -89,4 +90,17 @@ func TestMongoConnString(t *testing.T) {
 	assert.Equal(t, "mongodb://a:27018,b:27018", mongoConnString("a,b", "27018"))
 	assert.Equal(t, "mongodb://a:27018,b:27019", mongoConnString("a, b:27019", "27018"))
 	assert.Equal(t, "mongodb://[::1]:27017", mongoConnString("::1", "27017"))
+}
+
+// The connection fails within `connectTimeout` (it was a fixed 10s) when the server is unreachable.
+func TestConnectMongoDB_UsesConnectTimeout(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	host, port, _ := net.SplitHostPort(ln.Addr().String())
+	require.NoError(t, ln.Close()) // nothing listens there
+
+	start := time.Now()
+	_, _, _, err = connectMongoDB("", "", host, port, "db", 1, 0, 300*time.Millisecond, 0, false, SSLConfig{}, nil)
+	require.Error(t, err)
+	assert.Less(t, time.Since(start), 5*time.Second)
 }

@@ -33,9 +33,9 @@ import (
 	"time"
 
 	"github.com/retail-ai-inc/bean/v3/aes"
-	"go.mongodb.org/mongo-driver/event"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/event"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"gorm.io/gorm"
 )
 
@@ -241,7 +241,7 @@ func connectMongoDB(userName, password, host, port, dbName string,
 		opts.SetMonitor(&logMonitor)
 	}
 
-	mdb, err := mongo.Connect(ctx, opts)
+	mdb, err := mongo.Connect(opts)
 	if err != nil {
 		releaseTLS()
 		return nil, "", noClose, fmt.Errorf("failed to connect mongo database: %w", err)
