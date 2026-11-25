@@ -23,6 +23,7 @@
 package echoview
 
 import (
+	"bytes"
 	"io"
 
 	"github.com/labstack/echo/v5"
@@ -64,7 +65,11 @@ func (e *ViewEngine) Render(c *echo.Context, w io.Writer, name string, data inte
 func Render(ctx *echo.Context, code int, name string, data interface{}) error {
 	if val := ctx.Get(templateEngineKey); val != nil {
 		if e, ok := val.(*ViewEngine); ok {
-			return e.Render(ctx, ctx.Response(), name, data)
+			var buf bytes.Buffer
+			if err := e.Render(ctx, &buf, name, data); err != nil {
+				return err
+			}
+			return ctx.HTMLBlob(code, buf.Bytes())
 		}
 	}
 	return ctx.Render(code, name, data)
