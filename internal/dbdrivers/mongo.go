@@ -160,7 +160,7 @@ func connectMongoDB(userName, password, host, port, dbName string,
 		SetMaxConnIdleTime(maxConnIdleTime)
 
 	if ssl.On {
-		tlsConfig, err := newTLSConfig(ssl)
+		tlsConfig, err := newTLSConfig(ssl, hostsWithoutPort(host))
 		if err != nil {
 			return nil, "", noClose, err
 		}

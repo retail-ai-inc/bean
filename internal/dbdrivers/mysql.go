@@ -300,7 +300,7 @@ func useMysqlReplicas(db *gorm.DB, replicas []gorm.Dialector) error {
 func mysqlDSN(userName, password, host, port, dbName string, ssl SSLConfig) (string, error) {
 	tlsConfigName := ""
 	if ssl.On {
-		tlsConfig, err := newTLSConfig(ssl)
+		tlsConfig, err := newTLSConfig(ssl, []string{host})
 		if err != nil {
 			return "", err
 		}

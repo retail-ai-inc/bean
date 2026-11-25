@@ -919,7 +919,7 @@ func connectRedisDB(
 		}
 	}
 
-	tlsConfig, err := newTLSConfig(ssl)
+	tlsConfig, err := newTLSConfig(ssl, hostsWithoutPort(host))
 	if err != nil {
 		return nil, 0, noClose, err
 	}
