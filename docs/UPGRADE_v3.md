@@ -49,7 +49,7 @@ go install github.com/retail-ai-inc/bean/v3/cmd/bean@latest
 在项目根目录执行以下替换（macOS / Linux 均可用 `perl`）：
 
 ```bash
-find . -type f -name '*.go' -not -path './vendor/*' -print0 | xargs -0 perl -pi -e 's#retail-ai-inc/bean/v2\b#retail-ai-inc/bean/v3#g; s#labstack/echo/v4#labstack/echo/v5#g; s#labstack/echo-contrib/#labstack/echo-contrib/v5/#g; s/(?<![\*\w.])echo\.Context\b/*echo.Context/g; s#\becho\.Map\b#map[string]any#g'
+find . -type f -name '*.go' -not -path './vendor/*' -print0 | xargs -0 perl -pi -e 's#retail-ai-inc/bean/v2\b#retail-ai-inc/bean/v3#g; s#labstack/echo/v4#labstack/echo/v5#g; s#labstack/echo-contrib/#labstack/echo-contrib/v5/#g; s/(?<![\*\w.])echo\.Context\b/*echo.Context/g; s#\becho\.Map\b#map[string]any#g; s#github.com/go-redis/redis/v8#github.com/redis/go-redis/v9#g; s#go.mongodb.org/mongo-driver/(?!v2/)#go.mongodb.org/mongo-driver/v2/#g'
 ```
 
 它完成了：
@@ -61,6 +61,8 @@ find . -type f -name '*.go' -not -path './vendor/*' -print0 | xargs -0 perl -pi 
 | `github.com/labstack/echo-contrib/xxx` | `github.com/labstack/echo-contrib/v5/xxx` |
 | `func(c echo.Context) error` | `func(c *echo.Context) error` |
 | `echo.Map{...}` | `map[string]any{...}` |
+| `github.com/go-redis/redis/v8` | `github.com/redis/go-redis/v9`（见 4.13） |
+| `go.mongodb.org/mongo-driver/...` | `go.mongodb.org/mongo-driver/v2/...`（还需要手工修改，见 4.13） |
 
 替换后执行 `go build ./...`，剩余的编译错误按第 4 节处理。
 
@@ -332,6 +334,32 @@ e, closeEcho, err := bean.NewEcho()
 
 > **由 `bean init` 生成的项目**：`commands/root.go` 现在用 `config.LoadConfig("env.json")` 加载配置，不再直接调用 viper。
 
+### 4.13 Redis / MongoDB 驱动升级
+
+bean v3 使用的驱动：
+
+| 驱动 | v2 | v3 |
+| --- | --- | --- |
+| Redis | `github.com/go-redis/redis/v8`（已停止维护） | `github.com/redis/go-redis/v9` |
+| MongoDB | `go.mongodb.org/mongo-driver`（v1） | `go.mongodb.org/mongo-driver/v2` |
+
+`DBDeps` 中的 `MasterRedisDB` / `TenantRedisDBs`（`redis.UniversalClient`）、`store/redis` 返回的 `redis.Pipeliner` / `*redis.Script`，以及 `MasterMongoDB` / `TenantMongoDBs`（`*mongo.Client`）都是新驱动的类型，项目中直接使用这些类型的代码需要迁移：
+
+- **go-redis v9**：基本只需替换 import 路径（第 3 节的命令已包含），常用方法的签名不变。
+- **mongo-driver v2**：除了 import 路径，还需要手工修改，常见的有：
+  - `bson/primitive` 包并入 `bson`：`primitive.ObjectID` → `bson.ObjectID`，`primitive.M` / `primitive.D` → `bson.M` / `bson.D`；
+  - `mongo.Connect(ctx, opts)` → `mongo.Connect(opts)`；
+  - 选项构造函数返回 builder：声明为 `*options.FindOptions` 等类型的变量或参数改为 `*options.FindOptionsBuilder` 等；
+  - `SingleResult.DecodeBytes()` → `Raw()`，`Collection.Distinct` 返回 `*mongo.DistinctResult`。
+
+  完整的变化见官方迁移指南：<https://github.com/mongodb/mongo-go-driver/blob/v2.0.0/docs/migration-2.0.md>。
+
+### 4.14 不再依赖 `github.com/pkg/errors`
+
+bean 内部不再使用 `github.com/pkg/errors`（已归档），附带堆栈的错误改由 `stacktrace.WithStack` 创建：`%+v` 仍会打印堆栈，Sentry 仍能取到堆栈，`errors.Is` / `errors.As` / `errors.Unwrap` 可以照常使用。但 `pkg/errors` 的 `errors.Cause(err)` 无法再解开 bean 返回的错误，请改用 `errors.Is` / `errors.As`。
+
+`helpers/json` 改为直接使用标准库 `encoding/json`（不再依赖 `github.com/json-iterator/go`），并已标记为 Deprecated，建议直接使用 `encoding/json`。
+
 ## 5. bean 自身的行为变化
 
 以下变化由 bean 内部处理，项目通常无需改代码，但请了解：
@@ -372,6 +400,10 @@ e, closeEcho, err := bean.NewEcho()
 26. **Redis 读副本**：在读副本上未命中（`redis.Nil`）不再到主库重查（v2 中每次未命中都会多查一次主库）；`WRONGTYPE` 等服务端错误直接返回，不再被主库的结果掩盖；只有连接错误才转到主库，并且该副本在 10 秒内不再使用（v2 中副本宕机时每次读取都要先等拨号超时）。`HGets` 不再因为某个字段不存在而掩盖其它命令的网络错误。
 27. **出站请求日志**：开启 `DumpBody` 时，`OUTBOUND_API` 日志改为在响应体读到末尾、读取出错或被关闭时输出（v2 在返回响应前先读取最多 `BodyLimit` 字节，SSE / 长轮询等流式响应会被阻塞）。因此**响应体必须被读完或关闭**才会输出这条日志（不关闭响应体本身就会泄漏连接）；读取出错时增加 `response_body_error` 字段。另外，`Authorization`、`Proxy-Authorization`、`Cookie`、`Set-Cookie` 以及名称包含 token / secret / password / api-key / apikey / session 的请求头和响应头，即使配置在允许记录的头列表中，日志中的值也会替换为 `[REDACTED]`。
 28. **其它**：`CloseMemory` 可以重复调用（v2 第二次调用会永久阻塞），关闭后再调用 `memory.NewMemoryCache()` 会得到新的缓存；通配符删除（`DelMemory("prefix*")`）改为线性时间。`str.Substring` 按字符（rune）计算长度；`str.LeftPadToLength` / `RightPadToLength`、`helpers.JitterBackoff` 在边界输入下不再 panic；`helpers.StructStripTags` 不再丢失大整数的精度。
+29. **异步任务**：`async.Execute` 未指定池名时也在默认池中执行（v2 直接启动 goroutine），优雅关停时会等待它。`async.ExecuteWithTimeout` 和 `async.CaptureException` 已标记为 Deprecated，请改用 `async.ExecuteContext(ctx, fn, async.WithTimeout(d))` 和 `trace.SentryCaptureException`。异步任务 panic 时，日志中包含堆栈。`sync.NewPool` / `NewResultPool` 的任务现在使用克隆的 Sentry hub（带请求信息），v2 中实际用的是调用方的 hub。
+30. **`store/redis` 租户缓存**：`HGets` 返回的 map 以调用方传入的 key 为键（v2 中是加了前缀的 Redis key，例如传入 `h1` 得到 `app_h1`，导致 `result["h1"]` 总是空）；如果项目代码按带前缀的 key 取值，需要改回原始 key。租户不存在时返回的错误包装了 `redis.ErrTenantNotFound`，可以用 `errors.Is` 判断（错误信息不变）。
+31. **bean CLI**：所有命令出错时返回错误并以退出码 1 结束，不再打印整页用法说明；生成的 Go 文件（包括 `bean init`）都经过 gofmt；`bean create command <name>` 生成的变量名改为 `<name>Cmd`，Go 关键字和 `root` 不能作为命令名；在已有 `env.json` 的目录中执行 `bean init` 会报错（v2 会先覆盖 Makefile 等文件再失败）。
+32. **已标记为 Deprecated 的工具函数**（仍可使用，可按提示替换为标准库）：`helpers.Max`（内置 `max`）、`helpers.FloatInRange`（`min(max(i, lo), hi)`）、`helpers.Int` / `helpers.Float`（`cmp.Ordered`）、`helpers.HasStringInSlice` / `HasTargetInSlice`（`slices.Contains` / `ContainsFunc`）、`helpers.FindStringInSlice`（`slices.Index`）、`helpers.DeleteStringFromSlice`（`slices.Delete`）、`str.Contains` / `str.IsEqualsAny`（`slices.Contains`）、`str.StringToPointer`（`new(s)`）、`helpers/json` 包（`encoding/json`）。
 
 ### 5.1 404 / 405 的处理方式
 
@@ -422,3 +454,6 @@ v2 用一个全局中间件在每个请求上遍历全部路由、自行匹配�
 - [ ] CI 中使用 `bean test -o json|html` 的地方：测试失败时命令会返回 1；按新的报告文件名（`/` 替换为 `_`）收集报告（见第 5 节第 23 条）
 - [ ] 使用 `transport/http` 日志 Transport 并开启 `DumpBody` 的地方：确认响应体都被读完或关闭，否则不会输出 `OUTBOUND_API` 日志（见第 5 节第 27 条）
 - [ ] `mongo.connectTimeout` 配置了较小值的环境：该值现在也用于启动时的连接和 ping（见第 5 节第 25 条）
+- [ ] 使用 Redis 类型的代码改为 `github.com/redis/go-redis/v9`；使用 Mongo 的代码按 mongo-driver v2 迁移（见 4.13）
+- [ ] 使用 `pkg/errors` 的 `errors.Cause` 解开 bean 返回的错误的地方，改用 `errors.Is` / `errors.As`（见 4.14）
+- [ ] 使用 `store/redis` 的 `HGets` 并按带前缀的 key 取值的地方，改为按传入的 key 取值（见第 5 节第 30 条）
