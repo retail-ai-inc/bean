@@ -78,113 +78,40 @@ func Execute(fn func(), poolName ...string) {
 
 // ExecuteWithContext provides a safe way to execute a function asynchronously with a context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
+//
+// It is `ExecuteContext` for an echo handler: fn receives a context detached from the request (it is not canceled
+// when the request ends) that keeps the request ID, a clone of the request's Sentry hub (with its scope) and the
+// trace of the request. It runs in the pool named poolName, or the default pool.
 func ExecuteWithContext(fn Task, c *echo.Context, poolName ...string) {
-	functionName := "unknown function"
-	if config.Bean.Sentry.On && config.Bean.Sentry.TracesSampleRate > 0.0 {
-		if pc, file, line, ok := runtime.Caller(1); ok {
-			functionName = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
-		}
-	}
-
-	// Acquire a context from echo.
-	ec := c.Echo().AcquireContext()
-
-	// IMPORTANT: Must reset before use.
-	ec.Reset(c.Request().WithContext(context.TODO()), nil)
-
-	Execute(func() {
-		ctx := ec.Request().Context()
-		// IMPORTANT - Set the sentry hub key into the context so that `SentryCaptureException` and `SentryCaptureMessage`
-		// can pull the right hub and send the exception message to sentry.
-		if config.Bean.Sentry.On {
-			hub := sentry.GetHubFromContext(ctx)
-			if hub == nil {
-				hub = sentry.CurrentHub().Clone()
-			}
-
-			hub.Scope().SetRequest(ec.Request())
-			ctx = sentry.SetHubOnContext(ctx, hub)
-
-			if config.Bean.Sentry.TracesSampleRate > 0.0 {
-				urlPath := ec.Request().URL.Path
-
-				span := sentry.StartSpan(ctx, "async",
-					sentry.WithTransactionName(fmt.Sprintf("%s %s ASYNC", ec.Request().Method, urlPath)),
-					sentry.ContinueFromRequest(ec.Request()),
-				)
-
-				span.Description = functionName
-
-				if regex.SkipSampling(urlPath) {
-					span.Sampled = sentry.SampledFalse
-				}
-
-				defer span.Finish()
-				ctx = span.Context()
-			}
-		}
-
-		// Release the acquired context. This defer will be executed second.
-		defer c.Echo().ReleaseContext(ec)
-
-		// This defer will be executed first.
-		defer recoverPanic(ctx)
-
+	ctx := bctx.SetRequest(c.Request().Context(), c.Request())
+	task := func(ctx context.Context) error {
 		fn(ctx)
-	}, poolName...)
+		return nil
+	}
+	if err := executeContext(ctx, task, poolOptions(poolName)...); err != nil {
+		log.Logger().ErrorContext(ctx, "Async task not executed.", "error", err)
+	}
 }
 
+// ExecuteWithTimeout executes fn asynchronously like `ExecuteContext` with `WithTimeout(duration)` (no timeout if
+// duration <= 0), in the pool named poolName or the default pool. The context passed to fn keeps the request ID, a
+// clone of the Sentry hub and the trace of ctx, but is not canceled with ctx. An error returned by fn is logged and
+// sent to Sentry.
 func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TaskWithCtx, poolName ...string) {
-	functionName := "unknown function"
-	if config.Bean.Sentry.On && config.Bean.Sentry.TracesSampleRate > 0.0 {
-		if pc, file, line, ok := runtime.Caller(1); ok {
-			functionName = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
-		}
+	opts := poolOptions(poolName)
+	if duration > 0 {
+		opts = append(opts, WithTimeout(duration))
 	}
+	if err := executeContext(ctx, fn, opts...); err != nil {
+		log.Logger().ErrorContext(ctx, "Async task not executed.", "error", err)
+	}
+}
 
-	hub := sentry.GetHubFromContext(ctx)
-	parentSpan := sentry.SpanFromContext(ctx)
-
-	Execute(func() {
-		var (
-			c      context.Context
-			cancel context.CancelFunc
-		)
-		if duration <= 0 {
-			c = context.TODO()
-		} else {
-			c, cancel = context.WithTimeout(context.TODO(), duration)
-			defer cancel()
-		}
-
-		if hub == nil {
-			hub = sentry.CurrentHub().Clone()
-			c = sentry.SetHubOnContext(c, hub)
-		} else {
-			c = sentry.SetHubOnContext(c, hub)
-		}
-
-		// can pull the right hub and send the exception message to sentry.
-		if config.Bean.Sentry.On && config.Bean.Sentry.TracesSampleRate > 0.0 {
-			var transactionName string
-			if parentSpan != nil {
-				transactionName = parentSpan.Name
-			}
-
-			span := sentry.StartSpan(c, "async",
-				sentry.WithTransactionName(fmt.Sprintf("%s ASYNC", transactionName)))
-
-			span.Description = functionName
-
-			defer span.Finish()
-			c = span.Context()
-		}
-
-		// This defer will be executed first.
-		defer recoverPanic(c)
-
-		CaptureException(c, fn(c))
-	}, poolName...)
+func poolOptions(poolName []string) []AsyncOption {
+	if len(poolName) > 0 && poolName[0] != "" {
+		return []AsyncOption{WithPoolName(poolName[0])}
+	}
+	return nil
 }
 
 func CaptureException(c context.Context, err error) {
@@ -214,9 +141,15 @@ type asyncOptions struct {
 	timeout  time.Duration
 }
 
-// ExecuteWithContext execute a function returning an error asynchronously
+// ExecuteContext execute a function returning an error asynchronously
 // with a starndard context (not echo context), recovering if they panic.
 func ExecuteContext(ctx context.Context, fn TaskWithCtx, asyncOpts ...AsyncOption) error {
+	return executeContext(ctx, fn, asyncOpts...)
+}
+
+// executeContext implements `ExecuteContext`. It must be called directly by the exported function called by the
+// user (the caller's location is used as the span description).
+func executeContext(ctx context.Context, fn TaskWithCtx, asyncOpts ...AsyncOption) error {
 
 	// by default
 	opts := &asyncOptions{
@@ -305,7 +238,8 @@ func setupSentrySampling(current context.Context) []sentry.SpanOption {
 		transactionName = span.Name
 	}
 	if description == "" {
-		if pc, file, line, ok := runtime.Caller(2); ok {
+		// 0: setupSentrySampling, 1: executeContext, 2: the exported function, 3: its caller.
+		if pc, file, line, ok := runtime.Caller(3); ok {
 			description = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
 		}
 	}

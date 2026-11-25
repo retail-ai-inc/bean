@@ -25,6 +25,12 @@ func Test_Execute_Context(t *testing.T) {
 	},
 	}
 	_, _ = log.Init(io.Discard)
+	// The test registers pools with fixed names: unregister them so the test can run again (-count).
+	t.Cleanup(func() {
+		waitDefaultPoolIdle()
+		gopool.UnregisterAllPools()
+		gopool.RebootDefaultPool()
+	})
 
 	task := func(ctx context.Context) error {
 		_, finish := trace.StartSpan(ctx, "test")
