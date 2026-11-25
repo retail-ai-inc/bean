@@ -367,6 +367,11 @@ e, closeEcho, err := bean.NewEcho()
 21. **Redis**：`RPush` 在 v2 中每次调用都会失败（`can't marshal *[]string`），v3 修复，空列表为 no-op；`store/redis` 的 `MSetJSON` 在 v2 中不做 JSON 编码（传入 struct 会失败，写入的值也无法被 `GetJSON` 读取），v3 与 `SetJSON` 一致，对每个值做 `json.Marshal`。**注意**：如果项目为了绕开 v2 的问题，向 `MSetJSON` 传入了预先序列化好的 JSON 字符串（或 `[]byte`），v3 会再编码一次（字符串变成带引号的 JSON 字符串，`[]byte` 变成 base64），之后 `GetJSON` / `MGetJSON` 读出的数据就不对了，需要改为传入原始对象（struct、map 等）；缓存中已有的数据不受影响；集群模式下 `MGet` 有任意 key 不存在时 v2 整批返回 nil，v3 按 key 返回（不存在的为 nil），`Keys` 改为查询所有 master，多 key 的 `DelKey` 不再因 CROSSSLOT 失败。
 22. **出站请求**：`transport/http` 的日志 Transport 在 `DumpBody` 时，关闭响应体不会关闭底层连接（连接泄漏），v3 修复；请求体只读取 `BodyLimit` 字节用于日志，读取出错时请求失败而不是发送截断的 body。`trace.PropagateToGRPC` 不再覆盖 context 中已有的 outgoing metadata（如 authorization）；`PropagateToHTTP` 重复调用不会产生重复的 header。
 23. **bean CLI**：`bean gen spec` 对带域名的模块路径（如 `example.com/demo`）不再输出空的 `{}`；`bean test gen` 支持 PUT / PATCH；`bean test -o json|html` 在测试失败时退出码为 1（v2 中模块路径不含 `/` 时测试失败也返回 0，含 `/` 时报告无法写出），报告文件名中的 `/` 替换为 `_`（例如 `test_report_example.com_demo_<时间>.json`），CI 中依赖退出码或按文件名收集报告的地方需要相应调整；`bean create dockerfile` 生成可用的 Dockerfile / docker-compose.yml，并新增 `.air.toml`；`bean create handler|repo|service` 通过解析 `routers/route.go` 插入代码，无法插入时报错并提示需要手工添加的内容。
+24. **数据库初始化**：初始化中途失败时（某个租户连接失败、Redis 读副本连接失败、ping 失败等），已经建立的连接会先关闭再返回 error（v2 中会泄漏）。`TenantConnections.Connections` 中的字段类型不正确或缺失时，启动返回带租户 ID 的 error，而不是 panic；`"port": 3306` 这样的数字也被接受。开启 `ssl.hotReload` 时，同一证书文件的所有连接共用一个文件监听，连接关闭时停止（v2 中每个连接各起一个，永不停止）。
+25. **Mongo**：初次连接和 ping 使用 `mongo.connectTimeout`（未设置时为 10s；v2 固定为 10s，如果配置了较小的值，启动时会更早超时）；`host` 为多个主机（`a,b`）时每个主机都使用配置的端口（v2 中只有最后一个）；关闭时能正常结束会话。`maxConnectionLifeTime` 仍对应驱动的最大空闲时间（mongo 驱动没有连接最长寿命的选项）。
+26. **Redis 读副本**：在读副本上未命中（`redis.Nil`）不再到主库重查（v2 中每次未命中都会多查一次主库）；`WRONGTYPE` 等服务端错误直接返回，不再被主库的结果掩盖；只有连接错误才转到主库，并且该副本在 10 秒内不再使用（v2 中副本宕机时每次读取都要先等拨号超时）。`HGets` 不再因为某个字段不存在而掩盖其它命令的网络错误。
+27. **出站请求日志**：开启 `DumpBody` 时，`OUTBOUND_API` 日志改为在响应体读到末尾、读取出错或被关闭时输出（v2 在返回响应前先读取最多 `BodyLimit` 字节，SSE / 长轮询等流式响应会被阻塞）。因此**响应体必须被读完或关闭**才会输出这条日志（不关闭响应体本身就会泄漏连接）；读取出错时增加 `response_body_error` 字段。
+28. **其它**：`CloseMemory` 可以重复调用（v2 第二次调用会永久阻塞），关闭后再调用 `memory.NewMemoryCache()` 会得到新的缓存；通配符删除（`DelMemory("prefix*")`）改为线性时间。`str.Substring` 按字符（rune）计算长度；`str.LeftPadToLength` / `RightPadToLength`、`helpers.JitterBackoff` 在边界输入下不再 panic；`helpers.StructStripTags` 不再丢失大整数的精度。
 
 ### 5.1 404 / 405 的处理方式
 
@@ -415,3 +420,5 @@ v2 用一个全局中间件在每个请求上遍历全部路由、自行匹配�
 - [ ] 如果有客户端依赖"请求体 JSON 错误时返回 500"，改为处理 400 和 `errorCode` `100001`（见第 5 节第 19 条）
 - [ ] 搜索 `MSetJSON(` 的调用：确认传入的是原始对象，而不是预先序列化好的 JSON 字符串或 `[]byte`（见第 5 节第 21 条）
 - [ ] CI 中使用 `bean test -o json|html` 的地方：测试失败时命令会返回 1；按新的报告文件名（`/` 替换为 `_`）收集报告（见第 5 节第 23 条）
+- [ ] 使用 `transport/http` 日志 Transport 并开启 `DumpBody` 的地方：确认响应体都被读完或关闭，否则不会输出 `OUTBOUND_API` 日志（见第 5 节第 27 条）
+- [ ] `mongo.connectTimeout` 配置了较小值的环境：该值现在也用于启动时的连接和 ping（见第 5 节第 25 条）
