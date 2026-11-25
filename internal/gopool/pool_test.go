@@ -293,3 +293,37 @@ func setup(t *testing.T) {
 	defaultPool = initDefaultPool()
 	pools = make(map[string]*ants.Pool)
 }
+
+// A task that looks up a pool while the pools are being released must not block the release until the timeout.
+func Test_ReleaseAllPools_DoesNotBlockGetPool(t *testing.T) {
+	setup(t)
+
+	p := newPool(t)
+	require.NoError(t, Register("lookup", p))
+
+	started := make(chan struct{})
+	require.NoError(t, p.Submit(func() {
+		close(started)
+		time.Sleep(50 * time.Millisecond)
+		_, _ = GetPool("lookup") // e.g. async.ExecuteContext with a pool name
+	}))
+	<-started
+
+	begin := time.Now()
+	err := ReleaseAllPools(2 * time.Second)()
+	require.NoError(t, err)
+	assert.Less(t, time.Since(begin), time.Second)
+	assert.Empty(t, Pools())
+}
+
+// After a release the default pool rejects tasks until it is rebooted.
+func Test_RebootDefaultPool(t *testing.T) {
+	setup(t)
+	require.NoError(t, ReleaseAllPools(time.Second)())
+	assert.ErrorIs(t, GetDefaultPool().Submit(func() {}), ants.ErrPoolClosed)
+
+	RebootDefaultPool()
+	done := make(chan struct{})
+	require.NoError(t, GetDefaultPool().Submit(func() { close(done) }))
+	<-done
+}

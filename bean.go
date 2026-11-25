@@ -428,6 +428,8 @@ func NewEcho() (*echo.Echo, func() error, error) {
 	e.Use(middleware.Recover())
 
 	// Register goroutine pool. Register the release first so the pools are released on error too.
+	// The default pool is released on shutdown: reopen it if a previous instance released it.
+	gopool.RebootDefaultPool()
 	closes = append(closes, gopool.ReleaseAllPools(config.Bean.AsyncPoolReleaseTimeout))
 	if len(config.Bean.AsyncPool) > 0 {
 		for _, asyncPool := range config.Bean.AsyncPool {
