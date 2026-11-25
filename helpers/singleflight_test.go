@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
+	"errors"
 )
 
 var ctxTimeout1s, _ = context.WithTimeoutCause(context.Background(), time.Second, errors.New("single flight timeout"))

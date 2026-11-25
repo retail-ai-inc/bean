@@ -46,7 +46,6 @@ import (
 	"github.com/labstack/echo-contrib/v5/echoprometheus"
 	"github.com/labstack/echo/v5"
 	echomiddleware "github.com/labstack/echo/v5/middleware"
-	pkgerrors "github.com/pkg/errors"
 	"github.com/retail-ai-inc/bean/v3/config"
 	"github.com/retail-ai-inc/bean/v3/echoview"
 	berror "github.com/retail-ai-inc/bean/v3/error"
@@ -497,11 +496,11 @@ func (b *Bean) ServeAt(host, port string) error {
 		// Read the files here: `StartTLS` reads file paths relative to the working directory only.
 		cert, err := os.ReadFile(b.Config.HTTP.SSL.CertFile)
 		if err != nil {
-			return pkgerrors.Wrapf(err, "error during server startup")
+			return fmt.Errorf("error during server startup: %w", err)
 		}
 		key, err := os.ReadFile(b.Config.HTTP.SSL.PrivFile)
 		if err != nil {
-			return pkgerrors.Wrapf(err, "error during server startup")
+			return fmt.Errorf("error during server startup: %w", err)
 		}
 		sc.TLSConfig = &tls.Config{
 			MinVersion: b.Config.HTTP.SSL.MinTLSVersion,
@@ -522,7 +521,7 @@ func (b *Bean) ServeAt(host, port string) error {
 		stopSrv()
 		<-srvDone
 		if shutdownErr != nil {
-			return pkgerrors.Wrapf(shutdownErr, "failed to gracefully shutdown")
+			return fmt.Errorf("failed to gracefully shutdown: %w", shutdownErr)
 		}
 		return nil
 	})
@@ -544,7 +543,7 @@ func (b *Bean) ServeAt(host, port string) error {
 	select {
 	case <-srvDone: // The server failed to start / serve, or was shut down by calling `Shutdown`.
 		if srvErr != nil {
-			return pkgerrors.Wrapf(srvErr, "error during server startup")
+			return fmt.Errorf("error during server startup: %w", srvErr)
 		}
 		return nil
 	case <-ctx.Done():
@@ -558,7 +557,7 @@ func (b *Bean) ServeAt(host, port string) error {
 		if err != nil {
 			return errors.Join(err, srvErr)
 		}
-		return pkgerrors.Wrapf(srvErr, "error during server shutdown")
+		return fmt.Errorf("error during server shutdown: %w", srvErr)
 	}
 
 	return err

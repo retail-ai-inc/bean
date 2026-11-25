@@ -1,9 +1,12 @@
+// Package json exposes the JSON functions used by bean.
+//
+// Deprecated: use encoding/json. This package used github.com/json-iterator/go, which is no longer maintained; it
+// now forwards to encoding/json (backed by the faster json v2 implementation since Go 1.27).
 package json
 
-import jsoniter "github.com/json-iterator/go"
+import "encoding/json"
 
 var (
-	json = jsoniter.ConfigCompatibleWithStandardLibrary
 	// Marshal is exported by bean/json package.
 	Marshal = json.Marshal
 	// Unmarshal is exported by bean/json package.

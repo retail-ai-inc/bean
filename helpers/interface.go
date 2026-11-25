@@ -26,7 +26,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/pkg/errors"
+	"errors"
 )
 
 // ConvertInterfaceToSlice will convert an interface `value` into slice.

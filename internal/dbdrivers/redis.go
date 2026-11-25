@@ -25,16 +25,17 @@ package dbdrivers
 import (
 	"context"
 	"encoding/json"
-	stderrors "errors"
 	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
 
+	"errors"
+
 	"github.com/go-redis/redis/v8"
-	"github.com/pkg/errors"
 	"github.com/retail-ai-inc/bean/v3/aes"
+	"github.com/retail-ai-inc/bean/v3/stacktrace"
 	"gorm.io/gorm"
 )
 
@@ -134,7 +135,7 @@ func InitRedisMasterConn(config RedisConfig) (*RedisDBConn, []func() error, erro
 					config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, true, masterCfg.SSL,
 				)
 				if err != nil {
-					return nil, noClosers, stderrors.Join(err, closeAll(closeDBs))
+					return nil, noClosers, errors.Join(err, closeAll(closeDBs))
 				}
 				closeDBs = append(closeDBs, close)
 			}
@@ -150,7 +151,7 @@ func InitRedisMasterConn(config RedisConfig) (*RedisDBConn, []func() error, erro
 func (clients *RedisDBConn) KeyExists(c context.Context, key string) (bool, error) {
 	result, err := clients.Primary.Exists(c, key).Result()
 	if err != nil {
-		return false, errors.WithStack(err)
+		return false, stacktrace.WithStack(err)
 	}
 
 	if result == 1 {
@@ -207,7 +208,7 @@ func (clients *RedisDBConn) TTL(c context.Context, key string) (time.Duration, e
 		return rc.TTL(c, key).Result()
 	})
 	if err != nil && !errors.Is(err, redis.Nil) {
-		return ttl, errors.WithStack(err)
+		return ttl, stacktrace.WithStack(err)
 	}
 	return ttl, nil
 }
@@ -224,7 +225,7 @@ func (clients *RedisDBConn) Keys(c context.Context, pattern string) ([]string, e
 		})
 	}
 	if err != nil && !errors.Is(err, redis.Nil) {
-		return keys, errors.WithStack(err)
+		return keys, stacktrace.WithStack(err)
 	}
 	return keys, nil
 }
@@ -236,7 +237,7 @@ func (clients *RedisDBConn) GetString(c context.Context, key string) (string, er
 	if errors.Is(err, redis.Nil) {
 		return "", nil
 	} else if err != nil {
-		return "", errors.WithStack(err)
+		return "", stacktrace.WithStack(err)
 	}
 	return str, nil
 }
@@ -253,7 +254,7 @@ func (clients *RedisDBConn) MGet(c context.Context, keys ...string) ([]interface
 		})
 	}
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, stacktrace.WithStack(err)
 	}
 	return result, nil
 }
@@ -265,7 +266,7 @@ func (clients *RedisDBConn) HGet(c context.Context, key string, field string) (s
 	if errors.Is(err, redis.Nil) {
 		return "", nil
 	} else if err != nil {
-		return "", errors.WithStack(err)
+		return "", stacktrace.WithStack(err)
 	}
 	return result, nil
 }
@@ -277,7 +278,7 @@ func (clients *RedisDBConn) HMGet(c context.Context, key string, fields ...strin
 	if errors.Is(err, redis.Nil) {
 		return nil, nil
 	} else if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, stacktrace.WithStack(err)
 	}
 	return result, nil
 }
@@ -289,7 +290,7 @@ func (clients *RedisDBConn) HGetAll(c context.Context, key string) (map[string]s
 	if errors.Is(err, redis.Nil) {
 		return nil, nil
 	} else if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, stacktrace.WithStack(err)
 	}
 	return result, nil
 }
@@ -316,7 +317,7 @@ func (clients *RedisDBConn) HGets(c context.Context, redisKeysWithField map[stri
 		return values, nil
 	})
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, stacktrace.WithStack(err)
 	}
 	return result, nil
 }
@@ -328,7 +329,7 @@ func (clients *RedisDBConn) GetLRange(c context.Context, key string, start, stop
 	if errors.Is(err, redis.Nil) {
 		return []string{}, nil
 	} else if err != nil {
-		return []string{}, errors.WithStack(err)
+		return []string{}, stacktrace.WithStack(err)
 	}
 	return str, nil
 }
@@ -340,7 +341,7 @@ func (clients *RedisDBConn) SMembers(c context.Context, key string) ([]string, e
 	if errors.Is(err, redis.Nil) {
 		return []string{}, nil
 	} else if err != nil {
-		return []string{}, errors.WithStack(err)
+		return []string{}, stacktrace.WithStack(err)
 	}
 	return str, nil
 }
@@ -350,7 +351,7 @@ func (clients *RedisDBConn) SIsMember(c context.Context, key string, element int
 		return rc.SIsMember(c, key, element).Result()
 	})
 	if err != nil {
-		return false, errors.WithStack(err)
+		return false, stacktrace.WithStack(err)
 	}
 	return found, nil
 }
@@ -360,7 +361,7 @@ func (clients *RedisDBConn) SRandMemberN(c context.Context, key string, count in
 		return rc.SRandMemberN(c, key, count).Result()
 	})
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, stacktrace.WithStack(err)
 	}
 	return result, nil
 }
@@ -368,11 +369,11 @@ func (clients *RedisDBConn) SRandMemberN(c context.Context, key string, count in
 func (clients *RedisDBConn) SetJSON(c context.Context, key string, data interface{}, ttl time.Duration) error {
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	if err := clients.Primary.Set(c, key, string(jsonBytes), ttl).Err(); err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	return nil
@@ -380,7 +381,7 @@ func (clients *RedisDBConn) SetJSON(c context.Context, key string, data interfac
 
 func (clients *RedisDBConn) Set(c context.Context, key string, data interface{}, ttl time.Duration) error {
 	if err := clients.Primary.Set(c, key, data, ttl).Err(); err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	return nil
@@ -391,7 +392,7 @@ func (clients *RedisDBConn) Set(c context.Context, key string, data interface{},
 func (clients *RedisDBConn) SetNX(c context.Context, key string, data interface{}, ttl time.Duration) (bool, error) {
 	ok, err := clients.Primary.SetNX(c, key, data, ttl).Result()
 	if err != nil {
-		return false, errors.WithStack(err)
+		return false, stacktrace.WithStack(err)
 	}
 
 	return ok, nil
@@ -402,10 +403,10 @@ func (clients *RedisDBConn) SetNX(c context.Context, key string, data interface{
 // - HSet("myhash", "key1", "value1", "key2", "value2")
 func (clients *RedisDBConn) HSet(c context.Context, key string, args ...interface{}) error {
 	if len(args) == 0 {
-		return errors.WithStack(ErrRedisInvalidParameter)
+		return stacktrace.WithStack(ErrRedisInvalidParameter)
 	}
 	if err := clients.Primary.HSet(c, key, args...).Err(); err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 	return nil
 }
@@ -416,7 +417,7 @@ func (clients *RedisDBConn) RPush(c context.Context, key string, valueList []str
 	}
 	// go-redis expands a single []string argument into the values.
 	if err := clients.Primary.RPush(c, key, valueList).Err(); err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	return nil
@@ -424,7 +425,7 @@ func (clients *RedisDBConn) RPush(c context.Context, key string, valueList []str
 
 func (clients *RedisDBConn) IncrementValue(c context.Context, key string) error {
 	if err := clients.Primary.Incr(c, key).Err(); err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	return nil
@@ -432,7 +433,7 @@ func (clients *RedisDBConn) IncrementValue(c context.Context, key string) error 
 
 func (clients *RedisDBConn) SAdd(c context.Context, key string, elements interface{}) error {
 	if err := clients.Primary.SAdd(c, key, elements).Err(); err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	return nil
@@ -440,7 +441,7 @@ func (clients *RedisDBConn) SAdd(c context.Context, key string, elements interfa
 
 func (clients *RedisDBConn) SRem(c context.Context, key string, elements interface{}) error {
 	if err := clients.Primary.SRem(c, key, elements).Err(); err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	return nil
@@ -457,13 +458,13 @@ func (clients *RedisDBConn) DelKey(c context.Context, keys ...string) error {
 			return nil
 		})
 		if err != nil {
-			return errors.WithStack(err)
+			return stacktrace.WithStack(err)
 		}
 		return nil
 	}
 
 	if err := clients.Primary.Del(c, keys...).Err(); err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	return nil
@@ -471,7 +472,7 @@ func (clients *RedisDBConn) DelKey(c context.Context, keys ...string) error {
 
 func (clients *RedisDBConn) ExpireKey(c context.Context, key string, ttl time.Duration) error {
 	if err := clients.Primary.Expire(c, key, ttl).Err(); err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	return nil
@@ -499,7 +500,7 @@ func (clients *RedisDBConn) MSet(c context.Context, values ...interface{}) (err 
 	}
 
 	if err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	return nil
@@ -510,7 +511,7 @@ func (clients *RedisDBConn) MSet(c context.Context, values ...interface{}) (err 
 // For accepts multiple values, see RedisMSet description.
 func (clients *RedisDBConn) MSetWithTTL(c context.Context, ttl time.Duration, values ...interface{}) (err error) {
 	if err = wrapMSet(c, clients.Primary, ttl, values...); err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	return nil
@@ -523,7 +524,7 @@ func (clients *RedisDBConn) Eval(ctx context.Context, script string, keys []stri
 		if errors.Is(err, redis.Nil) {
 			return nil, nil
 		}
-		return nil, errors.WithStack(err)
+		return nil, stacktrace.WithStack(err)
 	}
 	return v, nil
 }
@@ -534,7 +535,7 @@ func (clients *RedisDBConn) EvalSha(ctx context.Context, sha1 string, keys []str
 		if errors.Is(err, redis.Nil) {
 			return nil, nil
 		}
-		return nil, errors.WithStack(err)
+		return nil, stacktrace.WithStack(err)
 	}
 	return v, nil
 }
@@ -546,7 +547,7 @@ func (clients *RedisDBConn) Run(ctx context.Context, script *redis.Script, keys 
 		if errors.Is(err, redis.Nil) {
 			return nil, nil
 		}
-		return nil, errors.WithStack(err)
+		return nil, stacktrace.WithStack(err)
 	}
 	return v, nil
 }
@@ -661,7 +662,7 @@ func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, te
 	closers := make([]func() error, 0, len(tenantCfgs))
 
 	fail := func(t *TenantConnections, msg string, err error) (map[uint64]*RedisDBConn, []func() error, error) {
-		return nil, noClosers, stderrors.Join(
+		return nil, noClosers, errors.Join(
 			fmt.Errorf("%s (%d:%s): %w", msg, t.TenantID, t.Code, err), closeAll(closers))
 	}
 
@@ -797,7 +798,7 @@ func connectRedisDB(
 	// Check the connection
 	_, err = rdb.Ping(context.TODO()).Result()
 	if err != nil {
-		return nil, 0, noClose, stderrors.Join(fmt.Errorf("redis connection error: %w", err), closeClient())
+		return nil, 0, noClose, errors.Join(fmt.Errorf("redis connection error: %w", err), closeClient())
 	}
 
 	return rdb, dbName, closeClient, nil

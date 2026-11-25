@@ -29,11 +29,11 @@ import (
 	"fmt"
 	"time"
 
-	stderrors "errors"
+	"errors"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/pkg/errors"
 	"github.com/retail-ai-inc/bean/v3/internal/dbdrivers"
+	"github.com/retail-ai-inc/bean/v3/stacktrace"
 	"github.com/retail-ai-inc/bean/v3/trace"
 )
 
@@ -98,7 +98,7 @@ func NewTenantCache(tenants map[uint64]*dbdrivers.RedisDBConn, prefix string, op
 }
 
 // ErrTenantNotFound is returned when the tenant has no Redis connection.
-var ErrTenantNotFound = stderrors.New("tenant not found")
+var ErrTenantNotFound = errors.New("tenant not found")
 
 // client returns the Redis connection of the tenant.
 func (t *tenantCache) client(tenantID uint64) (*dbdrivers.RedisDBConn, error) {
@@ -262,7 +262,7 @@ func (t *tenantCache) GetJSON(c context.Context, tenantID uint64, key string, ds
 	}
 
 	if err := json.Unmarshal([]byte(jsonStr), &dst); err != nil {
-		return false, errors.WithStack(err)
+		return false, stacktrace.WithStack(err)
 	}
 
 	return true, nil
@@ -285,13 +285,13 @@ func (t *tenantCache) MSetJSON(c context.Context, tenantID uint64, keys []string
 	for i, key := range keys {
 		jsonBytes, err := json.Marshal(data[i])
 		if err != nil {
-			return errors.WithStack(err)
+			return stacktrace.WithStack(err)
 		}
 		values = append(values, t.key(key), string(jsonBytes))
 	}
 
 	if err := client.MSetWithTTL(c, ttl, values); err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	return nil
@@ -310,7 +310,7 @@ func (t *tenantCache) MGetJSON(c context.Context, tenantID uint64, dst interface
 
 	values, err := client.MGet(c, pks...)
 	if err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	// Build a JSON array of the existing values (missing keys are skipped).
@@ -329,7 +329,7 @@ func (t *tenantCache) MGetJSON(c context.Context, tenantID uint64, dst interface
 	buf.WriteByte(']')
 	err = json.Unmarshal(buf.Bytes(), &dst)
 	if err != nil {
-		return errors.WithStack(err)
+		return stacktrace.WithStack(err)
 	}
 
 	return nil

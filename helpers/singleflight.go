@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"time"
 
-	pkgerrors "github.com/pkg/errors"
+	"github.com/retail-ai-inc/bean/v3/stacktrace"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -76,7 +76,7 @@ func SingleDo[T any](ctx context.Context, key string, call func() (T, error), re
 
 	val, ok := result.(T)
 	if !ok {
-		err = pkgerrors.WithStack(fmt.Errorf("expected type %T but got type %T", data, result))
+		err = stacktrace.WithStack(fmt.Errorf("expected type %T but got type %T", data, result))
 		return
 	}
 	return val, nil
@@ -86,7 +86,7 @@ func SingleDoChan[T any](ctx context.Context, key string, call func() (T, error)
 	result := singleFlightGroup.DoChan(key, func() (result interface{}, err error) {
 		defer func() {
 			if e := recover(); e != nil {
-				err = pkgerrors.WithStack(fmt.Errorf("%v", e))
+				err = stacktrace.WithStack(fmt.Errorf("%v", e))
 			}
 		}()
 
@@ -127,12 +127,12 @@ func SingleDoChan[T any](ctx context.Context, key string, call func() (T, error)
 		}
 		val, ok := r.Val.(T)
 		if !ok {
-			err = pkgerrors.WithStack(fmt.Errorf("expected type %T but got type %T", data, r.Val))
+			err = stacktrace.WithStack(fmt.Errorf("expected type %T but got type %T", data, r.Val))
 			return
 		}
 		return val, nil
 	case <-ctx.Done():
-		err = pkgerrors.WithStack(errors.Join(ctx.Err(), context.Cause(ctx)))
+		err = stacktrace.WithStack(errors.Join(ctx.Err(), context.Cause(ctx)))
 		return
 	}
 }

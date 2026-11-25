@@ -233,3 +233,38 @@ func funcname(name string) string {
 	i = strings.Index(name, ".")
 	return name[i+1:]
 }
+
+// WithStack annotates err with the stack of its caller, like github.com/pkg/errors.WithStack: `%+v` prints the
+// error and the stack, `errors.Is` / `errors.As` see err, and Sentry reads the stack through `StackTrace()`. It
+// returns nil if err is nil.
+func WithStack(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &withStack{err: err, Stack: Callers()}
+}
+
+type withStack struct {
+	err error
+	*Stack
+}
+
+func (w *withStack) Error() string { return w.err.Error() }
+
+func (w *withStack) Unwrap() error { return w.err }
+
+func (w *withStack) Format(s fmt.State, verb rune) {
+	switch verb {
+	case 'v':
+		if s.Flag('+') {
+			_, _ = fmt.Fprintf(s, "%+v", w.err)
+			w.Stack.Format(s, verb)
+			return
+		}
+		fallthrough
+	case 's':
+		_, _ = io.WriteString(s, w.Error())
+	case 'q':
+		_, _ = fmt.Fprintf(s, "%q", w.Error())
+	}
+}
