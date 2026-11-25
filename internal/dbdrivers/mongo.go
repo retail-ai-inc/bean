@@ -202,11 +202,13 @@ func connectMongoDB(userName, password, host, port, dbName string,
 		SetMinPoolSize(minPoolSize).
 		SetMaxConnIdleTime(maxConnIdleTime)
 
+	releaseTLS := noRelease
 	if ssl.On {
-		tlsConfig, err := newTLSConfig(ssl, hostsWithoutPort(host))
+		tlsConfig, release, err := newTLSConfig(ssl, hostsWithoutPort(host))
 		if err != nil {
 			return nil, "", noClose, err
 		}
+		releaseTLS = release
 		opts.SetTLSConfig(tlsConfig)
 	}
 
@@ -241,10 +243,12 @@ func connectMongoDB(userName, password, host, port, dbName string,
 
 	mdb, err := mongo.Connect(ctx, opts)
 	if err != nil {
+		releaseTLS()
 		return nil, "", noClose, fmt.Errorf("failed to connect mongo database: %w", err)
 	}
 
 	disconnect := func() error {
+		defer releaseTLS()
 		// Not the connect ctx: it is canceled when this function returns.
 		ctx, cancel := context.WithTimeout(context.Background(), mongoDisconnectTimeout)
 		defer cancel()

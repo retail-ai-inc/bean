@@ -770,7 +770,7 @@ func connectRedisDB(
 		}
 	}
 
-	tlsConfig, err := newTLSConfig(ssl, hostsWithoutPort(host))
+	tlsConfig, releaseTLS, err := newTLSConfig(ssl, hostsWithoutPort(host))
 	if err != nil {
 		return nil, 0, noClose, err
 	}
@@ -789,13 +789,18 @@ func connectRedisDB(
 		ReadOnly:     readOnly,
 		TLSConfig:    tlsConfig,
 	})
+	closeClient := func() error {
+		defer releaseTLS()
+		return rdb.Close()
+	}
+
 	// Check the connection
 	_, err = rdb.Ping(context.TODO()).Result()
 	if err != nil {
-		return nil, 0, noClose, stderrors.Join(fmt.Errorf("redis connection error: %w", err), rdb.Close())
+		return nil, 0, noClose, stderrors.Join(fmt.Errorf("redis connection error: %w", err), closeClient())
 	}
 
-	return rdb, dbName, rdb.Close, nil
+	return rdb, dbName, closeClient, nil
 }
 
 func GetRedisCachePrefix() string {

@@ -29,6 +29,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -74,12 +75,15 @@ func sslConfigFromMap(cfg map[string]interface{}) SSLConfig {
 	return ssl
 }
 
-// newTLSConfig returns the TLS config of a database connection, nil if SSL is off. hosts are the hosts of the
+func noRelease() {}
+
+// newTLSConfig returns the TLS config of a database connection, nil if SSL is off, and a function releasing its
+// resources (the certificate file watcher with `hotReload`) to call when the connection is closed. hosts are the hosts of the
 // connection as configured (without port); with `hotReload` they are used to verify the server name, see
 // `verifyServerName`.
-func newTLSConfig(ssl SSLConfig, hosts []string) (*tls.Config, error) {
+func newTLSConfig(ssl SSLConfig, hosts []string) (*tls.Config, func(), error) {
 	if !ssl.On {
-		return nil, nil
+		return nil, noRelease, nil
 	}
 
 	tlsConfig := &tls.Config{
@@ -88,19 +92,19 @@ func newTLSConfig(ssl SSLConfig, hosts []string) (*tls.Config, error) {
 	}
 
 	if !ssl.ShouldVerifyCertificate() {
-		return tlsConfig, nil
+		return tlsConfig, noRelease, nil
 	}
 
 	rootCAs, err := loadRootCAs(ssl.CertFile)
 	if err != nil {
-		return nil, err
+		return nil, noRelease, err
 	}
 
 	if ssl.HotReload && ssl.CertFile != "" {
 		tlsConfig.InsecureSkipVerify = true
 
-		cm := &certManager{}
-		cm.rootCAs.Store(rootCAs)
+		// One watcher per certificate file, shared by the connections using it and stopped with the last one.
+		cm, release := acquireCertManager(ssl.CertFile, rootCAs)
 
 		// The root CAs can change at runtime, so the certificate is verified here instead of by crypto/tls
 		// (InsecureSkipVerify only disables the built-in verification): the chain against the current root CAs,
@@ -138,12 +142,11 @@ func newTLSConfig(ssl SSLConfig, hosts []string) (*tls.Config, error) {
 			return verifyServerName(cs.PeerCertificates[0], cs.ServerName, hosts)
 		}
 
-		watchCertFile(ssl.CertFile, cm)
-	} else {
-		tlsConfig.RootCAs = rootCAs
+		return tlsConfig, release, nil
 	}
 
-	return tlsConfig, nil
+	tlsConfig.RootCAs = rootCAs
+	return tlsConfig, noRelease, nil
 }
 
 func loadRootCAs(certFile string) (*x509.CertPool, error) {
@@ -166,21 +169,66 @@ func loadRootCAs(certFile string) (*x509.CertPool, error) {
 	return rootCAs, nil
 }
 
-func watchCertFile(certFile string, cm *certManager) {
+// certWatcher is the certificate manager of a certificate file and the watcher reloading it, shared by the
+// connections using that file.
+type certWatcher struct {
+	cm   *certManager
+	refs int
+	stop func()
+}
+
+var (
+	certWatchersMu sync.Mutex
+	certWatchers   = map[string]*certWatcher{}
+)
+
+// acquireCertManager returns the certificate manager of certFile, watched for changes, and the function releasing
+// it: the watcher is stopped when the last user releases it.
+func acquireCertManager(certFile string, rootCAs *x509.CertPool) (*certManager, func()) {
+	certWatchersMu.Lock()
+	defer certWatchersMu.Unlock()
+
+	w, ok := certWatchers[certFile]
+	if !ok {
+		cm := &certManager{}
+		cm.rootCAs.Store(rootCAs)
+		w = &certWatcher{cm: cm, stop: watchCertFile(certFile, cm)}
+		certWatchers[certFile] = w
+	}
+	w.refs++
+
+	return w.cm, sync.OnceFunc(func() {
+		certWatchersMu.Lock()
+		defer certWatchersMu.Unlock()
+		w.refs--
+		if w.refs == 0 {
+			delete(certWatchers, certFile)
+			w.stop()
+		}
+	})
+}
+
+// watchCertFile reloads the root CAs of cm when certFile changes, until the returned stop function is called.
+func watchCertFile(certFile string, cm *certManager) (stop func()) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return
+		return noRelease
 	}
 
 	if err := watcher.Add(certFile); err != nil {
 		_ = watcher.Close()
-		return
+		return noRelease
 	}
 
+	done := make(chan struct{})
 	go func() {
-		//nolint:errcheck
-		defer watcher.Close()
+		defer close(done)
 		var timer *time.Timer
+		defer func() {
+			if timer != nil {
+				timer.Stop()
+			}
+		}()
 		for {
 			select {
 			case event, ok := <-watcher.Events:
@@ -209,6 +257,11 @@ func watchCertFile(certFile string, cm *certManager) {
 			}
 		}
 	}()
+
+	return func() {
+		_ = watcher.Close() // closes the channels: the goroutine returns
+		<-done
+	}
 }
 
 // verifyServerName checks that the server certificate is valid for the server the client connected to.

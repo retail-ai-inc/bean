@@ -236,7 +236,7 @@ func connectMysqlDB(userName, password, host, port, dbName string, readHosts []s
 		return nil, "", noClose, err
 	}
 
-	dsn, err := mysqlDSN(userName, password, host, port, dbName, ssl)
+	dsn, releaseTLS, err := mysqlDSN(userName, password, host, port, dbName, ssl)
 	if err != nil {
 		return nil, "", noClose, err
 	}
@@ -254,25 +254,28 @@ func connectMysqlDB(userName, password, host, port, dbName string, readHosts []s
 				_ = sqlDB.Close()
 			}
 		}
+		releaseTLS()
 		return nil, "", noClose, fmt.Errorf("failed to connect mysql database: %w", err)
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
+		releaseTLS()
 		return nil, "", noClose, fmt.Errorf("failed to get mysql database connection: %w", err)
 	}
 
 	setMysqlConnPool(sqlDB, maxIdleConnections, maxOpenConnections, maxConnectionLifeTime, maxIdleConnectionLifeTime)
-	closers := []func() error{sqlDB.Close}
+	closers := []func() error{sqlDB.Close, func() error { releaseTLS(); return nil }}
 
 	if len(readAddrs) > 0 {
 		replicas := make([]gorm.Dialector, 0, len(readAddrs))
 		for _, addr := range readAddrs {
 			readHost := net.JoinHostPort(addr.host, addr.port)
-			replicaDSN, err := mysqlDSN(userName, password, addr.host, addr.port, dbName, ssl)
+			replicaDSN, releaseReplicaTLS, err := mysqlDSN(userName, password, addr.host, addr.port, dbName, ssl)
 			if err != nil {
 				return nil, "", noClose, errors.Join(err, closeAll(closers))
 			}
+			closers = append(closers, func() error { releaseReplicaTLS(); return nil })
 
 			replicaDB, err := sql.Open("mysql", replicaDSN)
 			if err != nil {
@@ -320,17 +323,22 @@ func useMysqlReplicas(db *gorm.DB, replicas []gorm.Dialector) error {
 	return nil
 }
 
-func mysqlDSN(userName, password, host, port, dbName string, ssl SSLConfig) (string, error) {
+// mysqlDSN returns the DSN of a MySQL connection and the function releasing its TLS resources (see
+// `newTLSConfig`), to call when the connection is closed.
+func mysqlDSN(userName, password, host, port, dbName string, ssl SSLConfig) (string, func(), error) {
 	tlsConfigName := ""
+	release := noRelease
 	if ssl.On {
-		tlsConfig, err := newTLSConfig(ssl, []string{host})
+		tlsConfig, rel, err := newTLSConfig(ssl, []string{host})
 		if err != nil {
-			return "", err
+			return "", noRelease, err
 		}
+		release = rel
 
 		tlsConfigName = mysqlTLSConfigName(host, dbName, ssl)
 		if err := mysqlDriver.RegisterTLSConfig(tlsConfigName, tlsConfig); err != nil {
-			return "", fmt.Errorf("failed to register mysql tls config: %w", err)
+			release()
+			return "", noRelease, fmt.Errorf("failed to register mysql tls config: %w", err)
 		}
 	}
 
@@ -338,7 +346,7 @@ func mysqlDSN(userName, password, host, port, dbName string, ssl SSLConfig) (str
 		"%s:%s@tcp(%s)/%s?parseTime=true&multiStatements=true%s",
 		userName, password, net.JoinHostPort(host, port), dbName,
 		mysqlTLSDSNParam(tlsConfigName),
-	), nil
+	), release, nil
 }
 
 type mysqlAddr struct {

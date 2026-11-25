@@ -199,7 +199,7 @@ func TestMysqlDSNWithoutSSL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dsn, err := mysqlDSN("user", "pass", tt.host, "3306", "db", SSLConfig{})
+			dsn, _, err := mysqlDSN("user", "pass", tt.host, "3306", "db", SSLConfig{})
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, dsn)

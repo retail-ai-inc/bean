@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -34,7 +35,7 @@ func TestSSLConfigShouldVerifyCertificate(t *testing.T) {
 			t.Fatal("expected certificate verification to be enabled")
 		}
 
-		tlsConfig, err := newTLSConfig(ssl, nil)
+		tlsConfig, _, err := newTLSConfig(ssl, nil)
 		if err != nil {
 			t.Fatalf("expected TLS config: %v", err)
 		}
@@ -151,10 +152,11 @@ func TestNewTLSConfig_HotReloadVerifiesServerName(t *testing.T) {
 
 	dial := func(t *testing.T, addr, serverName string, hosts []string) error {
 		t.Helper()
-		cfg, err := newTLSConfig(ssl, hosts)
+		cfg, release, err := newTLSConfig(ssl, hosts)
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer release()
 		cfg = cfg.Clone()
 		cfg.ServerName = serverName // like the drivers: the dialed host, or empty
 		conn, err := tls.Dial("tcp", addr, cfg)
@@ -197,5 +199,52 @@ func TestHostsWithoutPort(t *testing.T) {
 	want := []string{"a.example", "10.0.0.1", "::1", "b.example"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+// The connections using the same certificate file share one watcher, stopped when the last one is released.
+func TestNewTLSConfig_HotReloadWatcherIsSharedAndStopped(t *testing.T) {
+	ca := newTestCA(t)
+	verify := true
+	ssl := SSLConfig{On: true, CertFile: ca.certFile, VerifyCertificate: &verify, HotReload: true}
+
+	baseline := runtime.NumGoroutine()
+
+	var releases []func()
+	for range 10 {
+		_, release, err := newTLSConfig(ssl, []string{"db.example"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		releases = append(releases, release)
+	}
+
+	certWatchersMu.Lock()
+	watchers, refs := len(certWatchers), certWatchers[ca.certFile].refs
+	certWatchersMu.Unlock()
+	if watchers != 1 || refs != 10 {
+		t.Fatalf("got %d watchers with %d refs, want 1 watcher with 10 refs", watchers, refs)
+	}
+	if got := runtime.NumGoroutine() - baseline; got > 3 {
+		t.Fatalf("%d goroutines started for 10 configs, want one watcher", got)
+	}
+
+	for _, release := range releases {
+		release()
+		release() // idempotent
+	}
+
+	certWatchersMu.Lock()
+	watchers = len(certWatchers)
+	certWatchersMu.Unlock()
+	if watchers != 0 {
+		t.Fatalf("got %d watchers after release, want 0", watchers)
+	}
+	deadline := time.Now().Add(time.Second)
+	for runtime.NumGoroutine() > baseline && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := runtime.NumGoroutine(); got > baseline {
+		t.Fatalf("%d goroutines left after release, baseline %d", got, baseline)
 	}
 }
