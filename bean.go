@@ -24,6 +24,7 @@ package bean
 
 import (
 	"context"
+	"crypto/subtle"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -188,7 +189,7 @@ func New() (*Bean, error) {
 			// If you set empty `authBearerToken` string in env.json then bean will not check the `Authorization` header.
 			if config.Bean.Database.Memory.DelKeyAPI.AuthBearerToken != "" {
 				tokenString := helpers.ExtractJWTFromHeader(c)
-				if tokenString != config.Bean.Database.Memory.DelKeyAPI.AuthBearerToken {
+				if subtle.ConstantTimeCompare([]byte(tokenString), []byte(config.Bean.Database.Memory.DelKeyAPI.AuthBearerToken)) != 1 {
 					return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 						"message": "Unauthorized!",
 					})

@@ -123,3 +123,65 @@ func Test_DecodeJWTWhenExpiredToken(t *testing.T) {
 	err = DecodeJWT(c, extractedData, "testSecret")
 	assert.True(t, errors.Is(err, ErrJWTokenExpired))
 }
+
+func newJWTContext(authorization string) *echo.Context {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	if authorization != "" {
+		req.Header.Set("Authorization", authorization)
+	}
+	return e.NewContext(req, httptest.NewRecorder())
+}
+
+func TestExtractJWTFromHeader(t *testing.T) {
+	tests := map[string]string{
+		"Bearer abc.def":   "abc.def",
+		"bearer abc.def":   "abc.def",
+		"BEARER  abc.def ": "abc.def",
+		"Bearerabc.def":    "",
+		"Basic abc.def":    "",
+		"Bearer":           "",
+		"":                 "",
+	}
+	for header, want := range tests {
+		assert.Equal(t, want, ExtractJWTFromHeader(newJWTContext(header)), header)
+	}
+}
+
+// The default options (HS256 only, `exp` required) must apply even when the caller passes other options.
+func TestDecodeJWT_DefaultsAlwaysApply(t *testing.T) {
+	const secret = "testSecret"
+	sign := func(t *testing.T, method jwt.SigningMethod, claims jwt.Claims) string {
+		t.Helper()
+		token, err := jwt.NewWithClaims(method, claims).SignedString([]byte(secret))
+		assert.NoError(t, err)
+		return token
+	}
+	valid := jwt.RegisteredClaims{Audience: jwt.ClaimStrings{"app"}, ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour))}
+	noExp := jwt.RegisteredClaims{Audience: jwt.ClaimStrings{"app"}}
+
+	tests := []struct {
+		name    string
+		token   string
+		wantErr bool
+	}{
+		{name: "valid", token: sign(t, jwt.SigningMethodHS256, valid)},
+		{name: "no exp", token: sign(t, jwt.SigningMethodHS256, noExp), wantErr: true},
+		{name: "other algorithm", token: sign(t, jwt.SigningMethodHS512, valid), wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newJWTContext("Bearer " + tt.token)
+			err := DecodeJWT(c, &jwt.RegisteredClaims{}, secret, jwt.WithAudience("app"))
+			if tt.wantErr {
+				assert.ErrorIs(t, err, ErrJWTokenInvalid)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+
+	// A caller option can still override a default.
+	c := newJWTContext("Bearer " + sign(t, jwt.SigningMethodHS512, valid))
+	assert.NoError(t, DecodeJWT(c, &jwt.RegisteredClaims{}, secret, jwt.WithValidMethods([]string{"HS512"})))
+}
