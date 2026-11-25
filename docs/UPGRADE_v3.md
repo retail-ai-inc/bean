@@ -364,9 +364,9 @@ e, closeEcho, err := bean.NewEcho()
 18. **`helpers.DecodeJWT` 的默认校验始终生效**：v2 中只要传入任意 `opts`（例如 `jwt.WithAudience`），默认的"只允许 HS256""必须有 `exp`""严格解码"就全部失效，没有 `exp` 的 token 会永久有效。v3 中默认选项始终生效，`opts` 追加在后面（仍可用 `jwt.WithValidMethods` 覆盖允许的算法）；需要接受没有 `exp` 的 token 时请直接使用 `jwt.ParseWithClaims`。`helpers.ExtractJWTFromHeader` 要求 `Bearer` 后有空格（v2 中 `Bearerxabc` 也会取出 `abc`），scheme 不区分大小写。
 19. **JSON 请求体错误返回 400**：v2 中请求体 JSON 语法错误、含未知字段或类型不匹配时，`c.Bind` 返回普通 error，客户端收到 **500**，并且错误被上报到 Sentry。v3 返回 400 的 `*berror.APIError`，响应为 `{"errorCode":"100001","errorMsg":"invalid JSON request body: ..."}`（`PROBLEM_PARSING_JSON`），不上报 Sentry。同时修正了误拒：嵌入结构体的字段、没有 json tag 的字段、绑定到 map 时的任意字段，v2 都会被当作未知字段拒绝；JSON 值后面带多余数据（如 `{"a":1} garbage`）现在会被拒绝。
 20. **`async.ExecuteWithContext` / `ExecuteWithTimeout` 保留请求上下文**：v2 中这两个函数的任务上下文丢失了请求 ID（异步任务的日志没有 `id`）和请求的 Sentry trace，`ExecuteWithTimeout` 还让任务和请求共用同一个 Sentry hub。v3 中它们与 `ExecuteContext` 行为一致：上下文不随请求取消，带请求 ID、克隆的 hub 和延续的 trace。另外：未指定池名时在默认池中执行（v2 直接启动 goroutine），因此优雅关停时会等待它们；`ExecuteWithTimeout` 中任务返回的 error 除上报 Sentry 外也会记录日志。
-21. **Redis**：`RPush` 在 v2 中每次调用都会失败（`can't marshal *[]string`），v3 修复，空列表为 no-op；`store/redis` 的 `MSetJSON` 在 v2 中不做 JSON 编码（传入 struct 会失败，写入的值也无法被 `GetJSON` 读取），v3 与 `SetJSON` 一致；集群模式下 `MGet` 有任意 key 不存在时 v2 整批返回 nil，v3 按 key 返回（不存在的为 nil），`Keys` 改为查询所有 master，多 key 的 `DelKey` 不再因 CROSSSLOT 失败。
+21. **Redis**：`RPush` 在 v2 中每次调用都会失败（`can't marshal *[]string`），v3 修复，空列表为 no-op；`store/redis` 的 `MSetJSON` 在 v2 中不做 JSON 编码（传入 struct 会失败，写入的值也无法被 `GetJSON` 读取），v3 与 `SetJSON` 一致，对每个值做 `json.Marshal`。**注意**：如果项目为了绕开 v2 的问题，向 `MSetJSON` 传入了预先序列化好的 JSON 字符串（或 `[]byte`），v3 会再编码一次（字符串变成带引号的 JSON 字符串，`[]byte` 变成 base64），之后 `GetJSON` / `MGetJSON` 读出的数据就不对了，需要改为传入原始对象（struct、map 等）；缓存中已有的数据不受影响；集群模式下 `MGet` 有任意 key 不存在时 v2 整批返回 nil，v3 按 key 返回（不存在的为 nil），`Keys` 改为查询所有 master，多 key 的 `DelKey` 不再因 CROSSSLOT 失败。
 22. **出站请求**：`transport/http` 的日志 Transport 在 `DumpBody` 时，关闭响应体不会关闭底层连接（连接泄漏），v3 修复；请求体只读取 `BodyLimit` 字节用于日志，读取出错时请求失败而不是发送截断的 body。`trace.PropagateToGRPC` 不再覆盖 context 中已有的 outgoing metadata（如 authorization）；`PropagateToHTTP` 重复调用不会产生重复的 header。
-23. **bean CLI**：`bean gen spec` 对带域名的模块路径（如 `example.com/demo`）不再输出空的 `{}`；`bean test gen` 支持 PUT / PATCH；`bean test -o json|html` 在测试失败时退出码为 1，报告文件名中的 `/` 替换为 `_`；`bean create dockerfile` 生成可用的 Dockerfile / docker-compose.yml，并新增 `.air.toml`；`bean create handler|repo|service` 通过解析 `routers/route.go` 插入代码，无法插入时报错并提示需要手工添加的内容。
+23. **bean CLI**：`bean gen spec` 对带域名的模块路径（如 `example.com/demo`）不再输出空的 `{}`；`bean test gen` 支持 PUT / PATCH；`bean test -o json|html` 在测试失败时退出码为 1（v2 中模块路径不含 `/` 时测试失败也返回 0，含 `/` 时报告无法写出），报告文件名中的 `/` 替换为 `_`（例如 `test_report_example.com_demo_<时间>.json`），CI 中依赖退出码或按文件名收集报告的地方需要相应调整；`bean create dockerfile` 生成可用的 Dockerfile / docker-compose.yml，并新增 `.air.toml`；`bean create handler|repo|service` 通过解析 `routers/route.go` 插入代码，无法插入时报错并提示需要手工添加的内容。
 
 ### 5.1 404 / 405 的处理方式
 
@@ -413,3 +413,5 @@ v2 用一个全局中间件在每个请求上遍历全部路由、自行匹配�
 - [ ] 开启了数据库 `ssl.hotReload` 的环境：确认证书对配置的 `host` 有效（见第 5 节第 17 条）
 - [ ] 调用 `helpers.DecodeJWT` 并传入了 `opts` 的地方：确认 token 都带 `exp`（见第 5 节第 18 条）
 - [ ] 如果有客户端依赖"请求体 JSON 错误时返回 500"，改为处理 400 和 `errorCode` `100001`（见第 5 节第 19 条）
+- [ ] 搜索 `MSetJSON(` 的调用：确认传入的是原始对象，而不是预先序列化好的 JSON 字符串或 `[]byte`（见第 5 节第 21 条）
+- [ ] CI 中使用 `bean test -o json|html` 的地方：测试失败时命令会返回 1；按新的报告文件名（`/` 替换为 `_`）收集报告（见第 5 节第 23 条）
