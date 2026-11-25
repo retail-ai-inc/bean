@@ -25,8 +25,11 @@ package dbdrivers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/retail-ai-inc/bean/v3/aes"
@@ -78,6 +81,7 @@ func InitMongoMasterConn(config MongoConfig, logger *slog.Logger) (*mongo.Client
 	return nil, "", noClose, nil
 }
 
+// getAllMongoTenantDB returns all tenant db connections. On error, the connections already opened are closed.
 func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger *slog.Logger,
 ) (map[uint64]*mongo.Client, map[uint64]string, []func() error, error) {
 
@@ -85,13 +89,17 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 	mongoDBNames := make(map[uint64]string, len(tenantCfgs))
 
 	closers := make([]func() error, 0, len(tenantCfgs))
+	fail := func(t *TenantConnections, msg string, err error) (map[uint64]*mongo.Client, map[uint64]string, []func() error, error) {
+		return nil, nil, noClosers, errors.Join(
+			fmt.Errorf("%s (%d:%s): %w", msg, t.TenantID, t.Code, err), closeAll(closers))
+	}
+
 	for _, t := range tenantCfgs {
 
 		var cfgsMap map[string]map[string]interface{}
-		var err error
 		if t.Connections != nil {
-			if err = json.Unmarshal(t.Connections, &cfgsMap); err != nil {
-				return nil, nil, noClosers, fmt.Errorf("failed to unmarshal tenant connections: %w", err)
+			if err := json.Unmarshal(t.Connections, &cfgsMap); err != nil {
+				return fail(t, "failed to unmarshal tenant connections", err)
 			}
 		}
 
@@ -101,28 +109,34 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 			mongoConns[t.TenantID], mongoDBNames[t.TenantID] = nil, ""
 			continue
 		}
-		userName := mongoCfg["username"].(string)
-		password := mongoCfg["password"].(string)
+
+		var userName, password, port, dbName string
+		var err error
+		for _, f := range []struct {
+			dst *string
+			key string
+		}{{&userName, "username"}, {&password, "password"}, {&port, "port"}, {&dbName, "database"}} {
+			if *f.dst, err = requiredTenantString(mongoCfg, f.key); err != nil {
+				return fail(t, "invalid mongo tenant config", err)
+			}
+		}
 
 		// IMPORTANT: If tenant database password is encrypted in master db config.
 		if tenantDBPassPhraseKey != "" {
 			password, err = aes.BeanAESDecrypt(tenantDBPassPhraseKey, password)
 			if err != nil {
-				return nil, nil, noClosers, fmt.Errorf("failed to decrypt mongo tenant password: %w", err)
+				return fail(t, "failed to decrypt mongo tenant password", err)
 			}
 		}
-
-		host := mongoCfg["host"].(string)
 
 		// IMPORTANT - If a command or service wants to use a different `host` parameter for tenant database connection
 		// then it's easy to do just by passing that parameter string name using `bean.TenantAlterDbHostParam`.
 		// Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
-		if tenantAlterDbHostParam != "" && mongoCfg[tenantAlterDbHostParam] != nil {
-			host = mongoCfg[tenantAlterDbHostParam].(string)
+		host, err := tenantHost(mongoCfg, tenantAlterDbHostParam)
+		if err != nil {
+			return fail(t, "invalid mongo tenant config", err)
 		}
 
-		port := mongoCfg["port"].(string)
-		dbName := mongoCfg["database"].(string)
 		ssl := sslConfigFromMap(mongoCfg)
 
 		var closeDB func() error
@@ -133,7 +147,7 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 			config.Debug, ssl, logger,
 		)
 		if err != nil {
-			return nil, nil, noClosers, fmt.Errorf("failed to connect mongo tenant database: %w", err)
+			return fail(t, "failed to connect mongo tenant database", err)
 		}
 		closers = append(closers, closeDB)
 	}
@@ -141,15 +155,44 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 	return mongoConns, mongoDBNames, closers, nil
 }
 
+// mongoDefaultConnectTimeout is used when `connectTimeout` is not set.
+const mongoDefaultConnectTimeout = 10 * time.Second
+
+// mongoDisconnectTimeout bounds the graceful disconnection (ending the sessions) on shutdown.
+const mongoDisconnectTimeout = 10 * time.Second
+
+// mongoConnString returns the connection string of the comma separated hosts, each with the default port unless it
+// has its own (e.g. a replica set `a,b:27018`).
+func mongoConnString(hostList, port string) string {
+	var hosts []string
+	for _, h := range strings.Split(hostList, ",") {
+		h = strings.TrimSpace(h)
+		if h == "" {
+			continue
+		}
+		if _, _, err := net.SplitHostPort(h); err != nil && port != "" {
+			h = net.JoinHostPort(strings.Trim(h, "[]"), port)
+		}
+		hosts = append(hosts, h)
+	}
+	return "mongodb://" + strings.Join(hosts, ",")
+}
+
 func connectMongoDB(userName, password, host, port, dbName string,
 	maxPoolSize, minPoolSize uint64,
+	// maxConnIdleTime is `mongo.maxConnectionLifeTime` in env.json: the mongo driver has no maximum connection
+	// lifetime, the closest option is the maximum idle time of a pooled connection.
 	connectTimeout, maxConnIdleTime time.Duration,
 	debug bool, ssl SSLConfig, logger *slog.Logger,
 ) (*mongo.Client, string, func() error, error) {
 
-	connStr := "mongodb://" + host + ":" + port
+	connStr := mongoConnString(host, port)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	timeout := connectTimeout
+	if timeout <= 0 {
+		timeout = mongoDefaultConnectTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	opts := options.Client().
@@ -201,11 +244,18 @@ func connectMongoDB(userName, password, host, port, dbName string,
 		return nil, "", noClose, fmt.Errorf("failed to connect mongo database: %w", err)
 	}
 
+	disconnect := func() error {
+		// Not the connect ctx: it is canceled when this function returns.
+		ctx, cancel := context.WithTimeout(context.Background(), mongoDisconnectTimeout)
+		defer cancel()
+		return mdb.Disconnect(ctx)
+	}
+
 	// Check the connection
 	err = mdb.Ping(ctx, nil)
 	if err != nil {
-		return nil, "", noClose, fmt.Errorf("failed to ping mongo database: %w", err)
+		return nil, "", noClose, errors.Join(fmt.Errorf("failed to ping mongo database: %w", err), disconnect())
 	}
 
-	return mdb, dbName, func() error { return mdb.Disconnect(ctx) }, nil
+	return mdb, dbName, disconnect, nil
 }

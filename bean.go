@@ -616,22 +616,23 @@ func (b *Bean) InitDB() error {
 	var masterMemoryDB memory.Cache
 	var cleanups []func() error
 
+	// On error, close the connections already opened.
 	masterMySQLDB, masterMySQLDBName, close, err := dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL, appLogger())
 	if err != nil {
-		return fmt.Errorf("failed to initialize master mysql db: %w", err)
+		return errors.Join(fmt.Errorf("failed to initialize master mysql db: %w", err), closer(cleanups)())
 	}
 	cleanups = append(cleanups, close)
 
 	masterMongoDB, masterMongoDBName, close, err = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo, appLogger())
 	if err != nil {
-		return fmt.Errorf("failed to initialize master mongo db: %w", err)
+		return errors.Join(fmt.Errorf("failed to initialize master mongo db: %w", err), closer(cleanups)())
 	}
 	cleanups = append(cleanups, close)
 
 	var redisCloses []func() error
 	masterRedisDB, redisCloses, err = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
 	if err != nil {
-		return fmt.Errorf("failed to initialize master redis db: %w", err)
+		return errors.Join(fmt.Errorf("failed to initialize master redis db: %w", err), closer(cleanups)())
 	}
 	cleanups = append(cleanups, redisCloses...)
 
@@ -640,19 +641,19 @@ func (b *Bean) InitDB() error {
 
 		tenantMySQLDBs, tenantMySQLDBNames, closeDBs, err = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, appLogger())
 		if err != nil {
-			return fmt.Errorf("failed to initialize tenant mysql dbs: %w", err)
+			return errors.Join(fmt.Errorf("failed to initialize tenant mysql dbs: %w", err), closer(cleanups)())
 		}
 		cleanups = append(cleanups, closeDBs...)
 
 		tenantMongoDBs, tenantMongoDBNames, closeDBs, err = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, appLogger())
 		if err != nil {
-			return fmt.Errorf("failed to initialize tenant mongo dbs: %w", err)
+			return errors.Join(fmt.Errorf("failed to initialize tenant mongo dbs: %w", err), closer(cleanups)())
 		}
 		cleanups = append(cleanups, closeDBs...)
 
 		tenantRedisDBs, closeDBs, err = dbdrivers.InitRedisTenantConns(b.Config.Database.Redis, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
 		if err != nil {
-			return fmt.Errorf("failed to initialize tenant redis dbs: %w", err)
+			return errors.Join(fmt.Errorf("failed to initialize tenant redis dbs: %w", err), closer(cleanups)())
 		}
 		cleanups = append(cleanups, closeDBs...)
 	}

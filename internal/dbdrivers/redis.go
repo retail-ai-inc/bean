@@ -25,6 +25,7 @@ package dbdrivers
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -133,7 +134,7 @@ func InitRedisMasterConn(config RedisConfig) (*RedisDBConn, []func() error, erro
 					config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, true, masterCfg.SSL,
 				)
 				if err != nil {
-					return nil, noClosers, err
+					return nil, noClosers, stderrors.Join(err, closeAll(closeDBs))
 				}
 				closeDBs = append(closeDBs, close)
 			}
@@ -870,94 +871,106 @@ func clusterKeys(ctx context.Context, client redis.UniversalClient, pattern stri
 	return keys, nil
 }
 
-// getAllRedisTenantDB returns a singleton tenant db connection for each tenant.
+// getAllRedisTenantDB returns a singleton tenant db connection for each tenant. On error, the connections already
+// opened are closed.
 func getAllRedisTenantDB(config RedisConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string,
 ) (map[uint64]*RedisDBConn, []func() error, error) {
 
 	tenantRedisDB := make(map[uint64]*RedisDBConn, len(tenantCfgs))
 	closers := make([]func() error, 0, len(tenantCfgs))
 
+	fail := func(t *TenantConnections, msg string, err error) (map[uint64]*RedisDBConn, []func() error, error) {
+		return nil, noClosers, stderrors.Join(
+			fmt.Errorf("%s (%d:%s): %w", msg, t.TenantID, t.Code, err), closeAll(closers))
+	}
+
 	for _, t := range tenantCfgs {
 
 		var cfgsMap map[string]map[string]interface{}
-		var err error
 		if t.Connections != nil {
-			if err = json.Unmarshal(t.Connections, &cfgsMap); err != nil {
-				return nil, noClosers, fmt.Errorf("failed to unmarshal tenant connections (%d:%s): %w", t.TenantID, t.Code, err)
+			if err := json.Unmarshal(t.Connections, &cfgsMap); err != nil {
+				return fail(t, "failed to unmarshal tenant connections", err)
 			}
 		}
 
 		// IMPORTANT: Check the `redis` object exist in the Connections column or not.
-		if redisCfg, ok := cfgsMap["redis"]; ok {
-			password := redisCfg["password"].(string)
+		redisCfg, ok := cfgsMap["redis"]
+		if !ok {
+			continue
+		}
 
-			// IMPORTANT: If tenant database password is encrypted in master mysql db config.
-			if tenantDBPassPhraseKey != "" {
-				password, err = aes.BeanAESDecrypt(tenantDBPassPhraseKey, password)
-				if err != nil {
-					return nil, noClosers, fmt.Errorf("failed to decrypt redis tenant database password (%d:%s): %w", t.TenantID, t.Code, err)
-				}
-			}
+		password, err := requiredTenantString(redisCfg, "password")
+		if err != nil {
+			return fail(t, "invalid redis tenant config", err)
+		}
 
-			host := redisCfg["host"].(string)
-
-			// IMPORTANT - If a command or service wants to use a different `host` parameter for tenant database connection
-			// then it's easy to do just by passing that parameter string name using `bean.TenantAlterDbHostParam`.
-			// Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
-			if tenantAlterDbHostParam != "" && redisCfg[tenantAlterDbHostParam] != nil {
-				host = redisCfg[tenantAlterDbHostParam].(string)
-			}
-
-			port := redisCfg["port"].(string)
-			var dbName int
-			if _dbName, ok := redisCfg["database"].(float64); ok {
-				dbName = int(_dbName)
-			}
-			ssl := sslConfigFromMap(redisCfg)
-
-			tenantRedisDB[t.TenantID] = &RedisDBConn{}
-			var (
-				close func() error
-				err   error
-			)
-			tenantRedisDB[t.TenantID].Primary, tenantRedisDB[t.TenantID].Name, close, err = connectRedisDB(
-				password, host, port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
-				config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, false, ssl,
-			)
+		// IMPORTANT: If tenant database password is encrypted in master mysql db config.
+		if tenantDBPassPhraseKey != "" {
+			password, err = aes.BeanAESDecrypt(tenantDBPassPhraseKey, password)
 			if err != nil {
-				return nil, noClosers, fmt.Errorf("failed to connect redis tenant database (%d:%s): %w", t.TenantID, t.Code, err)
-			}
-			closers = append(closers, close)
-
-			// IMPORTANT: Let's initialize the read replica connection if it is available.
-			// when `len(strings.Split(host, ","))>1`, it means that Redis will operate in `cluster` mode, and the `read` config will be ignored.
-			if len(strings.Split(host, ",")) > 1 {
-
-				tenantRedisDB[t.TenantID].isCluster = true
-
-			} else if readHostArray, ok := redisCfg["reads"]; ok && len(strings.Split(host, ",")) == 1 {
-				if readHost, ok := readHostArray.([]interface{}); ok {
-					redisReadConn := make(map[uint64]redis.UniversalClient, len(readHost))
-
-					for i, h := range readHost {
-
-						var host, port = h.(string), redisCfg["port"].(string)
-
-						redisReadConn[uint64(i)], _, close, err = connectRedisDB(
-							password, host, port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
-							config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, true, ssl,
-						)
-						if err != nil {
-							return nil, noClosers, fmt.Errorf("failed to connect to redis tenant database read replica (%d:%s): %w", t.TenantID, t.Code, err)
-						}
-						closers = append(closers, close)
-					}
-
-					tenantRedisDB[t.TenantID].Reads = redisReadConn
-					tenantRedisDB[t.TenantID].readCount = len(tenantRedisDB[t.TenantID].Reads)
-				}
+				return fail(t, "failed to decrypt redis tenant database password", err)
 			}
 		}
+
+		// IMPORTANT - If a command or service wants to use a different `host` parameter for tenant database connection
+		// then it's easy to do just by passing that parameter string name using `bean.TenantAlterDbHostParam`.
+		// Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
+		host, err := tenantHost(redisCfg, tenantAlterDbHostParam)
+		if err != nil {
+			return fail(t, "invalid redis tenant config", err)
+		}
+
+		port, err := requiredTenantString(redisCfg, "port")
+		if err != nil {
+			return fail(t, "invalid redis tenant config", err)
+		}
+		var dbName int
+		if _dbName, ok := redisCfg["database"].(float64); ok {
+			dbName = int(_dbName)
+		}
+		ssl := sslConfigFromMap(redisCfg)
+
+		conn := &RedisDBConn{}
+		var closeDB func() error
+		conn.Primary, conn.Name, closeDB, err = connectRedisDB(
+			password, host, port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
+			config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, false, ssl,
+		)
+		if err != nil {
+			return fail(t, "failed to connect redis tenant database", err)
+		}
+		closers = append(closers, closeDB)
+		tenantRedisDB[t.TenantID] = conn
+
+		// IMPORTANT: Let's initialize the read replica connection if it is available.
+		// when `len(strings.Split(host, ","))>1`, it means that Redis will operate in `cluster` mode, and the `read` config will be ignored.
+		if len(strings.Split(host, ",")) > 1 {
+			conn.isCluster = true
+			continue
+		}
+
+		readHosts, err := readHostsFromMap(redisCfg)
+		if err != nil {
+			return fail(t, "invalid redis tenant read replicas", err)
+		}
+		if len(readHosts) == 0 {
+			continue
+		}
+
+		redisReadConn := make(map[uint64]redis.UniversalClient, len(readHosts))
+		for i, readHost := range readHosts {
+			redisReadConn[uint64(i)], _, closeDB, err = connectRedisDB(
+				password, readHost, port, dbName, config.Maxretries, config.PoolSize, config.MinIdleConnections,
+				config.DialTimeout, config.ReadTimeout, config.WriteTimeout, config.PoolTimeout, true, ssl,
+			)
+			if err != nil {
+				return fail(t, "failed to connect to redis tenant database read replica", err)
+			}
+			closers = append(closers, closeDB)
+		}
+
+		conn.Reads = redisReadConn
+		conn.readCount = len(conn.Reads)
 	}
 
 	return tenantRedisDB, closers, nil
@@ -998,7 +1011,7 @@ func connectRedisDB(
 	// Check the connection
 	_, err = rdb.Ping(context.TODO()).Result()
 	if err != nil {
-		return nil, 0, noClose, fmt.Errorf("redis connection error: %w", err)
+		return nil, 0, noClose, stderrors.Join(fmt.Errorf("redis connection error: %w", err), rdb.Close())
 	}
 
 	return rdb, dbName, rdb.Close, nil
