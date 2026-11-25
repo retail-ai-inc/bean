@@ -27,13 +27,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path"
-	"runtime"
+	"runtime/debug"
 	"time"
 
 	bctx "github.com/retail-ai-inc/bean/v3/context"
 	"github.com/retail-ai-inc/bean/v3/internal/gopool"
 	"github.com/retail-ai-inc/bean/v3/internal/regex"
+	"github.com/retail-ai-inc/bean/v3/internal/sentryx"
 	"github.com/retail-ai-inc/bean/v3/log"
 	"github.com/retail-ai-inc/bean/v3/trace"
 
@@ -50,30 +50,18 @@ type (
 
 // Execute provides a safe way to execute a function asynchronously without any context, recovering if they panic
 // and provides all error stack aiming to facilitate fail causes discovery.
+//
+// It is `ExecuteContext` without a context: fn runs in the pool named poolName, or the default pool (it is waited
+// for on graceful shutdown). A task that cannot be submitted (e.g. during the shutdown) is logged.
 func Execute(fn func(), poolName ...string) {
-	var asyncFunc = func(task func()) {
-		go func() {
-			defer recoverPanic(context.TODO())
-			task()
-		}()
+	ctx := context.Background()
+	task := func(context.Context) error {
+		fn()
+		return nil
 	}
-
-	if len(poolName) > 0 && poolName[0] != "" {
-		pool, err := gopool.GetPool(poolName[0])
-		if err == nil && pool != nil {
-			asyncFunc = func(task func()) {
-				defer recoverPanic(context.TODO())
-				err = pool.Submit(task)
-				if err != nil {
-					panic(err)
-				}
-			}
-		} else {
-			log.Logger().Warn("async func will execute without goroutine pool", "pool", poolName[0])
-		}
+	if err := executeContext(ctx, task, poolOptions(poolName)...); err != nil {
+		log.Logger().ErrorContext(ctx, "Async task not executed.", "error", err)
 	}
-
-	asyncFunc(fn)
 }
 
 // ExecuteWithContext provides a safe way to execute a function asynchronously with a context, recovering if they panic
@@ -94,7 +82,10 @@ func ExecuteWithContext(fn Task, c *echo.Context, poolName ...string) {
 }
 
 // ExecuteWithTimeout executes fn asynchronously like `ExecuteContext` with `WithTimeout(duration)` (no timeout if
-// duration <= 0), in the pool named poolName or the default pool. The context passed to fn keeps the request ID, a
+// duration <= 0), in the pool named poolName or the default pool.
+//
+// Deprecated: use `ExecuteContext(ctx, fn, WithTimeout(duration), WithPoolName(poolName))`, which also returns the
+// submission error. The context passed to fn keeps the request ID, a
 // clone of the Sentry hub and the trace of ctx, but is not canceled with ctx. An error returned by fn is logged and
 // sent to Sentry.
 func ExecuteWithTimeout(ctx context.Context, duration time.Duration, fn TaskWithCtx, poolName ...string) {
@@ -114,6 +105,9 @@ func poolOptions(poolName []string) []AsyncOption {
 	return nil
 }
 
+// CaptureException sends err to Sentry with the hub of c.
+//
+// Deprecated: use `trace.SentryCaptureException`.
 func CaptureException(c context.Context, err error) {
 	trace.SentryCaptureException(c, err)
 }
@@ -225,7 +219,7 @@ func setupSentrySampling(current context.Context) []sentry.SpanOption {
 
 	// Continue the trace by passing the sentry-trace id, not by sharing the same span object, like distributed tracing across different servers.
 	// This is because the same span in the context is used in multiple goroutines, which causes a data race issue.
-	opts = append(opts, sentry.ContinueFromHeaders(extractTracing(current)))
+	opts = append(opts, sentry.ContinueFromHeaders(sentryx.TraceHeaders(current)))
 
 	var (
 		description     string
@@ -239,9 +233,7 @@ func setupSentrySampling(current context.Context) []sentry.SpanOption {
 	}
 	if description == "" {
 		// 0: setupSentrySampling, 1: executeContext, 2: the exported function, 3: its caller.
-		if pc, file, line, ok := runtime.Caller(3); ok {
-			description = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
-		}
+		description = sentryx.CallerDescription(3)
 	}
 	opts = append(opts, sentry.WithDescription(fmt.Sprintf("%s ASYNC", description)))
 
@@ -264,16 +256,6 @@ func setupSentrySampling(current context.Context) []sentry.SpanOption {
 	opts = append(opts, sentry.WithTransactionName(fmt.Sprintf("%s ASYNC", transactionName)))
 
 	return opts
-}
-
-func extractTracing(ctx context.Context) (sentryTrace, baggage string) {
-
-	span := sentry.SpanFromContext(ctx)
-	if span == nil {
-		return "", ""
-	}
-
-	return span.ToSentryTrace(), span.ToBaggage()
 }
 
 func newTask(ctx context.Context, fn TaskWithCtx,
@@ -358,30 +340,14 @@ func execute(ctx context.Context, task func(), execOpts ...execOption) error {
 	return submitToPool(task)
 }
 
-// recover the panic and send the exception to sentry.
+// recoverPanic recovers a panic of an async task: it is sent to Sentry if enabled, and logged with its stack.
 func recoverPanic(ctx context.Context) {
 	if v := recover(); v != nil {
-		// Create a new Hub by cloning the existing one.
 		if config.Bean.Sentry.On {
-			var localHub *sentry.Hub
-
-			if ctx != nil {
-				localHub = sentry.GetHubFromContext(ctx)
-			}
-
-			if localHub == nil {
-				localHub = sentry.CurrentHub()
-			}
-			clone := localHub.Clone()
-
-			clone.ConfigureScope(func(scope *sentry.Scope) {
-				scope.SetTag("goroutine", "true")
-			})
-
-			clone.Recover(v)
+			sentryx.CapturePanic(ctx, v)
 		}
 
 		// The request ID / trace ID in ctx are added by the logger.
-		log.Logger().ErrorContext(ctx, "Recovered panic from async task.", "cause", fmt.Sprint(v))
+		log.Logger().ErrorContext(ctx, "Recovered panic from async task.", "cause", fmt.Sprint(v), "stack", string(debug.Stack()))
 	}
 }

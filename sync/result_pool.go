@@ -67,11 +67,8 @@ func NewResultPool[T any](ctx context.Context, opts ...ResultPoolOption) ResultP
 		opt(plOpts)
 	}
 
-	// set sentry transaction or span
-	span := setSpan(ctx, plOpts.pl.req)
-	if span != nil {
-		ctx = span.Context()
-	}
+	// set the sentry hub (with the request) and transaction or span
+	ctx, span := setSpan(ctx, plOpts.pl.req)
 
 	var pl *pool.ResultContextPool[T]
 	if plOpts.pl.cancelOnFirstErr {

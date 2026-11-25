@@ -32,6 +32,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/labstack/echo/v5"
 	berror "github.com/retail-ai-inc/bean/v3/error"
+	"github.com/retail-ai-inc/bean/v3/internal/sentryx"
 	"github.com/retail-ai-inc/bean/v3/internal/validator"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/metadata"
@@ -95,7 +96,7 @@ func defaultDescription(skip int) sentry.SpanOption {
 // https://docs.sentry.io/platforms/go/tracing/trace-propagation/custom-instrumentation/#step-2-inject-tracing-information-to-outgoing-requests
 func PropagateToHTTP(ctx context.Context, header http.Header) http.Header {
 
-	sentryTrace, baggage := extractTracing(ctx)
+	sentryTrace, baggage := sentryx.TraceHeaders(ctx)
 	if sentryTrace == "" {
 		return header
 	}
@@ -115,7 +116,7 @@ func PropagateToHTTP(ctx context.Context, header http.Header) http.Header {
 // https://docs.sentry.io/platforms/go/tracing/trace-propagation/custom-instrumentation/#step-2-inject-tracing-information-to-outgoing-requests
 func PropagateToGRPC(ctx context.Context) context.Context {
 
-	sentryTrace, baggage := extractTracing(ctx)
+	sentryTrace, baggage := sentryx.TraceHeaders(ctx)
 	if sentryTrace == "" {
 		return ctx
 	}
@@ -130,16 +131,6 @@ func PropagateToGRPC(ctx context.Context) context.Context {
 	md.Set(sentry.SentryBaggageHeader, baggage)
 
 	return metadata.NewOutgoingContext(ctx, md)
-}
-
-func extractTracing(ctx context.Context) (sentryTrace, baggage string) {
-
-	span := sentry.SpanFromContext(ctx)
-	if span == nil {
-		return "", ""
-	}
-
-	return span.ToSentryTrace(), span.ToBaggage()
 }
 
 // Modify event through beforeSend function.

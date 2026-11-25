@@ -108,3 +108,20 @@ func TestExecuteWithTimeout_Timeout(t *testing.T) {
 	})
 	assert.True(t, errors.Is(<-done, ErrTaskTimeout))
 }
+
+// Execute runs in the default pool, and a panic is recovered.
+func TestExecute_RunsInPoolAndRecovers(t *testing.T) {
+	setupSentryConfig(t)
+
+	done := make(chan struct{})
+	Execute(func() {
+		defer close(done)
+		panic("boom")
+	})
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("task not executed")
+	}
+	waitDefaultPoolIdle()
+}

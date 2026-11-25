@@ -7,12 +7,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
-	"runtime"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/retail-ai-inc/bean/v3/config"
 	"github.com/retail-ai-inc/bean/v3/internal/regex"
+	"github.com/retail-ai-inc/bean/v3/internal/sentryx"
 	"github.com/sourcegraph/conc/panics"
 	"github.com/sourcegraph/conc/pool"
 )
@@ -71,11 +70,8 @@ func NewPool(ctx context.Context, opts ...PoolOption) *Pool {
 		opt(plOpts)
 	}
 
-	// set sentry transaction or span
-	span := setSpan(ctx, plOpts.req)
-	if span != nil {
-		ctx = span.Context()
-	}
+	// set the sentry hub (with the request) and transaction or span
+	ctx, span := setSpan(ctx, plOpts.req)
 
 	var pl *pool.ContextPool
 	if plOpts.cancelOnFirstErr {
@@ -130,56 +126,40 @@ func (p *Pool) Wait() error {
 	return p.pool.Wait()
 }
 
-func setSpan(ctx context.Context, req *http.Request) *sentry.Span {
-	var span *sentry.Span
-
-	if config.Bean.Sentry.On {
-		hub := sentry.GetHubFromContext(ctx)
-		if hub == nil {
-			hub = sentry.CurrentHub()
-		}
-		clone := hub.Clone()
-
-		clone.Scope().SetRequest(req)
-		ctx = sentry.SetHubOnContext(ctx, clone)
-
-		if config.Bean.Sentry.TracesSampleRate > 0.0 {
-			urlPath := req.URL.Path
-
-			functionName := "unknown function"
-			if config.Bean.Sentry.On && config.Bean.Sentry.TracesSampleRate > 0.0 {
-				if pc, file, line, ok := runtime.Caller(1); ok {
-					functionName = fmt.Sprintf("%s:%d\n\t\r %s\n", path.Base(file), line, runtime.FuncForPC(pc).Name())
-				}
-			}
-			span = sentry.StartSpan(ctx, "sync",
-				sentry.WithTransactionName(fmt.Sprintf("%s %s SYNC", req.Method, urlPath)),
-				sentry.ContinueFromRequest(req),
-				sentry.WithDescription(functionName),
-			)
-
-			if regex.SkipSampling(urlPath) {
-				span.Sampled = sentry.SampledFalse
-			}
-		}
+// setSpan prepares the context of the pool's tasks when Sentry is on: a clone of the hub of ctx with the request
+// in its scope, and a span when tracing is on (nil otherwise). It must be called by NewPool / NewResultPool.
+func setSpan(ctx context.Context, req *http.Request) (context.Context, *sentry.Span) {
+	if !config.Bean.Sentry.On {
+		return ctx, nil
 	}
 
-	return span
+	hub := sentry.GetHubFromContext(ctx)
+	if hub == nil {
+		hub = sentry.CurrentHub()
+	}
+	clone := hub.Clone()
+	clone.Scope().SetRequest(req)
+	ctx = sentry.SetHubOnContext(ctx, clone)
+
+	if config.Bean.Sentry.TracesSampleRate <= 0.0 {
+		return ctx, nil
+	}
+
+	urlPath := req.URL.Path
+	// 0: setSpan, 1: NewPool / NewResultPool, 2: their caller.
+	span := sentry.StartSpan(ctx, "sync",
+		sentry.WithTransactionName(fmt.Sprintf("%s %s SYNC", req.Method, urlPath)),
+		sentry.ContinueFromRequest(req),
+		sentry.WithDescription(sentryx.CallerDescription(2)),
+	)
+	if regex.SkipSampling(urlPath) {
+		span.Sampled = sentry.SampledFalse
+	}
+	return span.Context(), span
 }
 
 func capturePanic(ctx context.Context, err error) {
 	if config.Bean.Sentry.On {
-		var localHub *sentry.Hub
-		if ctx != nil {
-			localHub = sentry.GetHubFromContext(ctx)
-		}
-		if localHub == nil {
-			localHub = sentry.CurrentHub()
-		}
-		clone := localHub.Clone()
-		clone.ConfigureScope(func(scope *sentry.Scope) {
-			scope.SetTag("goroutine", "true")
-		})
-		clone.Recover(err)
+		sentryx.CapturePanic(ctx, err)
 	}
 }
