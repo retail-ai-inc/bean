@@ -362,6 +362,11 @@ e, closeEcho, err := bean.NewEcho()
 16. **`aes.BeanAESDecrypt` 校验 MAC**：v2 解密时不校验密文中的 `mac`，被篡改的密文也能"成功"解密（存在填充预言攻击的条件）。v3 会在解密前用常量时间比较校验 MAC，不匹配时返回 `aes.ErrInvalidMAC`。密文格式不变，`BeanAESEncrypt`（以及 Laravel `Encrypter`）生成的已有密文（例如租户数据库密码）可以照常解密；只有 `mac` 不正确的密文会被拒绝。格式不正确的输入返回 error 而不是 panic，空字符串也可以加密。
 17. **数据库 TLS `hotReload` 校验服务器主机名**：v2 开启 `ssl.hotReload` 后不校验证书的主机名（MySQL 总是不校验；Redis / Mongo 用 IP 地址连接时不校验），任何受信任 CA 签发的证书都会被接受。v3 要求证书对连接使用的主机名有效；用 IP 地址连接时，证书需要对配置中的某个 `host` 有效（IP 匹配证书的 IP SAN）。如果数据库证书与配置的 `host` 不匹配，开启 `hotReload` 后会连接失败，需要修正证书或 `host`。注意：Redis 集群中运行时发现、以 IP 访问且不在配置 `host` 中的节点，其证书需要对配置的某个 `host` 有效。
 18. **`helpers.DecodeJWT` 的默认校验始终生效**：v2 中只要传入任意 `opts`（例如 `jwt.WithAudience`），默认的"只允许 HS256""必须有 `exp`""严格解码"就全部失效，没有 `exp` 的 token 会永久有效。v3 中默认选项始终生效，`opts` 追加在后面（仍可用 `jwt.WithValidMethods` 覆盖允许的算法）；需要接受没有 `exp` 的 token 时请直接使用 `jwt.ParseWithClaims`。`helpers.ExtractJWTFromHeader` 要求 `Bearer` 后有空格（v2 中 `Bearerxabc` 也会取出 `abc`），scheme 不区分大小写。
+19. **JSON 请求体错误返回 400**：v2 中请求体 JSON 语法错误、含未知字段或类型不匹配时，`c.Bind` 返回普通 error，客户端收到 **500**，并且错误被上报到 Sentry。v3 返回 400 的 `*berror.APIError`，响应为 `{"errorCode":"100001","errorMsg":"invalid JSON request body: ..."}`（`PROBLEM_PARSING_JSON`），不上报 Sentry。同时修正了误拒：嵌入结构体的字段、没有 json tag 的字段、绑定到 map 时的任意字段，v2 都会被当作未知字段拒绝；JSON 值后面带多余数据（如 `{"a":1} garbage`）现在会被拒绝。
+20. **`async.ExecuteWithContext` / `ExecuteWithTimeout` 保留请求上下文**：v2 中这两个函数的任务上下文丢失了请求 ID（异步任务的日志没有 `id`）和请求的 Sentry trace，`ExecuteWithTimeout` 还让任务和请求共用同一个 Sentry hub。v3 中它们与 `ExecuteContext` 行为一致：上下文不随请求取消，带请求 ID、克隆的 hub 和延续的 trace。另外：未指定池名时在默认池中执行（v2 直接启动 goroutine），因此优雅关停时会等待它们；`ExecuteWithTimeout` 中任务返回的 error 除上报 Sentry 外也会记录日志。
+21. **Redis**：`RPush` 在 v2 中每次调用都会失败（`can't marshal *[]string`），v3 修复，空列表为 no-op；`store/redis` 的 `MSetJSON` 在 v2 中不做 JSON 编码（传入 struct 会失败，写入的值也无法被 `GetJSON` 读取），v3 与 `SetJSON` 一致；集群模式下 `MGet` 有任意 key 不存在时 v2 整批返回 nil，v3 按 key 返回（不存在的为 nil），`Keys` 改为查询所有 master，多 key 的 `DelKey` 不再因 CROSSSLOT 失败。
+22. **出站请求**：`transport/http` 的日志 Transport 在 `DumpBody` 时，关闭响应体不会关闭底层连接（连接泄漏），v3 修复；请求体只读取 `BodyLimit` 字节用于日志，读取出错时请求失败而不是发送截断的 body。`trace.PropagateToGRPC` 不再覆盖 context 中已有的 outgoing metadata（如 authorization）；`PropagateToHTTP` 重复调用不会产生重复的 header。
+23. **bean CLI**：`bean gen spec` 对带域名的模块路径（如 `example.com/demo`）不再输出空的 `{}`；`bean test gen` 支持 PUT / PATCH；`bean test -o json|html` 在测试失败时退出码为 1，报告文件名中的 `/` 替换为 `_`；`bean create dockerfile` 生成可用的 Dockerfile / docker-compose.yml，并新增 `.air.toml`；`bean create handler|repo|service` 通过解析 `routers/route.go` 插入代码，无法插入时报错并提示需要手工添加的内容。
 
 ### 5.1 404 / 405 的处理方式
 
@@ -407,3 +412,4 @@ v2 用一个全局中间件在每个请求上遍历全部路由、自行匹配�
 - [ ] 启动服务，验证 404 / 405 / 500 / 超时的响应和访问日志
 - [ ] 开启了数据库 `ssl.hotReload` 的环境：确认证书对配置的 `host` 有效（见第 5 节第 17 条）
 - [ ] 调用 `helpers.DecodeJWT` 并传入了 `opts` 的地方：确认 token 都带 `exp`（见第 5 节第 18 条）
+- [ ] 如果有客户端依赖"请求体 JSON 错误时返回 500"，改为处理 400 和 `errorCode` `100001`（见第 5 节第 19 条）
