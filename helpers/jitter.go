@@ -69,6 +69,9 @@ func JitterBackoff(min, max time.Duration, attempt int) time.Duration {
 
 func randDuration(center time.Duration) time.Duration {
 	var ri = int64(center)
+	if ri <= 0 {
+		return 0 // rand.Int63n panics for n <= 0 (e.g. JitterBackoff with min < 2ns)
+	}
 	var jitter = rand.Int63n(ri)
 	return time.Duration(math.Abs(float64(ri + jitter)))
 }

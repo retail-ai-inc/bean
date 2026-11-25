@@ -147,13 +147,16 @@ func InterfaceStripTags(data interface{}, trimSpace bool) interface{} {
 // helpers.StructStripTags(&test, true)
 func StructStripTags(data interface{}, trimSpace bool) error {
 
-	bytes, err := json.Marshal(data)
+	b, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
 
+	// UseNumber keeps the numbers as they are: float64 loses the precision of integers above 2^53.
 	var mapSI map[string]interface{}
-	if err := json.Unmarshal(bytes, &mapSI); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	if err := dec.Decode(&mapSI); err != nil {
 		return err
 	}
 
