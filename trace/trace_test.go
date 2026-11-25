@@ -210,3 +210,33 @@ func Test_Propagate_Sentry_Tracing_To_gRPC_Request(t *testing.T) {
 		})
 	}
 }
+
+// The outgoing metadata already in the context must be kept, and propagating twice must not duplicate the keys.
+func Test_PropagateToGRPC_KeepsExistingMetadata(t *testing.T) {
+	reset := setSentryConfig(true)
+	defer reset()
+	ctx, finish := trace.StartSpan(context.Background(), "test")
+	defer finish()
+
+	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer token")
+	before, _ := metadata.FromOutgoingContext(ctx)
+
+	got := trace.PropagateToGRPC(trace.PropagateToGRPC(ctx))
+
+	md, ok := metadata.FromOutgoingContext(got)
+	require.True(t, ok)
+	assert.Equal(t, []string{"Bearer token"}, md.Get("authorization"))
+	assert.Len(t, md.Get(sentry.SentryTraceHeader), 1)
+	assert.Empty(t, before.Get(sentry.SentryTraceHeader), "the metadata of the parent context must not be modified")
+}
+
+// Propagating twice (e.g. a retried request) must not duplicate the headers; a nil header is allocated.
+func Test_PropagateToHTTP_SetsHeaders(t *testing.T) {
+	reset := setSentryConfig(true)
+	defer reset()
+	ctx, finish := trace.StartSpan(context.Background(), "test")
+	defer finish()
+
+	header := trace.PropagateToHTTP(ctx, trace.PropagateToHTTP(ctx, nil))
+	assert.Len(t, header.Values(sentry.SentryTraceHeader), 1)
+}
