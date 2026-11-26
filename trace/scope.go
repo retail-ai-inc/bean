@@ -5,7 +5,7 @@ import (
 	"context"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/retail-ai-inc/bean/v2/config"
+	"github.com/retail-ai-inc/bean/v3/config"
 )
 
 // SetUser sets user information into Sentry's Scope: User Effect Analysis.

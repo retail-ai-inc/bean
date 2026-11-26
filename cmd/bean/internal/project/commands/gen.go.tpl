@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	str "github.com/retail-ai-inc/bean/v2/string"
+	str "github.com/retail-ai-inc/bean/v3/string"
 	"github.com/spf13/cobra"
 )
 

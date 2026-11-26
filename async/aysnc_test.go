@@ -3,16 +3,16 @@ package async
 import (
 	"context"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/config"
-	bctx "github.com/retail-ai-inc/bean/v2/context"
-	"github.com/retail-ai-inc/bean/v2/internal/gopool"
-	"github.com/retail-ai-inc/bean/v2/log"
-	"github.com/retail-ai-inc/bean/v2/trace"
+	"github.com/retail-ai-inc/bean/v3/config"
+	bctx "github.com/retail-ai-inc/bean/v3/context"
+	"github.com/retail-ai-inc/bean/v3/internal/gopool"
+	"github.com/retail-ai-inc/bean/v3/log"
+	"github.com/retail-ai-inc/bean/v3/trace"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,7 +24,13 @@ func Test_Execute_Context(t *testing.T) {
 		TracesSampleRate: 0,
 	},
 	}
-	_ = log.Init(echo.New().Logger)
+	_, _ = log.Init(io.Discard)
+	// The test registers pools with fixed names: unregister them so the test can run again (-count).
+	t.Cleanup(func() {
+		waitDefaultPoolIdle()
+		gopool.UnregisterAllPools()
+		gopool.RebootDefaultPool()
+	})
 
 	task := func(ctx context.Context) error {
 		_, finish := trace.StartSpan(ctx, "test")

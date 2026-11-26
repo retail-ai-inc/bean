@@ -31,10 +31,10 @@ import (
 	"testing"
 
 	validatorV10 "github.com/go-playground/validator/v10"
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/echoview"
-	"github.com/retail-ai-inc/bean/v2/goview"
-	"github.com/retail-ai-inc/bean/v2/internal/validator"
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/echoview"
+	"github.com/retail-ai-inc/bean/v3/goview"
+	"github.com/retail-ai-inc/bean/v3/internal/validator"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -53,7 +53,7 @@ func TestValidationErrorHanderFunc(t *testing.T) {
 	e := echo.New()
 	c := e.AcquireContext()
 	c.SetRequest(httptest.NewRequest("", "/", nil))
-	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e))
+	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e.Logger))
 
 	fakeErr := &fakeError{"fake"}
 	got, err := ValidationErrorHandlerFunc(fakeErr, c)
@@ -72,7 +72,7 @@ func TestAPIErrorHanderFunc(t *testing.T) {
 	e := echo.New()
 	c := e.AcquireContext()
 	c.SetRequest(httptest.NewRequest("", "/", nil))
-	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e))
+	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e.Logger))
 
 	fakeErr := &fakeError{"fake"}
 	got, err := APIErrorHandlerFunc(fakeErr, c)
@@ -100,7 +100,7 @@ func TestHTTPErrorHanderFunc(t *testing.T) {
 	})
 	c := e.AcquireContext()
 	c.SetRequest(httptest.NewRequest("", "/", nil))
-	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e))
+	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e.Logger))
 
 	fakeErr := &fakeError{"fake"}
 	got, err := HTTPErrorHandlerFunc(fakeErr, c)
@@ -109,6 +109,19 @@ func TestHTTPErrorHanderFunc(t *testing.T) {
 
 	echoHTTPErr := echo.NewHTTPError(http.StatusInternalServerError, "internal")
 	got, err = HTTPErrorHandlerFunc(echoHTTPErr, c)
+	assert.NoError(t, err)
+	assert.Equal(t, true, got)
+
+	// echo v5 predefined errors (returned by the router) are not `*echo.HTTPError`.
+	for _, sentinel := range []error{echo.ErrNotFound, echo.ErrMethodNotAllowed} {
+		got, err = HTTPErrorHandlerFunc(sentinel, c)
+		assert.NoError(t, err)
+		assert.Equal(t, true, got)
+	}
+
+	// Wrapped error is exposed as the internal error.
+	timeoutErr := echo.NewHTTPError(http.StatusGatewayTimeout, "gateway timeout").Wrap(errors.New("deadline"))
+	got, err = HTTPErrorHandlerFunc(timeoutErr, c)
 	assert.NoError(t, err)
 	assert.Equal(t, true, got)
 
@@ -128,7 +141,7 @@ func TestDefaultErrorHanderFunc(t *testing.T) {
 	})
 	c := e.AcquireContext()
 	c.SetRequest(httptest.NewRequest("", "/", nil))
-	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e))
+	c.SetResponse(echo.NewResponse(dummyWriter{io.Discard}, e.Logger))
 
 	fakeErr := &fakeError{"fake"}
 	got, err := DefaultErrorHandlerFunc(fakeErr, c)

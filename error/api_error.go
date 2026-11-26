@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/retail-ai-inc/bean/v2/stacktrace"
+	"github.com/retail-ai-inc/bean/v3/stacktrace"
 )
 
 // APIError represents the error object of {{ .PkgPath }} API error.
@@ -91,4 +91,10 @@ func (e *APIError) Format(s fmt.State, verb rune) {
 	case 'q':
 		_, _ = fmt.Fprintf(s, "%q", e.Error())
 	}
+}
+
+// StatusCode implements `echo.HTTPStatusCoder`, so echo and its middlewares (e.g. Prometheus metrics)
+// report the API error's HTTP status instead of 500.
+func (e *APIError) StatusCode() int {
+	return e.HTTPStatusCode
 }

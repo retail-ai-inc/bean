@@ -1,22 +1,24 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/async"
-	berror "github.com/retail-ai-inc/bean/v2/error"
-	"github.com/retail-ai-inc/bean/v2/trace"
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/async"
+	berror "github.com/retail-ai-inc/bean/v3/error"
+	blog "github.com/retail-ai-inc/bean/v3/log"
+	"github.com/retail-ai-inc/bean/v3/trace"
 	{{if .ServiceExists}}"{{.ProjectObject.PkgPath}}/services"{{end}}
 )
 
 type {{.HandlerNameUpper}}Handler interface {
-	{{.HandlerNameUpper}}JSONResponse(c echo.Context) error		// An example JSON response handler function
-	{{.HandlerNameUpper}}HTMLResponse(c echo.Context) error		// An example HTML response handler function
-	{{.HandlerNameUpper}}ValidateResponse(c echo.Context) error	// An example response handler function with validation
+	{{.HandlerNameUpper}}JSONResponse(c *echo.Context) error		// An example JSON response handler function
+	{{.HandlerNameUpper}}HTMLResponse(c *echo.Context) error		// An example HTML response handler function
+	{{.HandlerNameUpper}}ValidateResponse(c *echo.Context) error	// An example response handler function with validation
 }
 
 {{if .ServiceExists}}
@@ -30,7 +32,7 @@ type {{.HandlerNameLower}}Handler struct {
 }{{else}}func New{{.HandlerNameUpper}}Handler() *{{.HandlerNameLower}}Handler {
 	return &{{.HandlerNameLower}}Handler{{"{}\n}"}}{{end}}
 
-func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c echo.Context) error {	
+func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c *echo.Context) error {	
 	// IMPORTANT: If you wanna trace the performance of your handler function then uncomment following 2 lines
 	// tctx, finish := trace.StartSpan(c.Request().Context(), "http.handler")
 	// defer finish()
@@ -48,7 +50,8 @@ func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c
 	// However there is a recoverPanic function inside the ExecuteWithContext that will
 	// prevent this from happening and not crash the app.
 	async.ExecuteWithContext(func(asyncC context.Context) {
-		c.Logger().Debug(output)
+		// Log with the async context: it carries the request ID / trace ID of the request.
+		blog.Logger().DebugContext(asyncC, output)
 		traceableContext, asyncFinish := trace.StartSpan(asyncC, "http.async")
 		defer asyncFinish()
 
@@ -59,10 +62,8 @@ func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c
 		}
 		// handling error
 		if err != nil {
-			fmt.Println(err)
-			// This is a global function to send sentry exception if you configure the sentry through env.json. 
-			// You cann pass a proper context or nil.
-			// async.CaptureException(traceableContext, err)
+			// Logs the error and sends it to Sentry if Sentry is configured in env.json.
+			trace.LogAndSentryCaptureException(traceableContext, err)
 		}
 
 	},c)
@@ -72,8 +73,8 @@ func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}JSONResponse(c
 	})
 }
 
-func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}HTMLResponse(c echo.Context) error {
-	return c.Render(http.StatusOK, "index", echo.Map{
+func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}HTMLResponse(c *echo.Context) error {
+	return c.Render(http.StatusOK, "index", map[string]any{
 		"title": "Index title!",
 		"add": func(a int, b int) int {
 			return a + b
@@ -87,7 +88,7 @@ func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}HTMLResponse(c
 	})
 }
 
-func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}ValidateResponse(c echo.Context) error {
+func (handler *{{.HandlerNameLower}}Handler) {{.HandlerNameUpper}}ValidateResponse(c *echo.Context) error {
 	var params struct {
 		Example string `json:"example" validate:"required,example,min=7"`
 		Other   int    `json:"other" validate:"required,gt=0"`

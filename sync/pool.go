@@ -11,8 +11,8 @@ import (
 	"runtime"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/retail-ai-inc/bean/v2/config"
-	"github.com/retail-ai-inc/bean/v2/internal/regex"
+	"github.com/retail-ai-inc/bean/v3/config"
+	"github.com/retail-ai-inc/bean/v3/internal/regex"
 	"github.com/sourcegraph/conc/panics"
 	"github.com/sourcegraph/conc/pool"
 )

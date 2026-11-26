@@ -2,96 +2,92 @@ package regex
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
+	"sync/atomic"
 
-	"github.com/labstack/echo/v4"
-	echomiddleware "github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	echomiddleware "github.com/labstack/echo/v5/middleware"
 )
 
-var skipSampling func(path string) bool = func(path string) bool {
-	return false // no skip by default
-}
+// samplingSkipper is global because it is also used outside the request scope (`async`, `sync` packages).
+var samplingSkipper atomic.Pointer[pathMatcher]
 
-// SkipSamping checks if the path should be skipped for sampling.
+// SkipSampling checks if the path should be skipped for sampling.
 // It returns false if the skipper is not set.
 func SkipSampling(path string) bool {
-	return skipSampling(path)
+	m := samplingSkipper.Load()
+	return m != nil && m.match(path)
 }
 
-// SetSamplingPathSkipper updates the skipper for sampling.
-func SetSamplingPathSkipper(skipPaths []string) {
+// SetSamplingPathSkipper sets the path patterns (regular expressions) whose traces are not sampled.
+func SetSamplingPathSkipper(skipPaths []string) error {
+	m, err := newPathMatcher("sentry.skipTracesEndpoints", skipPaths)
+	if err != nil {
+		return err
+	}
+	samplingSkipper.Store(m)
+	return nil
+}
 
-	uniquePaths := make(map[string]struct{})
-	for _, path := range skipPaths {
-		uniquePaths[path] = struct{}{}
+func InitAccessLogPathSkipper(skipPaths []string) (func(c *echo.Context) bool, error) {
+	m, err := newPathMatcher("accessLog.skipEndpoints", skipPaths)
+	if err != nil {
+		return nil, err
+	}
+	return pathSkipper(m), nil
+}
+
+func InitPrometheusPathSkipper(skipPaths []string, metricsPath string) (func(c *echo.Context) bool, error) {
+	if metricsPath == "" {
+		return func(c *echo.Context) bool { return false }, errors.New("metrics path is empty")
 	}
 
-	traceSkipPaths := make([]*regexp.Regexp, 0, len(uniquePaths))
-	for path := range uniquePaths {
-		traceSkipPaths = append(traceSkipPaths, regexp.MustCompile(path))
+	m, err := newPathMatcher("prometheus.skipEndpoints", append(append([]string{}, skipPaths...), metricsPath))
+	if err != nil {
+		return nil, err
 	}
+	return pathSkipper(m), nil
+}
 
-	if len(traceSkipPaths) > 1 {
-		skipSampling = func(path string) bool {
-			for _, r := range traceSkipPaths {
-				if r.MatchString(path) {
-					return true
-				}
-			}
-			return false
+// pathMatcher matches a path against a set of regular expressions.
+type pathMatcher struct {
+	regexes []*regexp.Regexp
+}
+
+func newPathMatcher(configKey string, patterns []string) (*pathMatcher, error) {
+	seen := make(map[string]struct{}, len(patterns))
+	m := &pathMatcher{regexes: make([]*regexp.Regexp, 0, len(patterns))}
+	for _, p := range patterns {
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+
+		re, err := regexp.Compile(p)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s pattern %q: %w", configKey, p, err)
+		}
+		m.regexes = append(m.regexes, re)
+	}
+	return m, nil
+}
+
+func (m *pathMatcher) match(path string) bool {
+	for _, re := range m.regexes {
+		if re.MatchString(path) {
+			return true
 		}
 	}
+	return false
 }
 
-func InitAccessLogPathSkipper(skipPaths []string) func(c echo.Context) bool {
-	uniquePaths := make(map[string]struct{})
-	for _, path := range skipPaths {
-		uniquePaths[path] = struct{}{}
-	}
-
-	accessLogSkipPaths := make([]*regexp.Regexp, 0, len(uniquePaths))
-
-	for path := range uniquePaths {
-		accessLogSkipPaths = append(accessLogSkipPaths, regexp.MustCompile(path))
-	}
-
-	return pathSkipper(accessLogSkipPaths)
-}
-
-func InitPrometheusPathSkipper(skipPaths []string, metricsPath string) (func(c echo.Context) bool, error) {
-
-	if metricsPath == "" {
-		return func(c echo.Context) bool { return false }, errors.New("metrics path is empty")
-	}
-
-	uniquePaths := make(map[string]struct{})
-	for _, path := range skipPaths {
-		uniquePaths[path] = struct{}{}
-	}
-	uniquePaths[metricsPath] = struct{}{}
-
-	prometheusSkipPaths := make([]*regexp.Regexp, 0, len(uniquePaths))
-	for path := range uniquePaths {
-		prometheusSkipPaths = append(prometheusSkipPaths, regexp.MustCompile(path))
-	}
-
-	return pathSkipper(prometheusSkipPaths), nil
-}
-
-func pathSkipper(skipPathRegexes []*regexp.Regexp) func(c echo.Context) bool {
-
-	if len(skipPathRegexes) == 0 {
+func pathSkipper(m *pathMatcher) func(c *echo.Context) bool {
+	if len(m.regexes) == 0 {
 		return echomiddleware.DefaultSkipper
 	}
 
-	return func(c echo.Context) bool {
-		path := c.Request().URL.Path
-		for _, r := range skipPathRegexes {
-			if r.MatchString(path) {
-				return true
-			}
-		}
-
-		return false // no skip by default
+	return func(c *echo.Context) bool {
+		return m.match(c.Request().URL.Path)
 	}
 }

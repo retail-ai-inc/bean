@@ -5,12 +5,11 @@ import (
 	"log"
 	"os"
 
-	"{{ .PkgName }}/commands/gopher"
+	"{{ .PkgPath }}/commands/gopher"
 
-	"github.com/retail-ai-inc/bean/v2"
-	"github.com/retail-ai-inc/bean/v2/helpers"
+	"github.com/retail-ai-inc/bean/v3/config"
+	"github.com/retail-ai-inc/bean/v3/helpers"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -23,9 +22,6 @@ var rootCmd = &cobra.Command{
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	
-	// Clean up bean resources before exiting.
-	defer bean.Cleanup()
 	
 	err := rootCmd.Execute()
 	if err != nil {
@@ -43,16 +39,8 @@ func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	rootCmd.Version = helpers.CurrVersion()
 
-	viper.AddConfigPath(".")
-	viper.SetConfigType("json")
-	viper.SetConfigName("env")
-
-	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalln(err)
-	}
-
-	// IMPORTANT: Unmarshal the env.json into global BeanConfig object.
-	if err := viper.Unmarshal(&bean.BeanConfig); err != nil {
+	// IMPORTANT: Load env.json into the global config object `config.Bean`.
+	if _, err := config.LoadConfig("env.json"); err != nil {
 		log.Fatalln(err)
 	}
 

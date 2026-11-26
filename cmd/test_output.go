@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/retail-ai-inc/bean/v2/test"
+	"github.com/retail-ai-inc/bean/v3/test"
 )
 
 type report struct {
@@ -15,6 +15,8 @@ type report struct {
 	ExecutedAt reportTime       `json:"executed_at"`
 	Stats      stats            `json:"stats"`
 	PkgResults []*packageResult `json:"results"`
+
+	testErr error // the error of `go test` (failed tests), returned by the command after writing the report
 }
 
 type reportTime struct {

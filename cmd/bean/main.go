@@ -25,7 +25,7 @@ import (
 	"context"
 	"embed"
 
-	"github.com/retail-ai-inc/bean/v2/cmd"
+	"github.com/retail-ai-inc/bean/v3/cmd"
 )
 
 // Diretory of template files.

@@ -108,7 +108,11 @@ func UnregisterAllPools() {
 var ErrReleaseTimeout = errors.New("gopool: release timeout")
 
 // ReleaseAllPools provides a func to removes all pools in blocking way with a timeout.
-// It releases the default pool as well.
+// It releases the default pool as well (see `RebootDefaultPool`).
+//
+// The pools are unregistered first, then released without holding the registry lock: a running task can still
+// call `GetPool` (e.g. to submit a sub task, which then fails because the pool is closing) instead of blocking
+// until the timeout. The pools are unregistered even if the release fails.
 func ReleaseAllPools(timeout time.Duration) func() error {
 	return func() error {
 		if timeout <= 0 {
@@ -120,25 +124,22 @@ func ReleaseAllPools(timeout time.Duration) func() error {
 		defer cancel()
 
 		poolsMu.Lock()
-		defer poolsMu.Unlock()
+		toRelease := pools
+		pools = make(map[string]*ants.Pool) // reset pools
+		poolsMu.Unlock()
+
 		// Basically ReleaseTimeout() is in blocking way,
 		// which means it will wait for the tasks to be finished within the timeout.
-		p := pool.New().WithContext(ctx).WithMaxGoroutines(len(pools) + 1)
-		for name, pool := range pools {
+		p := pool.New().WithContext(ctx).WithMaxGoroutines(len(toRelease) + 1)
+		for name, pool := range toRelease {
 			p.Go(releaser(name, pool, timeout))
 		}
 		if defaultPool != nil {
 			p.Go(releaser("default", defaultPool, timeout))
 		}
-
-		err := p.Wait()
-		if err != nil {
-			return err
-		}
-		pools = make(map[string]*ants.Pool) // reset pools
 		// Do not reset the default pool
 
-		return nil
+		return p.Wait()
 	}
 }
 
@@ -201,6 +202,15 @@ func GetPool(poolName string) (*ants.Pool, error) {
 	}
 
 	return pool, nil
+}
+
+// RebootDefaultPool reopens the default pool if it was released (by `ReleaseAllPools` or `UnregisterAllPools`),
+// e.g. when a new bean instance is created in the same process. A released default pool rejects new tasks until
+// then, so that no task starts during a shutdown.
+func RebootDefaultPool() {
+	if defaultPool != nil && defaultPool.IsClosed() {
+		defaultPool.Reboot()
+	}
 }
 
 // GetDefaultPool returns the default pool.

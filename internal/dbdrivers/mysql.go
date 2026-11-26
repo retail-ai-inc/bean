@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"slices"
 	"strconv"
@@ -36,8 +37,7 @@ import (
 	"time"
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/aes"
+	"github.com/retail-ai-inc/bean/v3/aes"
 	"gorm.io/datatypes"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -91,7 +91,7 @@ var (
 )
 
 // InitMysqlMasterConn returns mysql master db connection.
-func InitMysqlMasterConn(config SQLConfig, logger echo.Logger) (*gorm.DB, string, func() error, error) {
+func InitMysqlMasterConn(config SQLConfig, logger *slog.Logger) (*gorm.DB, string, func() error, error) {
 
 	masterCfg := config.Master
 
@@ -106,7 +106,7 @@ func InitMysqlMasterConn(config SQLConfig, logger echo.Logger) (*gorm.DB, string
 	return nil, "", noClose, nil
 }
 
-func InitMysqlTenantConns(config SQLConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger echo.Logger,
+func InitMysqlTenantConns(config SQLConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger *slog.Logger,
 ) (map[uint64]*gorm.DB, map[uint64]string, []func() error, error) {
 
 	err := createTenantConnectionsTableIfNotExist(master)
@@ -142,21 +142,26 @@ func GetAllTenantCfgs(db *gorm.DB) ([]*TenantConnections, error) {
 	return tt, nil
 }
 
-// getAllMysqlTenantDB returns all tenant db connection.
+// getAllMysqlTenantDB returns all tenant db connection. On error, the connections already opened are closed.
 func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
-	tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger echo.Logger,
-) (mysqlConns map[uint64]*gorm.DB, mysqlDBNames map[uint64]string, resultClosers []func() error, err error) {
+	tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger *slog.Logger,
+) (map[uint64]*gorm.DB, map[uint64]string, []func() error, error) {
 
-	mysqlConns = make(map[uint64]*gorm.DB, len(tenantCfgs))
-	mysqlDBNames = make(map[uint64]string, len(tenantCfgs))
+	mysqlConns := make(map[uint64]*gorm.DB, len(tenantCfgs))
+	mysqlDBNames := make(map[uint64]string, len(tenantCfgs))
 	openedClosers := make([]func() error, 0, len(tenantCfgs))
+
+	fail := func(t *TenantConnections, msg string, err error) (map[uint64]*gorm.DB, map[uint64]string, []func() error, error) {
+		return nil, nil, noClosers, errors.Join(
+			fmt.Errorf("%s (%d:%s): %w", msg, t.TenantID, t.Code, err), closeAll(openedClosers))
+	}
 
 	for _, t := range tenantCfgs {
 
 		var cfgsMap map[string]map[string]interface{}
 		if t.Connections != nil {
-			if err = json.Unmarshal(t.Connections, &cfgsMap); err != nil {
-				return nil, nil, nil, fmt.Errorf("failed to unmarshal tenant connections (%d:%s): %w", t.TenantID, t.Code, err)
+			if err := json.Unmarshal(t.Connections, &cfgsMap); err != nil {
+				return fail(t, "failed to unmarshal tenant connections", err)
 			}
 		}
 
@@ -166,33 +171,45 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
 			mysqlConns[t.TenantID], mysqlDBNames[t.TenantID] = nil, ""
 			continue
 		}
-		userName := mysqlCfg["username"].(string)
-		password := mysqlCfg["password"].(string)
+
+		var userName, password, host, port, dbName string
+		var err error
+		for _, f := range []struct {
+			dst      *string
+			key      string
+			required bool
+		}{{&userName, "username", true}, {&password, "password", true}, {&port, "port", true}, {&dbName, "database", true}} {
+			if f.required {
+				*f.dst, err = requiredTenantString(mysqlCfg, f.key)
+			} else {
+				*f.dst, err = tenantString(mysqlCfg, f.key)
+			}
+			if err != nil {
+				return fail(t, "invalid mysql tenant config", err)
+			}
+		}
 
 		// IMPORTANT: If tenant database password is encrypted in master db config.
 		if tenantDBPassPhraseKey != "" {
 			password, err = aes.BeanAESDecrypt(tenantDBPassPhraseKey, password)
 			if err != nil {
-				return nil, nil, nil, fmt.Errorf("failed to decrypt mysql tenant database password (%d:%s): %w", t.TenantID, t.Code, err)
+				return fail(t, "failed to decrypt mysql tenant database password", err)
 			}
 		}
-
-		host := mysqlCfg["host"].(string)
 
 		// IMPORTANT - If a command or service wants to use a different `host` parameter for tenant database connection
 		// then it's easy to do just by passing that parameter string name using `bean.TenantAlterDbHostParam`.
 		// Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
-		if tenantAlterDbHostParam != "" && mysqlCfg[tenantAlterDbHostParam] != nil {
-			host = mysqlCfg[tenantAlterDbHostParam].(string)
+		host, err = tenantHost(mysqlCfg, tenantAlterDbHostParam)
+		if err != nil {
+			return fail(t, "invalid mysql tenant config", err)
 		}
 
-		port := mysqlCfg["port"].(string)
-		dbName := mysqlCfg["database"].(string)
 		ssl := sslConfigFromMap(mysqlCfg)
 
 		readHosts, err := readHostsFromMap(mysqlCfg)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("invalid mysql tenant read replicas (%d:%s): %w", t.TenantID, t.Code, err)
+			return fail(t, "invalid mysql tenant read replicas", err)
 		}
 
 		var closeDB func() error
@@ -202,7 +219,7 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
 			config.Debug, ssl, logger,
 		)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to connect mysql tenant database (%d:%s): %w", t.TenantID, t.Code, err)
+			return fail(t, "failed to connect mysql tenant database", err)
 		}
 		openedClosers = append(openedClosers, closeDB)
 	}
@@ -212,14 +229,14 @@ func getAllMysqlTenantDB(config SQLConfig, tenantCfgs []*TenantConnections,
 
 func connectMysqlDB(userName, password, host, port, dbName string, readHosts []string,
 	maxIdleConnections, maxOpenConnections int, maxConnectionLifeTime, maxIdleConnectionLifeTime time.Duration,
-	debug bool, ssl SSLConfig, logger echo.Logger) (*gorm.DB, string, func() error, error) {
+	debug bool, ssl SSLConfig, logger *slog.Logger) (*gorm.DB, string, func() error, error) {
 
 	readAddrs, err := parseReadAddrs(readHosts, port)
 	if err != nil {
 		return nil, "", noClose, err
 	}
 
-	dsn, err := mysqlDSN(userName, password, host, port, dbName, ssl)
+	dsn, releaseTLS, err := mysqlDSN(userName, password, host, port, dbName, ssl)
 	if err != nil {
 		return nil, "", noClose, err
 	}
@@ -231,25 +248,34 @@ func connectMysqlDB(userName, password, host, port, dbName string, readHosts []s
 
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: gormLogger.Default.LogMode(logMode)})
 	if err != nil {
+		// gorm.Open opens the pool before pinging it: close it when the ping fails.
+		if db != nil {
+			if sqlDB, dbErr := db.DB(); dbErr == nil {
+				_ = sqlDB.Close()
+			}
+		}
+		releaseTLS()
 		return nil, "", noClose, fmt.Errorf("failed to connect mysql database: %w", err)
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
+		releaseTLS()
 		return nil, "", noClose, fmt.Errorf("failed to get mysql database connection: %w", err)
 	}
 
 	setMysqlConnPool(sqlDB, maxIdleConnections, maxOpenConnections, maxConnectionLifeTime, maxIdleConnectionLifeTime)
-	closers := []func() error{sqlDB.Close}
+	closers := []func() error{sqlDB.Close, func() error { releaseTLS(); return nil }}
 
 	if len(readAddrs) > 0 {
 		replicas := make([]gorm.Dialector, 0, len(readAddrs))
 		for _, addr := range readAddrs {
 			readHost := net.JoinHostPort(addr.host, addr.port)
-			replicaDSN, err := mysqlDSN(userName, password, addr.host, addr.port, dbName, ssl)
+			replicaDSN, releaseReplicaTLS, err := mysqlDSN(userName, password, addr.host, addr.port, dbName, ssl)
 			if err != nil {
 				return nil, "", noClose, errors.Join(err, closeAll(closers))
 			}
+			closers = append(closers, func() error { releaseReplicaTLS(); return nil })
 
 			replicaDB, err := sql.Open("mysql", replicaDSN)
 			if err != nil {
@@ -297,17 +323,22 @@ func useMysqlReplicas(db *gorm.DB, replicas []gorm.Dialector) error {
 	return nil
 }
 
-func mysqlDSN(userName, password, host, port, dbName string, ssl SSLConfig) (string, error) {
+// mysqlDSN returns the DSN of a MySQL connection and the function releasing its TLS resources (see
+// `newTLSConfig`), to call when the connection is closed.
+func mysqlDSN(userName, password, host, port, dbName string, ssl SSLConfig) (string, func(), error) {
 	tlsConfigName := ""
+	release := noRelease
 	if ssl.On {
-		tlsConfig, err := newTLSConfig(ssl)
+		tlsConfig, rel, err := newTLSConfig(ssl, []string{host})
 		if err != nil {
-			return "", err
+			return "", noRelease, err
 		}
+		release = rel
 
 		tlsConfigName = mysqlTLSConfigName(host, dbName, ssl)
 		if err := mysqlDriver.RegisterTLSConfig(tlsConfigName, tlsConfig); err != nil {
-			return "", fmt.Errorf("failed to register mysql tls config: %w", err)
+			release()
+			return "", noRelease, fmt.Errorf("failed to register mysql tls config: %w", err)
 		}
 	}
 
@@ -315,7 +346,7 @@ func mysqlDSN(userName, password, host, port, dbName string, ssl SSLConfig) (str
 		"%s:%s@tcp(%s)/%s?parseTime=true&multiStatements=true%s",
 		userName, password, net.JoinHostPort(host, port), dbName,
 		mysqlTLSDSNParam(tlsConfigName),
-	), nil
+	), release, nil
 }
 
 type mysqlAddr struct {

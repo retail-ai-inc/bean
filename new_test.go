@@ -1,0 +1,190 @@
+package bean
+
+import (
+	"context"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/config"
+	"github.com/retail-ai-inc/bean/v3/internal/gopool"
+	blog "github.com/retail-ai-inc/bean/v3/log"
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func validTestConfig() *config.Config {
+	conf := &config.Config{}
+	conf.HTTP.BodyLimit = "1M"
+	conf.HTTP.AllowedMethod = []string{"GET"}
+	return conf
+}
+
+func useConfig(t *testing.T, conf *config.Config) {
+	t.Helper()
+	orig := config.Bean
+	config.Bean = conf
+	t.Cleanup(func() { config.Bean = orig })
+}
+
+func TestNew_ConfigNotLoaded(t *testing.T) {
+	useConfig(t, nil)
+
+	b, err := New()
+	assert.Nil(t, b)
+	assert.ErrorIs(t, err, ErrConfigNotLoaded)
+
+	e, closeEcho, err := NewEcho()
+	assert.Nil(t, e)
+	assert.Nil(t, closeEcho)
+	assert.ErrorIs(t, err, ErrConfigNotLoaded)
+}
+
+func TestNewEcho_InvalidConfigReturnsError(t *testing.T) {
+	tests := []struct {
+		name    string
+		modify  func(c *config.Config)
+		wantErr string
+	}{
+		{"trustIPRange", func(c *config.Config) { c.HTTP.TrustIPRange = []string{"not-an-ip"} }, "invalid http.trustIPRange"},
+		{"bodyLimit", func(c *config.Config) { c.HTTP.BodyLimit = "lots" }, "invalid http.bodyLimit"},
+		{"accessLog skip pattern", func(c *config.Config) {
+			c.AccessLog.On = true
+			c.AccessLog.SkipEndpoints = []string{"("}
+		}, "accessLog.skipEndpoints"},
+		{"prometheus skip pattern", func(c *config.Config) {
+			c.Prometheus.On = true
+			c.Prometheus.SkipEndpoints = []string{"("}
+		}, "prometheus.skipEndpoints"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf := validTestConfig()
+			tt.modify(conf)
+			useConfig(t, conf)
+
+			e, closeEcho, err := NewEcho()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+			assert.Nil(t, e)
+			assert.Nil(t, closeEcho)
+		})
+	}
+}
+
+func TestNewEcho_ReleasesPoolsOnError(t *testing.T) {
+	size := 1
+	conf := validTestConfig()
+	conf.AsyncPool = []struct {
+		Name       string
+		Size       *int
+		BlockAfter *int
+	}{
+		{Name: "first", Size: &size},
+		{Name: "first", Size: &size}, // duplicated name: registration fails
+	}
+	useConfig(t, conf)
+
+	_, _, err := NewEcho()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `failed to register goroutine pool "first"`)
+
+	_, err = gopool.GetPool("first")
+	assert.Error(t, err, "pools registered before the failure must be released")
+}
+
+func TestNew_ReinitializesLogger(t *testing.T) {
+	useConfig(t, validTestConfig())
+
+	b1, err := New()
+	require.NoError(t, err)
+	l1 := blog.Logger()
+
+	b2, err := New()
+	require.NoError(t, err)
+	l2 := blog.Logger()
+
+	assert.NotNil(t, l1)
+	assert.NotSame(t, l1, l2, "a new bean instance must initialize a new logger")
+	require.NoError(t, b1.Shutdown())
+	require.NoError(t, b2.Shutdown())
+}
+
+func TestNewEcho_UsesBeanLoggerForEcho(t *testing.T) {
+	conf := validTestConfig()
+	conf.DebugLogLevel = "info"
+	useConfig(t, conf)
+
+	e, closeEcho, err := NewEcho()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = closeEcho() })
+
+	require.NotNil(t, blog.Logger())
+	assert.Same(t, blog.Logger().Logger, e.Logger, "c.Logger() and log.Logger() must be the same logger")
+	assert.Equal(t, slog.LevelInfo, blog.Logger().Level())
+}
+
+func TestNewEcho_InvalidLogLevel(t *testing.T) {
+	conf := validTestConfig()
+	conf.DebugLogLevel = "verbose"
+	useConfig(t, conf)
+
+	_, _, err := NewEcho()
+	assert.ErrorContains(t, err, "debugLogLevel")
+}
+
+// Projects that load env.json with viper directly (not config.LoadConfig) must still be stopped when the
+// removed `accessLog.bodyDumpMaskParam` is set, otherwise log masking would be silently turned off.
+func TestNewEcho_RejectsRemovedMaskConfig(t *testing.T) {
+	useConfig(t, validTestConfig())
+	viper.Set("accessLog.bodyDumpMaskParam", []string{"password"})
+	t.Cleanup(func() { viper.Set("accessLog.bodyDumpMaskParam", nil) })
+
+	_, _, err := NewEcho()
+	assert.ErrorContains(t, err, "rename it to accessLog.maskFields")
+}
+
+func TestNewEcho_MaskFieldsAreApplied(t *testing.T) {
+	accessLogPath := filepath.Join(t.TempDir(), "access.log")
+	conf := validTestConfig()
+	conf.AccessLog.MaskFields = []string{"password"}
+	conf.AccessLog.Path = accessLogPath
+	useConfig(t, conf)
+
+	_, closeEcho, err := NewEcho()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = closeEcho() })
+
+	blog.Logger().TraceInfo(context.Background(), "DUMP", map[string]any{"request_body": `{"password":"secret","user":"bob"}`})
+	require.NoError(t, blog.Shutdown(context.Background())) // flush and close the access log file
+
+	out, err := os.ReadFile(accessLogPath)
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), "secret")
+	assert.Contains(t, string(out), "bob")
+}
+
+// config.Bean built in code (without viper) and without the http settings must still work.
+func TestNewEcho_WithoutHTTPConfig(t *testing.T) {
+	useConfig(t, &config.Config{})
+
+	e, closeEcho, err := NewEcho()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = closeEcho() })
+
+	e.POST("/x", func(c *echo.Context) error { return c.String(http.StatusOK, "ok") })
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/x", strings.NewReader("{}")))
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// The default body limit (1M) applies.
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(strings.Repeat("a", 1_000_001))))
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+}

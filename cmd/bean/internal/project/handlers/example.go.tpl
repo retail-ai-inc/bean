@@ -8,17 +8,17 @@ import (
 
 	"{{ .PkgPath }}/services"
 
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2"
-	"github.com/retail-ai-inc/bean/v2/async"
-	berror "github.com/retail-ai-inc/bean/v2/error"
-	"github.com/retail-ai-inc/bean/v2/trace"
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/async"
+	berror "github.com/retail-ai-inc/bean/v3/error"
+	blog "github.com/retail-ai-inc/bean/v3/log"
+	"github.com/retail-ai-inc/bean/v3/trace"
 )
 
 type ExampleHandler interface {
-	JSONIndex(c echo.Context) error // JSON example
-	HTMLIndex(c echo.Context) error // HTML example
-	Validate(c echo.Context) error  // Validation example
+	JSONIndex(c *echo.Context) error // JSON example
+	HTMLIndex(c *echo.Context) error // HTML example
+	Validate(c *echo.Context) error  // Validation example
 }
 
 type exampleHandler struct {
@@ -29,7 +29,7 @@ func NewExampleHandler(exampleSvc services.ExampleService) *exampleHandler {
 	return &exampleHandler{exampleSvc}
 }
 
-func (handler *exampleHandler) JSONIndex(c echo.Context) error {
+func (handler *exampleHandler) JSONIndex(c *echo.Context) error {
 	tctx, finish := trace.StartSpan(c.Request().Context(), "http.handler")
 	defer finish()
 
@@ -41,7 +41,8 @@ func (handler *exampleHandler) JSONIndex(c echo.Context) error {
 	// IMPORTANT: Panic inside a goroutine will crash the whole application.
 	// Example: How to execute some asynchronous code safely instead of plain goroutine.
 	async.ExecuteWithContext(func(asyncC context.Context) {
-		bean.Logger().Debug(dbName)
+		// Log with the async context: it carries the request ID / trace ID of the request.
+		blog.Logger().DebugContext(asyncC, dbName)
 		// IMPORTANT: Using sentry directly in goroutine may cause data race!
 		// Need to create a new hub by cloning the existing one.
 		// Example: How to use sentry safely in goroutine.
@@ -54,8 +55,8 @@ func (handler *exampleHandler) JSONIndex(c echo.Context) error {
 	})
 }
 
-func (handler *exampleHandler) HTMLIndex(c echo.Context) error {
-	return c.Render(http.StatusOK, "index", echo.Map{
+func (handler *exampleHandler) HTMLIndex(c *echo.Context) error {
+	return c.Render(http.StatusOK, "index", map[string]any{
 		"title": "Index title!",
 		"add": func(a int, b int) int {
 			return a + b
@@ -69,7 +70,7 @@ func (handler *exampleHandler) HTMLIndex(c echo.Context) error {
 	})
 }
 
-func (handler *exampleHandler) Validate(c echo.Context) error {
+func (handler *exampleHandler) Validate(c *echo.Context) error {
 	var params struct {
 		Example string `json:"example" validate:"required,example,min=7"`
 		Other   int    `json:"other" validate:"required,gt=0"`

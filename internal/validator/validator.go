@@ -35,10 +35,11 @@ package validator
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // ValidatorFunc is a custom validator function you can define and add to the validator.
@@ -174,4 +175,10 @@ func (ve *ValidationError) Error() string {
 // Unwrap implements the builtin `error.Unwrap` function.
 func (ve *ValidationError) Unwrap() error {
 	return ve.Err
+}
+
+// StatusCode implements `echo.HTTPStatusCoder`, so echo and its middlewares (e.g. Prometheus metrics)
+// report validation errors as 400 instead of 500.
+func (ve *ValidationError) StatusCode() int {
+	return http.StatusBadRequest
 }

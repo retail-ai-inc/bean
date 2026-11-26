@@ -27,12 +27,12 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"log/slog"
 	"net"
 	"sync/atomic"
 	"time"
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
-	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 )
 
@@ -49,7 +49,7 @@ type replicaConnPool struct {
 	host      string
 	replica   gorm.ConnPool
 	primary   gorm.ConnPool
-	logger    echo.Logger
+	logger    *slog.Logger
 	now       func() time.Time
 	downUntil atomic.Int64
 	probing   atomic.Bool
@@ -57,7 +57,7 @@ type replicaConnPool struct {
 
 var _ gorm.ConnPool = (*replicaConnPool)(nil)
 
-func newReplicaConnPool(host string, replica, primary gorm.ConnPool, logger echo.Logger) *replicaConnPool {
+func newReplicaConnPool(host string, replica, primary gorm.ConnPool, logger *slog.Logger) *replicaConnPool {
 	return &replicaConnPool{host: host, replica: replica, primary: primary, logger: logger, now: time.Now}
 }
 
@@ -157,7 +157,8 @@ func (p *replicaConnPool) markUnavailable(err error) bool {
 func (p *replicaConnPool) setUnavailable(err error) {
 	p.downUntil.Store(p.now().Add(replicaRetryInterval).UnixNano())
 	if p.logger != nil {
-		p.logger.Warnf("mysql read replica %s is unavailable, falling back to primary for %s: %v", p.host, replicaRetryInterval, err)
+		p.logger.Warn("mysql read replica is unavailable, falling back to primary",
+			"host", p.host, "retry_after", replicaRetryInterval, "error", err)
 	}
 }
 

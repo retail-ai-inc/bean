@@ -4,8 +4,8 @@ package repositories
 import (
 	"context"
 
-	"github.com/retail-ai-inc/bean/v2"
-	"github.com/retail-ai-inc/bean/v2/trace"
+	"github.com/retail-ai-inc/bean/v3"
+	"github.com/retail-ai-inc/bean/v3/trace"
 )
 
 type ExampleRepository interface {

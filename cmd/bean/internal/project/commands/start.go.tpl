@@ -2,15 +2,18 @@
 package commands
 
 import (
+	"log"
 
 	"{{ .PkgPath }}/middlewares"
 	"{{ .PkgPath }}/routers"
 	"{{ .PkgPath }}/validations"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/retail-ai-inc/bean/v2"
-	berror "github.com/retail-ai-inc/bean/v2/error"
-	"github.com/retail-ai-inc/bean/v2/helpers"
+	"github.com/retail-ai-inc/bean/v3"
+	"github.com/retail-ai-inc/bean/v3/config"
+	berror "github.com/retail-ai-inc/bean/v3/error"
+	"github.com/retail-ai-inc/bean/v3/helpers"
+	"github.com/retail-ai-inc/bean/v3/trace"
 	"github.com/spf13/cobra"
 )
 
@@ -32,8 +35,8 @@ var (
 
 func init() {
 	rootCmd.AddCommand(startCmd)
-	defaultHost := bean.BeanConfig.HTTP.Host
-	defaultPort := bean.BeanConfig.HTTP.Port
+	defaultHost := config.Bean.HTTP.Host
+	defaultPort := config.Bean.HTTP.Port
 	startCmd.Flags().StringVar(&host, "host", defaultHost, "host address")
 	startCmd.Flags().StringVar(&port, "port", defaultPort, "port number")
 	startCmd.Flags().BoolVarP(&startWeb, "web", "w", false, "start with web service")
@@ -42,25 +45,28 @@ func init() {
 
 func start(cmd *cobra.Command, args []string) {
 	// Prepare sentry options before initialize bean.
-	if bean.BeanConfig.Sentry.On {		
-		bean.BeanConfig.Sentry.ClientOptions = &sentry.ClientOptions{
-			Debug:            bean.BeanConfig.Sentry.Debug,
-			Dsn:              bean.BeanConfig.Sentry.Dsn,
-			Environment:      bean.BeanConfig.Environment,
-			BeforeSend:       bean.DefaultBeforeSend, // Default beforeSend function. You can initialize your own custom function.
+	if config.Bean.Sentry.On {		
+		config.Bean.Sentry.ClientOptions = &sentry.ClientOptions{
+			Debug:            config.Bean.Sentry.Debug,
+			Dsn:              config.Bean.Sentry.Dsn,
+			Environment:      config.Bean.Environment,
+			BeforeSend:       trace.DefaultBeforeSend, // Default beforeSend function. You can initialize your own custom function.
 			AttachStacktrace: true,
-			TracesSampleRate: helpers.FloatInRange(bean.BeanConfig.Sentry.TracesSampleRate, 0.0, 1.0),
+			TracesSampleRate: helpers.FloatInRange(config.Bean.Sentry.TracesSampleRate, 0.0, 1.0),
 		}
 
 		// Example of setting a global scope, if you want to set the scope per event,
 		// please check `sentry.WithScope()`.
-		// bean.BeanConfig.Sentry.ConfigureScope = func(scope *sentry.Scope) {
+		// config.Bean.Sentry.ConfigureScope = func(scope *sentry.Scope) {
 		// scope.SetTag("my-tag", "my value")
 		// }
 	}
 
 	// Create a bean object
-	b := bean.New()
+	b, err := bean.New()
+	if err != nil {
+		log.Fatalf("Failed to initialize bean: %v", err)
+	}
 
 	// Add custom validation to the default validator.
 	b.UseValidation(
@@ -82,7 +88,7 @@ func start(cmd *cobra.Command, args []string) {
 		berror.APIErrorHandlerFunc, // You can use your own custom API error handler func.
 		berror.HTTPErrorHandlerFunc,
 		// Set your custom error handler func here, for example:
-		// func(e error, c echo.Context) (bool, error) {
+		// func(e error, c *echo.Context) (bool, error) {
 		// 	return false, nil
 		// },
 	)

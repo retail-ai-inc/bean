@@ -26,7 +26,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net"
 	"os"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -72,9 +75,15 @@ func sslConfigFromMap(cfg map[string]interface{}) SSLConfig {
 	return ssl
 }
 
-func newTLSConfig(ssl SSLConfig) (*tls.Config, error) {
+func noRelease() {}
+
+// newTLSConfig returns the TLS config of a database connection, nil if SSL is off, and a function releasing its
+// resources (the certificate file watcher with `hotReload`) to call when the connection is closed. hosts are the hosts of the
+// connection as configured (without port); with `hotReload` they are used to verify the server name, see
+// `verifyServerName`.
+func newTLSConfig(ssl SSLConfig, hosts []string) (*tls.Config, func(), error) {
 	if !ssl.On {
-		return nil, nil
+		return nil, noRelease, nil
 	}
 
 	tlsConfig := &tls.Config{
@@ -83,54 +92,61 @@ func newTLSConfig(ssl SSLConfig) (*tls.Config, error) {
 	}
 
 	if !ssl.ShouldVerifyCertificate() {
-		return tlsConfig, nil
+		return tlsConfig, noRelease, nil
 	}
 
 	rootCAs, err := loadRootCAs(ssl.CertFile)
 	if err != nil {
-		return nil, err
+		return nil, noRelease, err
 	}
 
 	if ssl.HotReload && ssl.CertFile != "" {
 		tlsConfig.InsecureSkipVerify = true
 
-		cm := &certManager{}
-		cm.rootCAs.Store(rootCAs)
+		// One watcher per certificate file, shared by the connections using it and stopped with the last one.
+		cm, release := acquireCertManager(ssl.CertFile, rootCAs)
 
+		// The root CAs can change at runtime, so the certificate is verified here instead of by crypto/tls
+		// (InsecureSkipVerify only disables the built-in verification): the chain against the current root CAs,
+		// then the server name.
 		tlsConfig.VerifyConnection = func(cs tls.ConnectionState) error {
-			pool, _ := cm.rootCAs.Load().(*x509.CertPool)
-			opts := x509.VerifyOptions{
-				Roots:         pool,
-				Intermediates: x509.NewCertPool(),
-				DNSName:       cs.ServerName,
-			}
-
 			if len(cs.PeerCertificates) == 0 {
 				return fmt.Errorf("tls: no certificates from peer")
 			}
 
-			for _, cert := range cs.PeerCertificates[1:] {
-				opts.Intermediates.AddCert(cert)
+			verify := func(pool *x509.CertPool) error {
+				opts := x509.VerifyOptions{
+					Roots:         pool,
+					Intermediates: x509.NewCertPool(),
+				}
+				for _, cert := range cs.PeerCertificates[1:] {
+					opts.Intermediates.AddCert(cert)
+				}
+				_, err := cs.PeerCertificates[0].Verify(opts)
+				return err
 			}
 
-			_, err := cs.PeerCertificates[0].Verify(opts)
+			pool, _ := cm.rootCAs.Load().(*x509.CertPool)
+			err := verify(pool)
 			if err != nil {
+				// The certificate may have been rotated before the watcher reloaded the file.
 				if newPool, loadErr := loadRootCAs(ssl.CertFile); loadErr == nil {
 					cm.rootCAs.Store(newPool)
-					opts.Roots = newPool
-					_, err = cs.PeerCertificates[0].Verify(opts)
+					err = verify(newPool)
 				}
 			}
+			if err != nil {
+				return err
+			}
 
-			return err
+			return verifyServerName(cs.PeerCertificates[0], cs.ServerName, hosts)
 		}
 
-		watchCertFile(ssl.CertFile, cm)
-	} else {
-		tlsConfig.RootCAs = rootCAs
+		return tlsConfig, release, nil
 	}
 
-	return tlsConfig, nil
+	tlsConfig.RootCAs = rootCAs
+	return tlsConfig, noRelease, nil
 }
 
 func loadRootCAs(certFile string) (*x509.CertPool, error) {
@@ -153,21 +169,66 @@ func loadRootCAs(certFile string) (*x509.CertPool, error) {
 	return rootCAs, nil
 }
 
-func watchCertFile(certFile string, cm *certManager) {
+// certWatcher is the certificate manager of a certificate file and the watcher reloading it, shared by the
+// connections using that file.
+type certWatcher struct {
+	cm   *certManager
+	refs int
+	stop func()
+}
+
+var (
+	certWatchersMu sync.Mutex
+	certWatchers   = map[string]*certWatcher{}
+)
+
+// acquireCertManager returns the certificate manager of certFile, watched for changes, and the function releasing
+// it: the watcher is stopped when the last user releases it.
+func acquireCertManager(certFile string, rootCAs *x509.CertPool) (*certManager, func()) {
+	certWatchersMu.Lock()
+	defer certWatchersMu.Unlock()
+
+	w, ok := certWatchers[certFile]
+	if !ok {
+		cm := &certManager{}
+		cm.rootCAs.Store(rootCAs)
+		w = &certWatcher{cm: cm, stop: watchCertFile(certFile, cm)}
+		certWatchers[certFile] = w
+	}
+	w.refs++
+
+	return w.cm, sync.OnceFunc(func() {
+		certWatchersMu.Lock()
+		defer certWatchersMu.Unlock()
+		w.refs--
+		if w.refs == 0 {
+			delete(certWatchers, certFile)
+			w.stop()
+		}
+	})
+}
+
+// watchCertFile reloads the root CAs of cm when certFile changes, until the returned stop function is called.
+func watchCertFile(certFile string, cm *certManager) (stop func()) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return
+		return noRelease
 	}
 
 	if err := watcher.Add(certFile); err != nil {
 		_ = watcher.Close()
-		return
+		return noRelease
 	}
 
+	done := make(chan struct{})
 	go func() {
-		//nolint:errcheck
-		defer watcher.Close()
+		defer close(done)
 		var timer *time.Timer
+		defer func() {
+			if timer != nil {
+				timer.Stop()
+			}
+		}()
 		for {
 			select {
 			case event, ok := <-watcher.Events:
@@ -196,6 +257,60 @@ func watchCertFile(certFile string, cm *certManager) {
 			}
 		}
 	}()
+
+	return func() {
+		_ = watcher.Close() // closes the channels: the goroutine returns
+		<-done
+	}
+}
+
+// verifyServerName checks that the server certificate is valid for the server the client connected to.
+//
+// serverName is the name sent in the TLS handshake (SNI). It is empty when the client connected to an IP address
+// (SNI does not carry IP addresses), so in that case the certificate must be valid for one of the configured hosts
+// (an IP address host is matched against the IP SANs). Without any name the certificate cannot be verified, which
+// is an error: accepting it would accept any certificate signed by a trusted CA.
+//
+// Limitation: a server reached by IP address that is not a configured host (e.g. a Redis cluster node discovered
+// at runtime) must present a certificate valid for one of the configured hosts.
+func verifyServerName(cert *x509.Certificate, serverName string, hosts []string) error {
+	if serverName != "" {
+		return cert.VerifyHostname(serverName)
+	}
+
+	var firstErr error
+	for _, host := range hosts {
+		if host == "" {
+			continue
+		}
+		err := cert.VerifyHostname(host)
+		if err == nil {
+			return nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	if firstErr == nil {
+		return fmt.Errorf("tls: cannot verify the server certificate: no server name")
+	}
+	return firstErr
+}
+
+// hostsWithoutPort returns the hosts of a comma separated `host` (or `host:port`) list, without the ports.
+func hostsWithoutPort(hostList string) []string {
+	var hosts []string
+	for _, h := range strings.Split(hostList, ",") {
+		h = strings.TrimSpace(h)
+		if h == "" {
+			continue
+		}
+		if host, _, err := net.SplitHostPort(h); err == nil {
+			h = host
+		}
+		hosts = append(hosts, strings.Trim(h, "[]"))
+	}
+	return hosts
 }
 
 func (ssl SSLConfig) ShouldVerifyCertificate() bool {

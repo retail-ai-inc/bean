@@ -34,7 +34,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	toolsimports "golang.org/x/tools/imports"
 )
@@ -191,7 +190,7 @@ func (g *generator) Generate() error {
 	g.p("%q", "testing")
 	g.p("%q", "github.com/go-resty/resty/v2")
 	g.p("%q", "github.com/stretchr/testify/assert")
-	g.p("%q", "github.com/retail-ai-inc/bean/v2/test")
+	g.p("%q", "github.com/retail-ai-inc/bean/v3/test")
 
 	g.out()
 	g.p(")")
@@ -373,19 +372,22 @@ func (g *generator) GenerateMethod(mockType string, m spec) error {
 				}
 				s.Path = s.Path + strings.Join(qs, "&")
 			}
+			if s.Body != nil && len(*s.Body) > 0 {
+				g.p("SetBody(%v).", fmt.Sprintf("%#v", *s.Body))
+			}
 			switch s.Method {
 			case http.MethodGet:
 				g.p(`Get(c.endPoint + "%v")`, s.Path)
 			case http.MethodPost:
-				if s.Body != nil && len(*s.Body) > 0 {
-					g.p("SetBody(%v).", fmt.Sprintf("%#v", *s.Body))
-				}
-
 				g.p(`Post(c.endPoint + "%v")`, s.Path)
+			case http.MethodPut:
+				g.p(`Put(c.endPoint + "%v")`, s.Path)
+			case http.MethodPatch:
+				g.p(`Patch(c.endPoint + "%v")`, s.Path)
 			case http.MethodDelete:
 				g.p(`Delete(c.endPoint + "%v")`, s.Path)
 			default:
-				return errors.New("not support")
+				g.p(`Execute(%q, c.endPoint + "%v")`, s.Method, s.Path)
 			}
 		}
 	} else {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/retail-ai-inc/bean/v2/config"
+	"github.com/retail-ai-inc/bean/v3/config"
 	"github.com/spf13/viper"
 )
 

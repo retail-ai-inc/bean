@@ -6,18 +6,16 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	sentryecho "github.com/getsentry/sentry-go/echo"
-	"github.com/labstack/echo/v4"
-	elog "github.com/labstack/gommon/log"
-	"github.com/retail-ai-inc/bean/v2/config"
-	bctx "github.com/retail-ai-inc/bean/v2/context"
-	"github.com/retail-ai-inc/bean/v2/log"
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/config"
+	"github.com/retail-ai-inc/bean/v3/log"
 )
 
 // SentryCaptureExceptionWithEcho captures an exception with echo context and send to sentry if sentry is configured.
 // It caputures the exception even if the context or sentry hub in the context is nil.
 // To capture an exception with a stack trace, include the top-level error.
 // For supported libraries, see: https://pkg.go.dev/github.com/getsentry/sentry-go@v0.30.0#ExtractStacktrace
-func SentryCaptureExceptionWithEcho(c echo.Context, err error) {
+func SentryCaptureExceptionWithEcho(c *echo.Context, err error) {
 
 	sentryCaptureException(echoRequestContext(c), err, false, func() (*sentry.Hub, bool) {
 
@@ -68,7 +66,8 @@ func sentryCaptureException(ctx context.Context, err error, logging bool, getHub
 
 	// Log the error if logging is on, whether sentry is on or off.
 	if logging {
-		logWithRequestID(ctx, err.Error(), log.Logger().Errorj, func() { log.Logger().Error(err) })
+		// The request ID / trace ID in ctx are added by the logger.
+		log.Logger().ErrorContext(ctx, err.Error())
 	}
 
 	if !config.Bean.Sentry.On {
@@ -91,7 +90,7 @@ func sentryCaptureException(ctx context.Context, err error, logging bool, getHub
 
 // SentryCaptureMessageWithEcho captures a message with echo context and send to sentry.
 // It captures the message even if the context or sentry hub in the context is nil.
-func SentryCaptureMessageWithEcho(c echo.Context, msg string) {
+func SentryCaptureMessageWithEcho(c *echo.Context, msg string) {
 
 	sentryCaptureMsg(echoRequestContext(c), msg, false, func() (*sentry.Hub, bool) {
 
@@ -140,7 +139,8 @@ func sentryCaptureMsg(ctx context.Context, msg string, logging bool, getHub func
 
 	// Log the message if logging is on, whether sentry is on or off.
 	if logging {
-		logWithRequestID(ctx, msg, log.Logger().Infoj, func() { log.Logger().Info(msg) })
+		// The request ID / trace ID in ctx are added by the logger.
+		log.Logger().InfoContext(ctx, msg)
 	}
 
 	if !config.Bean.Sentry.On {
@@ -161,28 +161,11 @@ func sentryCaptureMsg(ctx context.Context, msg string, logging bool, getHub func
 	hub.CaptureMessage(msg)
 }
 
-func echoRequestContext(c echo.Context) context.Context {
+func echoRequestContext(c *echo.Context) context.Context {
 
 	if c == nil || c.Request() == nil {
 		return context.TODO()
 	}
 
 	return c.Request().Context()
-}
-
-// logWithRequestID writes a JSON log with `message` and `id` (same key as the access log) when the context
-// has a request ID, otherwise it falls back to the plain log so the output stays the same as before.
-func logWithRequestID(ctx context.Context, msg string, logj func(elog.JSON), fallback func()) {
-
-	if ctx != nil {
-		if reqID, ok := bctx.GetRequestID(ctx); ok {
-			logj(elog.JSON{
-				"message": msg,
-				"id":      reqID,
-			})
-			return
-		}
-	}
-
-	fallback()
 }

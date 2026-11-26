@@ -2,14 +2,18 @@ package http
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"io"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/config"
-	bctx "github.com/retail-ai-inc/bean/v2/context"
-	blog "github.com/retail-ai-inc/bean/v2/log"
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/config"
+	bctx "github.com/retail-ai-inc/bean/v3/context"
+	blog "github.com/retail-ai-inc/bean/v3/log"
 )
 
 type LoggingTransport struct {
@@ -31,12 +35,14 @@ func NewLoggingTransport(
 		opt.BodyLimit = 64 * 1024
 	}
 
-	if len(opt.AllowedReqHeaders) == 0 {
-		opt.AllowedReqHeaders = config.Bean.AccessLog.ReqHeaderParam
-	}
-
-	if len(opt.AllowedRespHeaders) == 0 {
-		opt.AllowedRespHeaders = config.Bean.AccessLog.ResHeaderParam
+	// Default to the access log headers of the bean config, if it is loaded.
+	if config.Bean != nil {
+		if len(opt.AllowedReqHeaders) == 0 {
+			opt.AllowedReqHeaders = config.Bean.AccessLog.ReqHeaderParam
+		}
+		if len(opt.AllowedRespHeaders) == 0 {
+			opt.AllowedRespHeaders = config.Bean.AccessLog.ResHeaderParam
+		}
 	}
 
 	return &LoggingTransport{
@@ -52,9 +58,12 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		"url":    req.URL.String(),
 	}
 
-	if t.opt.DumpBody && req != nil && req.Body != nil {
-		reqBody, _ := io.ReadAll(req.Body)
-		req.Body = io.NopCloser(bytes.NewBuffer(reqBody))
+	if t.opt.DumpBody && req.Body != nil && req.Body != http.NoBody {
+		reqBody, newReq, err := t.dumpRequestBody(req)
+		if err != nil {
+			return nil, err
+		}
+		req = newReq
 		fields["request_body"] = string(reqBody)
 	}
 
@@ -69,7 +78,7 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	}
 	for _, h := range t.opt.AllowedReqHeaders {
 		if v := req.Header.Get(h); v != "" {
-			reqHeader[h] = v
+			reqHeader[h] = redactHeader(h, v)
 		}
 	}
 
@@ -88,7 +97,7 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		respHeader := make(map[string]any)
 		for _, h := range t.opt.AllowedRespHeaders {
 			if v := resp.Header.Get(h); v != "" {
-				respHeader[h] = v
+				respHeader[h] = redactHeader(h, v)
 			}
 		}
 
@@ -97,22 +106,146 @@ func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		}
 	}
 
-	if t.opt.DumpBody && resp != nil && resp.Body != nil {
-		limited := io.LimitReader(resp.Body, t.opt.BodyLimit)
-		buf := &bytes.Buffer{}
-		respBody, _ := io.ReadAll(io.TeeReader(limited, buf))
-		resp.Body = io.NopCloser(io.MultiReader(buf, resp.Body))
-
-		fields["response_body"] = string(respBody)
+	// The response body is logged as the caller reads it, when it reaches the end or is closed: reading it here
+	// would block streaming responses (SSE, long polling) until BodyLimit bytes or the end. A 101 response body is
+	// the upgraded connection (an io.ReadWriteCloser): it must not be wrapped.
+	if t.opt.DumpBody && err == nil && resp != nil && resp.Body != nil && resp.Body != http.NoBody &&
+		resp.StatusCode != http.StatusSwitchingProtocols {
+		ctx := req.Context()
+		resp.Body = &loggingBody{
+			body:  resp.Body,
+			limit: t.opt.BodyLimit,
+			log: func(respBody string, readErr error) {
+				fields["response_body"] = respBody
+				if readErr != nil {
+					fields["response_body_error"] = readErr.Error()
+				}
+				t.log(ctx, fields, nil)
+			},
+		}
+		return resp, nil
 	}
 
+	t.log(req.Context(), fields, err)
+	return resp, err
+}
+
+// log writes the OUTBOUND_API entry, as an error if err is not nil.
+func (t *LoggingTransport) log(ctx context.Context, fields map[string]any, err error) {
 	if err != nil {
 		fields["error"] = err.Error()
-		t.logger.TraceError(req.Context(), "OUTBOUND_API", fields)
-		return resp, err
+		t.logger.TraceError(ctx, "OUTBOUND_API", fields)
+		return
+	}
+	t.logger.TraceInfo(ctx, "OUTBOUND_API", fields)
+}
+
+// redactedValue replaces the value of a sensitive header in the log.
+const redactedValue = "[REDACTED]"
+
+// sensitiveHeaders are never logged in clear text, even if they are in the allowed headers.
+var sensitiveHeaders = map[string]bool{
+	"Authorization":       true,
+	"Proxy-Authorization": true,
+	"Cookie":              true,
+	"Set-Cookie":          true,
+}
+
+// redactHeader returns the value of the header to log: `[REDACTED]` for a credential (the headers above, and the
+// headers whose name contains token, secret, password, api-key / apikey or session), the value otherwise.
+func redactHeader(name, value string) string {
+	if sensitiveHeaders[http.CanonicalHeaderKey(name)] {
+		return redactedValue
+	}
+	lower := strings.ToLower(name)
+	for _, word := range []string{"token", "secret", "password", "api-key", "apikey", "session"} {
+		if strings.Contains(lower, word) {
+			return redactedValue
+		}
+	}
+	return value
+}
+
+// dumpRequestBody returns the first `BodyLimit` bytes of the request body, and the request to send.
+//
+// With `GetBody` (set by http.NewRequest for in-memory bodies) the prefix is read from a copy and the request is
+// unchanged. Otherwise the prefix is read from the body, and a copy of the request is returned whose body replays
+// the prefix then the rest of the original body (a RoundTripper must not modify the caller's request).
+func (t *LoggingTransport) dumpRequestBody(req *http.Request) ([]byte, *http.Request, error) {
+	if req.GetBody != nil {
+		body, err := req.GetBody()
+		if err == nil {
+			prefix, readErr := io.ReadAll(io.LimitReader(body, t.opt.BodyLimit))
+			_ = body.Close()
+			if readErr == nil {
+				return prefix, req, nil
+			}
+		}
 	}
 
-	t.logger.TraceInfo(req.Context(), "OUTBOUND_API", fields)
+	prefix, err := io.ReadAll(io.LimitReader(req.Body, t.opt.BodyLimit))
+	if err != nil {
+		// Do not send a truncated body. RoundTrip must close the body, even on error.
+		_ = req.Body.Close()
+		return nil, nil, err
+	}
 
-	return resp, nil
+	newReq := req.Clone(req.Context())
+	newReq.Body = readCloser{Reader: io.MultiReader(bytes.NewReader(prefix), req.Body), Closer: req.Body}
+	return prefix, newReq, nil
+}
+
+type readCloser struct {
+	io.Reader
+	io.Closer
+}
+
+// loggingBody records the first `limit` bytes read from body and calls log once, when the body is read to the end,
+// fails, or is closed.
+type loggingBody struct {
+	body  io.ReadCloser
+	limit int64
+	log   func(respBody string, readErr error)
+
+	mu     sync.Mutex // Close may be called concurrently with Read
+	buf    bytes.Buffer
+	logged bool
+}
+
+func (b *loggingBody) Read(p []byte) (int, error) {
+	n, err := b.body.Read(p)
+
+	b.mu.Lock()
+	if remaining := b.limit - int64(b.buf.Len()); remaining > 0 && n > 0 {
+		b.buf.Write(p[:min(int64(n), remaining)])
+	}
+	b.mu.Unlock()
+
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			b.finish(nil)
+		} else {
+			b.finish(err)
+		}
+	}
+	return n, err
+}
+
+func (b *loggingBody) Close() error {
+	err := b.body.Close()
+	b.finish(nil)
+	return err
+}
+
+func (b *loggingBody) finish(readErr error) {
+	b.mu.Lock()
+	if b.logged {
+		b.mu.Unlock()
+		return
+	}
+	b.logged = true
+	respBody := b.buf.String()
+	b.mu.Unlock()
+
+	b.log(respBody, readErr)
 }

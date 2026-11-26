@@ -51,7 +51,8 @@ type Service struct {
 	ProjectObject    Project
 	ServiceNameUpper string
 	ServiceNameLower string
-	RepoExists       bool
+	// Repos are the repositories injected into the service.
+	Repos []ServiceRepo
 }
 
 // serviceCmd represents the service command
@@ -66,7 +67,11 @@ var (
 		Use:   "service <service-name>",
 		Short: "Create a new service file of your choice",
 		Long: `Command takes one argument that is the name of user-defined service
-Example :- "bean create service post" will create a service Post in the services folder.`,
+Example :- "bean create service post" will create a service Post in the services folder.
+
+Without --repo, the repository with the same name (repositories/post.go) is injected into the service if it exists.
+With --repo, the given repositories are injected instead (and created if they do not exist):
+  bean create service post --repo post,user`,
 		Args: cobra.ExactArgs(1),
 		Run:  service,
 	}
@@ -84,21 +89,6 @@ func service(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	var reposParamForSvcs []string
-
-	if len(repoFlag) > 0 {
-		for _, v := range repoFlag {
-			repoFile := wd + "/repositories/" + v + ".go"
-
-			if _, err := os.Stat(repoFile); errors.Is(err, os.ErrNotExist) {
-				// repository file does not exist so, create it
-				repo(cmd, []string{v})
-			}
-
-			reposParamForSvcs = append(reposParamForSvcs, "repos."+strings.ToLower(v)+"Repo")
-		}
-	}
-
 	userServiceName := args[0]
 	serviceName, err := getServiceName(userServiceName)
 	if err != nil {
@@ -114,6 +104,20 @@ func service(cmd *cobra.Command, args []string) {
 	if err == nil {
 		fmt.Println("Service with name " + serviceFileName + " already exists.")
 		os.Exit(1)
+	}
+
+	// The repositories injected into the service: the `--repo` ones (created if missing) or, without `--repo`,
+	// the repository with the same name as the service if it exists.
+	repos, err := serviceRepos(serviceFileName, repoFlag, checkRepoExists)
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println(repoValidationRule)
+		os.Exit(1)
+	}
+	for _, r := range repos {
+		if !checkRepoExists(r.Lower) {
+			repo(cmd, []string{r.Lower})
+		}
 	}
 
 	p := &Project{
@@ -153,17 +157,13 @@ func service(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	var service Service
-	// check if repo with same name exists then set template for service accordingly.
-	repoCheck := checkRepoExists(serviceFileName)
-	if repoCheck {
-		service.RepoExists = true
-	} else {
-		service.RepoExists = false
+	service := Service{
+		ProjectObject:    *p,
+		ServiceNameUpper: serviceName,
+		ServiceNameLower: strings.ToLower(serviceName),
+		Repos:            repos,
 	}
-	service.ProjectObject = *p
-	service.ServiceNameLower = strings.ToLower(serviceName)
-	service.ServiceNameUpper = serviceName
+
 	serviceFileCreate, err := os.Create(serviceFilesPath + serviceFileName + ".go")
 	if err != nil {
 		fmt.Println(err)
@@ -175,145 +175,61 @@ func service(cmd *cobra.Command, args []string) {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-
-	// IMPORTANT: Instead of `defer` let's close the service file so that we can open it again if requires.
 	_ = serviceFileCreate.Close()
 
-	if len(repoFlag) > 1 {
-		// Open service file and update 3 places
-		serviceFileToUpdate := serviceFilesPath + serviceFileName + ".go"
-		needle := service.ServiceNameLower + "Repository repositories." + service.ServiceNameUpper + "Repository"
-		lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
-
-		if err == nil && lineNumber > 0 {
-			newText := ""
-
-			for _, v := range repoFlag {
-				newText += "\t" + strings.ToLower(v) + "Repository repositories." +
-					strings.ToUpper(v[:1]) + strings.ToLower(v[1:]) + "Repository\n"
-			}
-
-			_ = replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
-
-			needle := "func New" + service.ServiceNameUpper + "Service("
-			lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
-
-			if err == nil && lineNumber > 0 {
-				var param []string
-
-				for _, v := range repoFlag {
-					param = append(param, strings.ToLower(v)+"Repo repositories."+
-						strings.ToUpper(v[:1])+strings.ToLower(v[1:])+"Repository")
-				}
-
-				newText := "func New" + service.ServiceNameUpper + "Service(" +
-					strings.Join(param[:], ", ") + ") *" + service.ServiceNameLower + "Service {"
-
-				_ = replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
-
-				needle := "return &" + service.ServiceNameLower + "Service{"
-				lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
-
-				if err == nil && lineNumber > 0 {
-					var param []string
-					for _, v := range repoFlag {
-						param = append(param, "\t\t"+strings.ToLower(v)+"Repository: "+strings.ToLower(v)+"Repo,")
-					}
-
-					// Remove `return &` and rewrite it again with new code
-					err = replaceStringFromFileByRegex(
-						serviceFileToUpdate, `return &`+service.ServiceNameLower+`Service{([^"]*)}`,
-						"return &"+service.ServiceNameLower+"Service{",
-						"",
-					)
-					if err == nil {
-						newText := "\treturn &" + service.ServiceNameLower + "Service{\n" +
-							strings.Join(param[:], "\n") + "\n\t}\n}"
-
-						_ = replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
-					}
-				}
-			}
-		} else {
-
-			needle := "type " + service.ServiceNameLower + "Service struct {}"
-			lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
-
-			if err == nil {
-				err = replaceStringFromFileByExactMatches(serviceFileToUpdate, needle, "")
-				if err == nil {
-					newText := "type " + service.ServiceNameLower + "Service struct {\n"
-
-					for _, v := range repoFlag {
-						newText += "\t" + strings.ToLower(v) + "Repository repositories." +
-							strings.ToUpper(v[:1]) + strings.ToLower(v[1:]) + "Repository\n"
-					}
-
-					newText += "}"
-
-					_ = replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
-
-					needle = "func New" + service.ServiceNameUpper + "Service() *" + service.ServiceNameLower + "Service {"
-					lineNumber, err = matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
-
-					if err == nil {
-						err = replaceStringFromFileByExactMatches(serviceFileToUpdate, needle, "")
-
-						if err == nil {
-							var param []string
-
-							for _, v := range repoFlag {
-								param = append(param, strings.ToLower(v)+"Repo repositories."+
-									strings.ToUpper(v[:1])+strings.ToLower(v[1:])+"Repository")
-							}
-
-							newText := "func New" + service.ServiceNameUpper + "Service(" +
-								strings.Join(param[:], ", ") + ") *" + service.ServiceNameLower + "Service {"
-
-							err = replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
-							if err == nil {
-								needle = "return &" + service.ServiceNameLower + "Service{}"
-								lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
-								if err == nil {
-									err = replaceStringFromFileByExactMatches(serviceFileToUpdate, needle, "")
-									if err == nil {
-										var param []string
-										for _, v := range repoFlag {
-											param = append(param, "\t\t"+strings.ToLower(v)+"Repository: "+strings.ToLower(v)+"Repo,\n")
-										}
-
-										newText := "\treturn &" + service.ServiceNameLower + "Service{\n" + strings.Join(param[:], "") + "\t}"
-										_ = replaceStringToNthLineOfFile(serviceFileToUpdate, newText, lineNumber)
-
-										needle = `// "github.com/retail-ai-inc/bean/v2/trace"`
-										lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(serviceFileToUpdate, needle)
-										if err == nil {
-											_ = replaceStringToNthLineOfFile(serviceFileToUpdate, "\t\""+p.PkgPath+`/repositories"`, lineNumber+1)
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	routerFilesPath := wd + "/routers/"
-	lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(routerFilesPath+"route.go", "type Services struct {")
-	if err == nil && lineNumber > 0 {
-		textToInsert := `	` + service.ServiceNameLower + `Svc services.` + service.ServiceNameUpper + `Service` + ` // added by bean`
-		_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
-
-		lineNumber, err := matchTextInFileAndReturnFirstOccurrenceLineNumber(routerFilesPath+"route.go", "svcs := &Services{")
-		if err == nil && lineNumber > 0 {
-			textToInsert := `		` + service.ServiceNameLower + `Svc: services.New` + service.ServiceNameUpper + `Service(` + strings.Join(reposParamForSvcs[:], ", ") + `),` + ` // added by bean`
-			_ = insertStringToNthLineOfFile(routerFilesPath+"route.go", textToInsert, lineNumber+1)
-		}
-	}
+	wireRoute(wd, "Services",
+		service.ServiceNameLower+"Svc services."+service.ServiceNameUpper+"Service",
+		service.ServiceNameLower+"Svc: services.New"+service.ServiceNameUpper+"Service("+serviceConstructorArgs(repos)+")",
+	)
 
 	fmt.Printf("service with name %s and service file %s.go created\n", serviceName, serviceFileName)
+}
+
+// ServiceRepo is a repository injected into a generated service.
+type ServiceRepo struct {
+	Upper string // e.g. `Post`, as in `repositories.PostRepository`
+	Lower string // e.g. `post`, as in `repos.postRepo` and the file `repositories/post.go`
+}
+
+// serviceRepos returns the repositories to inject into the service: the `--repo` ones (normalized like
+// `bean create repo` does, duplicates removed) or, without `--repo`, the repository with the same name as the
+// service if it exists.
+func serviceRepos(serviceFileName string, repoNames []string, repoExists func(string) bool) ([]ServiceRepo, error) {
+	if len(repoNames) == 0 {
+		if repoExists(serviceFileName) {
+			return []ServiceRepo{{Upper: strings.ToUpper(serviceFileName[:1]) + serviceFileName[1:], Lower: serviceFileName}}, nil
+		}
+		return nil, nil
+	}
+
+	var repos []ServiceRepo
+	seen := map[string]bool{}
+	for _, name := range repoNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		repoName, err := getRepoName(name)
+		if err != nil {
+			return nil, fmt.Errorf("invalid repository name %q", name)
+		}
+		lower := strings.ToLower(repoName)
+		if seen[lower] {
+			continue
+		}
+		seen[lower] = true
+		repos = append(repos, ServiceRepo{Upper: repoName, Lower: lower})
+	}
+	return repos, nil
+}
+
+// serviceConstructorArgs returns the arguments of the service constructor call in `routers/route.go`.
+func serviceConstructorArgs(repos []ServiceRepo) string {
+	args := make([]string, 0, len(repos))
+	for _, r := range repos {
+		args = append(args, "repos."+r.Lower+"Repo")
+	}
+	return strings.Join(args, ", ")
 }
 
 func getServiceName(serviceName string) (string, error) {

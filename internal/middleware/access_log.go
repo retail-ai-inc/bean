@@ -25,6 +25,7 @@ package middleware
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -32,10 +33,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 
-	"github.com/retail-ai-inc/bean/v2/log"
+	"github.com/retail-ai-inc/bean/v3/log"
 )
 
 type LoggerConfig struct {
@@ -44,11 +45,49 @@ type LoggerConfig struct {
 	RequestHeader  []string
 	ResponseHeader []string
 	Logger         log.AccessLogger
+	// BodyLimit is the maximum number of bytes of the request / response body kept in memory for the
+	// body dump log. The access log truncates bodies to the same limit, so nothing more is ever logged.
+	// <= 0 means `log.DefaultBodyLimit`.
+	BodyLimit int
+}
+
+// bodyCapture keeps at most `limit` bytes of the data passed through it and counts the total size.
+type bodyCapture struct {
+	buf   bytes.Buffer
+	limit int
+	total int64
+}
+
+func (b *bodyCapture) capture(p []byte) {
+	b.total += int64(len(p))
+	if room := b.limit - b.buf.Len(); room > 0 {
+		if len(p) > room {
+			p = p[:room]
+		}
+		b.buf.Write(p)
+	}
+}
+
+// requestBodyRecorder counts the bytes read from the request body and records the first read error
+// (e.g. the client aborted the upload).
+type requestBodyRecorder struct {
+	io.Reader
+	read int64
+	err  error
+}
+
+func (r *requestBodyRecorder) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	r.read += int64(n)
+	if err != nil && !errors.Is(err, io.EOF) && r.err == nil {
+		r.err = err
+	}
+	return n, err
 }
 
 type bodyDumpResponseWriter struct {
-	io.Writer
 	http.ResponseWriter
+	body   *bodyCapture
 	Status int
 }
 
@@ -60,9 +99,13 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 	if config.Skipper == nil {
 		config.Skipper = DefaultLoggerConfig.Skipper
 	}
+	bodyLimit := config.BodyLimit
+	if bodyLimit <= 0 {
+		bodyLimit = log.DefaultBodyLimit
+	}
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) (err error) {
+		return func(c *echo.Context) (err error) {
 			if config.Skipper(c) {
 				return next(c)
 			}
@@ -80,36 +123,49 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 			logAccess(config, c)
 
 			// ---- Body Dump handling ----
-			var reqBody []byte
-			var reqBodyErr error
-			if config.BodyDump && req.Body != nil {
-				reqBody, reqBodyErr = io.ReadAll(req.Body)
-				req.Body = io.NopCloser(bytes.NewBuffer(reqBody))
-			}
-
-			var resBody *bytes.Buffer
+			// Only the first `bodyLimit + 1` bytes of the bodies are kept in memory (one extra byte so that the
+			// access log can tell the body was truncated); the rest is streamed to / from the handler as is.
+			var reqRecorder *requestBodyRecorder
+			var reqPrefix []byte
 			var writer *bodyDumpResponseWriter
 
 			if config.BodyDump {
-				resBody = new(bytes.Buffer)
-				mw := io.MultiWriter(res.Writer, resBody)
-				writer = &bodyDumpResponseWriter{
-					Writer:         mw,
-					ResponseWriter: res.Writer,
+				captureLimit := bodyLimit + 1
+
+				if req.Body != nil {
+					origBody := req.Body
+					reqRecorder = &requestBodyRecorder{Reader: origBody}
+					// Read the head of the body now so it is logged even if the handler does not read it.
+					reqPrefix, _ = io.ReadAll(io.LimitReader(reqRecorder, int64(captureLimit)))
+					req.Body = struct {
+						io.Reader
+						io.Closer
+					}{
+						Reader: io.MultiReader(bytes.NewReader(reqPrefix), reqRecorder),
+						Closer: origBody,
+					}
 				}
-				res.Writer = writer
+
+				writer = &bodyDumpResponseWriter{
+					ResponseWriter: res,
+					body:           &bodyCapture{limit: captureLimit},
+				}
+				c.SetResponse(writer)
+				defer c.SetResponse(res)
 			}
 
 			// ---- Execute handler ----
 			if err = next(c); err != nil {
-				c.Error(err)
+				// Let the global error handler write the error response now so that the
+				// response status/body can be logged. (echo v5 removed `c.Error()`.)
+				c.Echo().HTTPErrorHandler(c, err)
 			}
 
 			stop := time.Now()
 
 			// ---- Body Dump Log (after) ----
 			if config.BodyDump {
-				logBodyDump(config, c, reqBody, reqBodyErr, resBody, writer, start, stop, err)
+				logBodyDump(config, c, reqPrefix, reqRecorder, writer, start, stop, err)
 			}
 
 			return
@@ -117,7 +173,7 @@ func AccessLoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 	}
 }
 
-func logAccess(config LoggerConfig, c echo.Context) {
+func logAccess(config LoggerConfig, c *echo.Context) {
 	req := c.Request()
 
 	fields := map[string]any{
@@ -149,10 +205,9 @@ func logAccess(config LoggerConfig, c echo.Context) {
 
 func logBodyDump(
 	config LoggerConfig,
-	c echo.Context,
+	c *echo.Context,
 	reqBody []byte,
-	reqBodyErr error,
-	resBody *bytes.Buffer,
+	reqRecorder *requestBodyRecorder,
 	writer *bodyDumpResponseWriter,
 	start, stop time.Time,
 	handlerErr error,
@@ -167,7 +222,10 @@ func logBodyDump(
 		"latency":       int64(stop.Sub(start)),
 		"latency_human": stop.Sub(start).String(),
 		"bytes_in":      req.Header.Get(echo.HeaderContentLength),
-		"bytes_out":     res.Size,
+	}
+
+	if r, _ := echo.UnwrapResponse(res); r != nil {
+		fields["bytes_out"] = r.Size
 	}
 
 	if handlerErr != nil {
@@ -178,16 +236,16 @@ func logBodyDump(
 	if len(reqBody) > 0 {
 		fields["request_body"] = string(reqBody)
 	}
-	if reqBodyErr != nil {
-		fields["request_body_error"] = reqBodyErr.Error()
-		fields["bytes_in_read"] = len(reqBody)
+	if reqRecorder != nil && reqRecorder.err != nil {
+		fields["request_body_error"] = reqRecorder.err.Error()
+		fields["bytes_in_read"] = reqRecorder.read
 	}
 
 	// ---- structured response body ----
-	if resBody != nil && resBody.Len() > 0 {
+	if resBody := &writer.body.buf; resBody.Len() > 0 {
 		if isGzipEncoded(res.Header().Get(echo.HeaderContentEncoding)) {
 			fields["response_body"] = "[gzip compressed response omitted]"
-			fields["response_body_size"] = resBody.Len()
+			fields["response_body_size"] = writer.body.total
 			fields["response_content_encoding"] = res.Header().Get(echo.HeaderContentEncoding)
 		} else {
 			fields["response_body"] = resBody.String()
@@ -238,7 +296,15 @@ func (w *bodyDumpResponseWriter) WriteHeader(code int) {
 }
 
 func (w *bodyDumpResponseWriter) Write(b []byte) (int, error) {
-	return w.Writer.Write(b)
+	n, err := w.ResponseWriter.Write(b)
+	w.body.capture(b[:n])
+	return n, err
+}
+
+// Unwrap returns the original http.ResponseWriter so that `echo.UnwrapResponse` and
+// `http.ResponseController` can reach the underlying writer.
+func (w *bodyDumpResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func (w *bodyDumpResponseWriter) Flush() {

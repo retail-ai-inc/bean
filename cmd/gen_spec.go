@@ -25,6 +25,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -78,12 +79,7 @@ func genSpec(cmd *cobra.Command, args []string) {
 	if err := routeCmd.Run(); err != nil {
 		log.Fatalf("Failed to execute route list command: %v", err)
 	}
-	var routeList []struct {
-		Method string `json:"method"`
-		Name   string `json:"name"`
-		Path   string `json:"path"`
-	}
-	err := json.Unmarshal(out.Bytes(), &routeList)
+	routeList, err := parseRouteList(out.Bytes())
 	if err != nil {
 		log.Fatalf("Failed to unmarshal route list: %v", err)
 	}
@@ -94,10 +90,8 @@ func genSpec(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		names := strings.SplitN(r.Name, ".", 2)
-		names = strings.Split(names[1], ".")
-
-		if len(names) != 2 {
+		names, ok := handlerNameParts(r.Name)
+		if !ok {
 			continue
 		}
 
@@ -162,4 +156,52 @@ func genSpec(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed to write specJSONFile: %v", err)
 	}
 	log.Printf("Generate %q completed.\n", destination)
+}
+
+// handlerNameParts splits a route name like `example.com/demo/handlers.(*exampleHandler).JSONIndex-fm` (the
+// handler's function name) into the receiver `(*exampleHandler)` and the method `JSONIndex-fm`. The package path
+// is removed first: it may contain dots (e.g. a domain).
+func handlerNameParts(routeName string) ([]string, bool) {
+	name := routeName
+	if i := strings.LastIndex(name, "/"); i >= 0 {
+		name = name[i+1:]
+	}
+	_, name, ok := strings.Cut(name, ".") // remove the package name
+	if !ok {
+		return nil, false
+	}
+	parts := strings.Split(name, ".")
+	if len(parts) != 2 || parts[1] == "" {
+		return nil, false
+	}
+	return parts, true
+}
+
+type routeListEntry struct {
+	Method string `json:"method"`
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+}
+
+// parseRouteList returns the routes printed by `route list -j`. The application logs go to stdout too (e.g. a
+// warning for a route whose method is not allowed), as JSON objects: the route list is the JSON array among them.
+func parseRouteList(out []byte) ([]routeListEntry, error) {
+	dec := json.NewDecoder(bytes.NewReader(out))
+	for {
+		var value json.RawMessage
+		if err := dec.Decode(&value); err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil, errors.New("no route list in the output")
+			}
+			return nil, err
+		}
+		if trimmed := bytes.TrimSpace(value); len(trimmed) == 0 || trimmed[0] != '[' {
+			continue // a log line
+		}
+		var routes []routeListEntry
+		if err := json.Unmarshal(value, &routes); err != nil {
+			return nil, err
+		}
+		return routes, nil
+	}
 }

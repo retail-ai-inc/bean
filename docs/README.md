@@ -13,6 +13,8 @@
 
 A web framework written in GO on-top of `echo` to ease your application development. Our main goal is not to compete with other `Go` framework instead we are mainly focusing on `tooling` and `structuring` a project to make developers life a bit easier and less stressful to maintain their project more in a lean way.
 
+> **Upgrading from bean v2?** Bean v3 is built on Echo v5 and changes the module path to `github.com/retail-ai-inc/bean/v3`. See the [v2 → v3 upgrade guide](UPGRADE_v3.en.md) ([中文](UPGRADE_v3.md)).
+
 - [BEAN (豆)](#bean-豆)
   - [How to use](#how-to-use)
     - [Initialize a project](#initialize-a-project)
@@ -60,7 +62,7 @@ A web framework written in GO on-top of `echo` to ease your application developm
 1. Install the package by
 
 ```sh
-go install github.com/retail-ai-inc/bean/v2/cmd/bean@latest
+go install github.com/retail-ai-inc/bean/v3/cmd/bean@latest
 ```
 
 2. Create a project directory
@@ -127,6 +129,13 @@ bean create service auth -r login -r profile,logout
 
 Above command will create both service repository files if it doesn't exist and automatically set the association.
 
+Without `--repo`, the repository with the same name as the service is injected if it exists:
+
+```sh
+bean create repo post
+bean create service post   # NewPostService(repos.postRepo) is added to routers/route.go
+```
+
 ## How To Create Handler
 
 ```sh
@@ -154,7 +163,7 @@ Bean has a pre-builtin logging system. If you open the `env.json` file from your
   "bodyDump": true,
   "path": "",
   "runtimePlatform": "gcp",
-  "bodyDumpMaskParam": ["password", "token"],
+  "maskFields": ["password", "token"],
   "async": false,
   "asyncQueueSize": 4096,
   "bodyLimit": 8192
@@ -165,16 +174,16 @@ Bean has a pre-builtin logging system. If you open the `env.json` file from your
 - `bodyDump` — When `true`, the access logger middleware captures the **HTTP request body** and **response body** and writes them to structured logs **after the handler runs** (along with latency and status). The access logger emits an initial `ACCESS` line before the handler and, if `bodyDump` is enabled, a second `DUMP` line with `request_body` / `response_body` fields. This is useful for debugging but increases log volume and I/O; set to `false` in production if you do not need full bodies. Default is `true`.
 - `path` — Log file path for the Bean structured logger output (e.g. `tmp/logs/console.log`). An **empty** string means logs go to **stdout** (Echo logger output). When a path is set, the file is opened by the logger and will be properly closed during graceful shutdown.
 - `runtimePlatform` — Deployment / log **runtime** hint for structured logs (string, optional). Common values: `gcp` (Google Cloud), `aws` (Amazon Web Services), `azure` (Microsoft Azure), or leave **empty** for a generic default. It is written on every structured trace log line as `runtime_platform`, and selects which JSON key holds the trace id from Sentry context: `gcp` → `logging.googleapis.com/trace`; `aws` / `azure` → `trace_id`; empty or unknown → `trace`. It does **not** replace cloud SDK configuration elsewhere.
-- `bodyDumpMaskParam` — List of **JSON object keys** whose values should be **masked** in structured log fields before write. These names are passed to `log.Init` → `WithMaskFields` and applied by `MaskProcessor`: matching keys at **any nesting level** in maps / decoded JSON have their values replaced with `****`. Use the same key names as in your API JSON bodies (e.g. `password`, `access_token`). Nested objects are traversed; only **exact key names** are matched (not dot-paths like `user.password`). Default is an empty slice.
+- `maskFields` — List of **field names** whose values should be **masked** in structured log fields before write. These names are passed to `log.Init` → `WithMaskFields` and applied by `MaskProcessor`: matching keys at **any nesting level** in maps / decoded JSON / XML elements have their values replaced with `****`. This covers `request_body` / `response_body` (JSON or XML) and the `request_header` / `response_header` maps, and it applies whether or not `bodyDump` is on. Matching is **exact and case-sensitive**: list every spelling your APIs use (e.g. `password`, `access_token`, `accessToken`); dot-paths like `user.password` are not supported. Bodies that are neither JSON nor XML (e.g. `application/x-www-form-urlencoded`, plain text) and URL query strings in `uri` / `url` are **not** masked. Default is an empty slice.
 - `async` — When `true`, log writes are performed asynchronously by a background worker goroutine. The caller's `Write` only enqueues the encoded buffer, reducing latency on the request path. Default is `false` (synchronous).
 - `asyncQueueSize` — Bounded channel capacity for async mode. When the queue is full, new log entries are dropped (drop-new policy) rather than blocking the request. Default is `4096`. Ignored when `async` is `false`.
 - `bodyLimit` - Maximum size, in bytes, for each `request_body` and `response_body` structured log field. Larger body values keep the first `bodyLimit` bytes and append a `...(truncated)` suffix before writing to the sink. Default is `8192` (8KB), excluding the suffix length.
 - Gzip-compressed responses are not written to `response_body` as raw bytes. When `Content-Encoding` contains `gzip`, Bean logs `[gzip compressed response omitted]`, `response_body_size`, and `response_content_encoding` instead.
 
-**Note:** `bodyDumpMaskParam` affects **structured** `TraceInfo` / `TraceError` payloads (including `request_body` / `response_body` when they contain JSON). It does not change what the middleware reads from the wire; it only redacts values in the logged output.
+**Note:** `maskFields` affects **structured** `TraceInfo` / `TraceError` payloads (including `request_body` / `response_body` when they contain JSON). It does not change what the middleware reads from the wire; it only redacts values in the logged output.
 
-**Scope of `bodyDumpMaskParam` (where masking applies)**  
-`accessLog.bodyDumpMaskParam` in `env.json` is wired as `log.Init(..., WithMaskFields(config.Bean.AccessLog.BodyDumpMaskParam))`. That installs **MaskProcessor** on the **Bean structured logger** singleton, so the same key list applies to **all** entries produced via that logger’s `TraceInfo` / `TraceError`—not only inbound access logs:
+**Scope of `maskFields` (where masking applies)**  
+`accessLog.maskFields` in `env.json` is wired as `log.Init(..., WithMaskFields(config.Bean.AccessLog.MaskFields))`. That installs **MaskProcessor** on the **Bean structured logger** singleton, so the same key list applies to **all** entries produced via that logger’s `TraceInfo` / `TraceError`—not only inbound access logs:
 
 | Area          | Location                                                                                | Typical log content                                                                                                                            |
 | ------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -182,14 +191,42 @@ Bean has a pre-builtin logging system. If you open the `env.json` file from your
 | Outbound HTTP | `packages/bean/transport/http` (`LoggingTransport`)                                     | `OUTBOUND_API`: `request_body`, `response_body` (when the transport’s body dump option is on), `request_header` / `response_header` maps, etc. |
 | Elsewhere     | Any code calling `log.Logger()` (or the same `AccessLogger`) `TraceInfo` / `TraceError` | Same recursive masking on the `fields` map for that entry.                                                                                     |
 
-The logger in bean is an instance of log.Logger interface from the `github.com/labstack/gommon/log` package [compatible with the standard log.Logger interface], there are multiple levels of logging such as `Debug`, `Info`, `Warn`, `Error` and to customize the formatting of the log messages. The logger also supports like `Debugf`, `Infof`, `Warnf`, `Errorf`, `Debugj`, `Infoj`, `Warnj`, `Errorj`.
-The logger can be used in any of the layers `handler`, `service`, `repository`.
+### Application logs
 
-Example:-
+Bean's application logger is built on the standard library [`log/slog`](https://pkg.go.dev/log/slog). `log.Logger()` (package `github.com/retail-ai-inc/bean/v3/log`), echo's logger and `c.Logger()` in handlers are the **same** logger, so every log line has the same format as the access log:
 
-```sh
-log.Logger().Debugf("This is a debug message for request %s", c.Request().URL.Path)
+```json
+{"timestamp":"2026-11-24T09:23:57.08+08:00","severity":"ERROR","message":"failed to get user","user_id":42,"id":"req-123","logging.googleapis.com/trace":"...","file":"services/user.go","line":31}
 ```
+
+- `timestamp`, `severity` (`DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`) and `message` — Google Cloud Logging compatible.
+- `id` (request ID) and the trace ID (key selected by `accessLog.runtimePlatform`) are added automatically when you log with the request context (`...Context` methods).
+- `file` / `line` — the source location of the log call.
+
+Related `env.json` settings:
+
+```json
+"debugLogPath": "",
+"debugLogLevel": "debug"
+```
+
+- `debugLogPath` — file for the application logs; empty means stdout. The access log uses `accessLog.path`, or the same output if empty.
+- `debugLogLevel` — minimum level of the application logs: `debug` (default), `info`, `warn` or `error`. It does not affect the access log.
+
+The logger can be used in any of the layers `handler`, `service`, `repository`:
+
+```go
+import "github.com/retail-ai-inc/bean/v3/log"
+
+// Pass the request context to get the request ID / trace ID in the log.
+log.Logger().InfoContext(ctx, "user logged in", "user_id", user.ID)
+log.Logger().ErrorContext(ctx, "failed to get user", "user_id", id, "error", err)
+
+// In a handler, c.Logger() is the same logger.
+c.Logger().WarnContext(c.Request().Context(), "deprecated API called", "path", c.Path())
+```
+
+`Debugf`, `Infof`, `Warnf`, `Errorf`, `Debugj`, `Errorj`, ... from bean v2 are still available but **deprecated**; see [the upgrade guide](UPGRADE_v3.en.md#42-unified-logging-with-slog).
 
 ## Built-In testing
 
@@ -267,8 +304,8 @@ import (
  "errors"
  "fmt"
 
- "github.com/retail-ai-inc/bean/v2"
- "github.com/retail-ai-inc/bean/v2/trace"
+ "github.com/retail-ai-inc/bean/v3"
+ "github.com/retail-ai-inc/bean/v3/trace"
  "github.com/spf13/cobra"
 )
 
@@ -326,7 +363,7 @@ Now, compile your project and run the command as `./myproject gopher helloworld`
 How to use in the code:
 
 ```go
-import "github.com/retail-ai-inc/bean/v2/store/memory"
+import "github.com/retail-ai-inc/bean/v3/store/memory"
 
 // Initialize the local memory store with key type `string` and value type `any`
 m := memory.NewMemory()
@@ -349,7 +386,7 @@ On Sentry's monitoring platform, you will see the number of users affected by th
 
 How to use in the code:
 ```go
-import "github.com/retail-ai-inc/bean/v2/trace"
+import "github.com/retail-ai-inc/bean/v3/trace"
 ctx := trace.SetUser(c.Request().Context(), sentry.User{
 	    ID:        "12345", // such as userID, deviceID, etc.
 	    Email:     "user@example.com",
@@ -362,13 +399,42 @@ ctx := trace.SetUser(c.Request().Context(), sentry.User{
 
 ## Useful Helper Functions
 
-Please refer to the [`helpers` package](helpers/) in this codebase or [go doc](https://pkg.go.dev/github.com/retail-ai-inc/bean/v2/helpers) for more information.
+Please refer to the [`helpers` package](helpers/) in this codebase or [go doc](https://pkg.go.dev/github.com/retail-ai-inc/bean/v3/helpers) for more information.
+
+### Processing large CSV files
+
+`helpers.ProcessCSV` / `helpers.ProcessCSVFile` read a CSV file of any size with bounded memory and call your handler with batches of records from several goroutines (one per CPU by default). Records are parsed by `encoding/csv` (quoted fields, embedded newlines, no line length limit), and a leading UTF-8 BOM is skipped.
+
+```go
+err := helpers.ProcessCSVFile(ctx, "users.csv", helpers.CSVOptions{
+    HasHeader: true, // the first record is passed as batch.Header
+    BatchSize: 1000, // records per handler call (default 1000)
+    Workers:   8,    // concurrent handlers (default runtime.NumCPU(); 1 keeps file order)
+}, func(ctx context.Context, batch helpers.CSVBatch) error {
+    // batch.Index is the position of batch.Records[0] in the file (header excluded).
+    return userRepo.BulkInsert(ctx, batch.Records)
+})
+```
+
+- Memory use is bounded by about `2 x Workers + 1` batches, whatever the file size (a 1.1 GB file with 10 million rows was processed in about 2.7 s with a peak heap of about 5 MB on an 8 core machine).
+- Processing stops at the first error and `ProcessCSV` returns it: a CSV parse error (`*csv.ParseError`, with the line number), an error returned by the handler, a panic in the handler (returned as an error), or the cancellation of `ctx`. The `ctx` passed to the handler is canceled when processing stops.
+- The handler runs concurrently and must be safe for concurrent use. Batches are not handled in file order unless `Workers` is 1.
+- `Comma`, `Comment`, `FieldsPerRecord`, `LazyQuotes` and `TrimLeadingSpace` are passed to `encoding/csv`.
 
 ## Bean Config
 
-Bean provides the [`config.Config`](https://pkg.go.dev/github.com/retail-ai-inc/bean/v2/config#Config) struct to enable the user to tweak the configuration of their consumer project as per their requirement .
+Bean provides the [`config.Config`](https://pkg.go.dev/github.com/retail-ai-inc/bean/v3/config#Config) struct to enable the user to tweak the configuration of their consumer project as per their requirement .
 Bean configs default values are picked from the `env.json` file, but can be updated during runtime as well.
 <https://pkg.go.dev/github.com/retail-ai-inc/bean#Config>
+
+The `http` block of `env.json` is optional. These keys get a default value when omitted (the values of the project template); the other `http` keys work with their zero value (for example no request `timeout`, all HTTP methods allowed when `allowedMethod` is empty, `shutdownTimeout` 30s):
+
+| Key | Default |
+| --- | --- |
+| `http.host` | `0.0.0.0` |
+| `http.port` | `8888` |
+| `http.bodyLimit` | `1M` |
+| `http.keepAlive` | `true` |
 
 <details>
   <summary>config.Config</summary>
@@ -415,7 +481,7 @@ Some of the configurable parameters are:
 
 ## Logging Module
 
-The `log` package (`github.com/retail-ai-inc/bean/v2/log`) provides a structured, pipeline-based access logging system with sync/async writing, field masking, escape cleanup, and distributed trace correlation.
+The `log` package (`github.com/retail-ai-inc/bean/v3/log`) provides a structured, pipeline-based access logging system with sync/async writing, field masking, escape cleanup, and distributed trace correlation.
 
 ### Architecture
 
@@ -442,18 +508,20 @@ TraceInfo / TraceError
 
 #### Logger
 
-Application entry point. The public interface is `BeanLogger`, which extends `echo.Logger` and adds:
+Application entry point: `*log.BeanLogger`.
 
-- `TraceInfo(ctx context.Context, level string, fields map[string]any)` — structured info-level log with trace context
-- `TraceError(ctx context.Context, level string, fields map[string]any)` — structured error-level log with trace context
+- It embeds `*slog.Logger` for application logs. Records are converted to an `Entry` by a `slog.Handler` and written through a pipeline (without processors) to a synchronous sink, so application logs share the encoding of the access log. The handler adds the request ID, the trace ID and the source location.
+- `TraceInfo(ctx context.Context, level string, fields map[string]any)` — structured info-level access log with trace context
+- `TraceError(ctx context.Context, level string, fields map[string]any)` — structured error-level access log with trace context
 
-The logger builds an `Entry` (timestamp, severity, level, fields, trace), runs it through the pipeline, then writes to the sink.
+For the access log, the logger builds an `Entry` (timestamp, severity, level, fields, trace), runs it through the pipeline, then writes to the sink.
 
 Functional options for `NewLogger`:
 
 | Option | Description |
 |---|---|
-| `WithAccessLogPath(path)` | Log file path; empty = echo logger output |
+| `WithAccessLogPath(path)` | Access log file path; empty = the writer passed to `NewLogger` |
+| `WithLevel(level)` | Minimum `slog.Level` of the application logs (default debug) |
 | `WithMaskFields(fields)` | Field names to mask with `****` |
 | `WithRuntimePlatform(platform)` | Cloud platform hint (`gcp`/`aws`/`azure`) for trace key |
 | `WithSinkAsync(async, queueSize)` | Enable async writing with bounded queue |
@@ -495,19 +563,28 @@ Final output destination. Implement the `Sink` interface (`Write(entry Entry) er
 
 ### Example
 
-Initialize once with Echo logger, then call `TraceInfo` / `TraceError`:
+`bean.New()` initializes the global logger from `env.json` (`log.Init`). To create one yourself:
 
 ```go
-import (
-    "github.com/labstack/echo/v4"
-    "github.com/retail-ai-inc/bean/v2/log"
+import "github.com/retail-ai-inc/bean/v3/log"
+
+blogger, err := log.NewLogger(
+    os.Stdout,
+    log.WithLevel(slog.LevelInfo),
+    log.WithRuntimePlatform("gcp"),
+    log.WithMaskFields([]string{"password", "token"}),
+    log.WithSinkAsync(true, 4096),
+    log.WithBodyLimit(8192),
 )
+if err != nil {
+    return err
+}
+log.SetLogger(blogger) // optional: make it the global `log.Logger()`
 
-// At startup
-e := echo.New()
-blogger := log.Init(e.Logger)
+// Application logs (slog)
+blogger.InfoContext(ctx, "payment accepted", "order_id", orderID)
 
-// In handlers or services
+// Access style structured logs
 blogger.TraceInfo(ctx, "outbound_http", map[string]any{
     "method": "GET",
     "url":    "https://example.com",
@@ -515,19 +592,7 @@ blogger.TraceInfo(ctx, "outbound_http", map[string]any{
 blogger.TraceError(ctx, "payment_failed", map[string]any{"error": err.Error()})
 ```
 
-Custom logger with functional options:
-
-```go
-blogger, err := log.NewLogger(
-    e.Logger,
-    log.WithRuntimePlatform("gcp"),
-    log.WithMaskFields([]string{"password", "token"}),
-    log.WithSinkAsync(true, 4096),
-    log.WithBodyLimit(8192),
-)
-```
-
-Internally, `NewLogger` builds: Sentry extractor → Pipeline(MaskProcessor, RemoveEscapeProcessor) → Sink(echo.Logger.Output(), projectID).
+Internally, `NewLogger` builds: Sentry extractor → Pipeline(TruncateBody, Mask, RemoveEscape) → Sink(access log output) for the access log, and a `slog.Handler` → Pipeline → Sink(w) for the application logs.
 
 **Sync vs Async (parallel):** Async is ~27% faster (1369 vs 1886 ns/op) because IO is offloaded to a single worker goroutine.
 
@@ -537,7 +602,7 @@ Internally, `NewLogger` builds: Sentry extractor → Pipeline(MaskProcessor, Rem
 
 - Separation of concerns (extraction → transformation → output)
 - Composable processor pipeline
-- Minimal framework coupling (Echo logger + optional Sentry)
+- Minimal framework coupling (standard `log/slog` + optional Sentry)
 - Extensible via custom processors and sinks
 - Zero-copy async path with `sync.Pool` buffer reuse
 
@@ -576,8 +641,8 @@ It captures:
 
 ```go
 import (
-    "github.com/retail-ai-inc/bean/v2/log"
-    "github.com/retail-ai-inc/bean/v2/transport/http"
+    "github.com/retail-ai-inc/bean/v3/log"
+    "github.com/retail-ai-inc/bean/v3/transport/http"
 )
 
 // logger is a log.AccessLogger (e.g. from log.Init(e.Logger) or log.Logger())

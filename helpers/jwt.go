@@ -24,9 +24,10 @@ package helpers
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 var (
@@ -42,17 +43,18 @@ func EncodeJWT(claims jwt.Claims, secret string) (string, error) {
 	return token.SignedString([]byte(secret))
 }
 
-// DecodeJWT will decode JWT string into `claims` structure using a secret string.
-func DecodeJWT(c echo.Context, claims jwt.Claims, secret string, opts ...jwt.ParserOption) error {
+// DecodeJWT will decode the JWT of the `Authorization: Bearer` header into `claims` using a secret string.
+//
+// The token must be signed with HS256 and have an expiration time (`exp`), and is decoded strictly. These defaults
+// always apply: opts are added after them, e.g. `jwt.WithAudience(...)`, or `jwt.WithValidMethods(...)` to accept
+// other algorithms. To accept tokens without `exp`, use `jwt.ParseWithClaims` directly.
+func DecodeJWT(c *echo.Context, claims jwt.Claims, secret string, opts ...jwt.ParserOption) error {
 
-	if len(opts) == 0 {
-		// Add default options if not provided.
-		opts = append(opts,
-			jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
-			jwt.WithExpirationRequired(),
-			jwt.WithStrictDecoding(),
-		)
-	}
+	opts = append([]jwt.ParserOption{
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithExpirationRequired(),
+		jwt.WithStrictDecoding(),
+	}, opts...)
 
 	tokenString := ExtractJWTFromHeader(c)
 	_, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
@@ -75,20 +77,12 @@ func DecodeJWT(c echo.Context, claims jwt.Claims, secret string, opts ...jwt.Par
 	return nil
 }
 
-// ExtractJWTFromHeader will extract JWT from `Authorization` HTTP header and returns as string.
-func ExtractJWTFromHeader(c echo.Context) string {
-
-	var tokenString string
-
-	authHeader := c.Request().Header.Get("Authorization")
-
-	l := len("Bearer")
-
-	if len(authHeader) > l+1 && authHeader[:l] == "Bearer" {
-		tokenString = authHeader[l+1:]
-	} else {
-		tokenString = ""
+// ExtractJWTFromHeader returns the token of an `Authorization: Bearer <token>` HTTP header, or an empty string if
+// the header is missing or uses another scheme. The scheme is case-insensitive (RFC 7235).
+func ExtractJWTFromHeader(c *echo.Context) string {
+	scheme, token, ok := strings.Cut(c.Request().Header.Get("Authorization"), " ")
+	if !ok || !strings.EqualFold(scheme, "Bearer") {
+		return ""
 	}
-
-	return tokenString
+	return strings.TrimSpace(token)
 }

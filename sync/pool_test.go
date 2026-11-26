@@ -33,9 +33,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retail-ai-inc/bean/v2/config"
-	"github.com/retail-ai-inc/bean/v2/sync"
-	"github.com/retail-ai-inc/bean/v2/trace"
+	"github.com/retail-ai-inc/bean/v3/config"
+	"github.com/retail-ai-inc/bean/v3/sync"
+	"github.com/retail-ai-inc/bean/v3/trace"
 )
 
 func Test_Pool(t *testing.T) {

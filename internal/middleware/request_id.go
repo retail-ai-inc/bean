@@ -2,11 +2,11 @@ package middleware
 
 import (
 	sentryecho "github.com/getsentry/sentry-go/echo"
-	"github.com/labstack/echo/v4"
-	bctx "github.com/retail-ai-inc/bean/v2/context"
+	"github.com/labstack/echo/v5"
+	bctx "github.com/retail-ai-inc/bean/v3/context"
 )
 
-var RequestIDHandler = func(c echo.Context, requestID string) {
+var RequestIDHandler = func(c *echo.Context, requestID string) {
 	// Set the request ID in the request header if not set.
 	if v := c.Request().Header.Get(echo.HeaderXRequestID); v == "" {
 		c.Request().Header.Set(echo.HeaderXRequestID, requestID)

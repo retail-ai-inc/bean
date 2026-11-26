@@ -39,8 +39,9 @@ type Cache interface {
 
 // memoryCache stores arbitrary data with ttl.
 type memoryCache struct {
-	keys *haxmap.Map[string, data]
-	done chan struct{}
+	keys      *haxmap.Map[string, data]
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 // data represents an arbitrary value with ttl.
@@ -50,51 +51,68 @@ type data struct {
 }
 
 // memoryDBConn is a singleton memory database connection.
-var memoryDBConn *memoryCache
-var memoryOnce sync.Once
+var (
+	memoryMu     sync.Mutex
+	memoryDBConn *memoryCache
+)
 
 // NewMemoryCache New creates a new memory that asynchronously cleans expired entries after the given ttl passes.
+// It returns the same cache to every caller until the cache is closed; after `CloseMemory`, a new cache is created.
 func NewMemoryCache() Cache {
-	memoryOnce.Do(func() {
+	memoryMu.Lock()
+	defer memoryMu.Unlock()
 
-		// XXX: IMPORTANT - Run the ttl cleaning process in every 60 seconds.
-		ttlCleaningInterval := 60 * time.Second
+	if memoryDBConn != nil && !memoryDBConn.closed() {
+		return memoryDBConn
+	}
 
-		h := haxmap.New[string, data]()
-		if h == nil {
-			panic("failed to initialize the memory!")
-		}
+	// XXX: IMPORTANT - Run the ttl cleaning process in every 60 seconds.
+	ttlCleaningInterval := 60 * time.Second
 
-		memoryDBConn = &memoryCache{
-			keys: h,
-			done: make(chan struct{}),
-		}
+	h := haxmap.New[string, data]()
+	if h == nil {
+		panic("failed to initialize the memory!")
+	}
 
-		go func() {
-			ticker := time.NewTicker(ttlCleaningInterval)
-			defer ticker.Stop()
+	mem := &memoryCache{
+		keys: h,
+		done: make(chan struct{}),
+	}
+	memoryDBConn = mem
 
-			for {
-				select {
-				case <-ticker.C:
-					now := time.Now().UnixNano()
-					// O(N) iteration. It is linear time complexity.
-					memoryDBConn.keys.ForEach(func(k string, d data) bool {
-						if d.ttl > 0 && now > d.ttl {
-							memoryDBConn.keys.Del(k)
-						}
+	go func() {
+		ticker := time.NewTicker(ttlCleaningInterval)
+		defer ticker.Stop()
 
-						return true
-					})
+		for {
+			select {
+			case <-ticker.C:
+				now := time.Now().UnixNano()
+				// O(N) iteration. It is linear time complexity.
+				mem.keys.ForEach(func(k string, d data) bool {
+					if d.ttl > 0 && now > d.ttl {
+						mem.keys.Del(k)
+					}
 
-				case <-memoryDBConn.done:
-					return
-				}
+					return true
+				})
+
+			case <-mem.done:
+				return
 			}
-		}()
-	})
+		}
+	}()
 
-	return memoryDBConn
+	return mem
+}
+
+func (mem *memoryCache) closed() bool {
+	select {
+	case <-mem.done:
+		return true
+	default:
+		return false
+	}
 }
 
 // GetMemory Get gets the value for the given key.
@@ -138,34 +156,43 @@ func (mem *memoryCache) DelMemory(key string) {
 
 	// Delete by wildcard key.
 	mem.keys.ForEach(func(k string, _ data) bool {
-		if matchWildCard([]rune(k), []rune(key)) {
+		if matchWildCard(k, key) {
 			mem.keys.Del(k)
 		}
 		return true
 	})
 }
 
-func matchWildCard(str, pattern []rune) bool {
-
-	if len(pattern) == 0 {
-		return len(str) == 0 // Return true finally if both are empty after the rescursive matching.
+// matchWildCard reports whether str matches pattern, where `*` matches any sequence of characters (including
+// none). It runs in O(len(str) x len(pattern)) at worst (the previous recursive version was exponential for patterns
+// with several `*`). Matching bytes is equivalent to matching runes: `*` is ASCII and a literal UTF-8 sequence of
+// the pattern can only match a whole character.
+func matchWildCard(str, pattern string) bool {
+	s, p := 0, 0
+	star, starMatch := -1, 0 // position of the last `*` in pattern, and of what it matched up to in str
+	for s < len(str) {
+		switch {
+		case p < len(pattern) && pattern[p] == '*':
+			star, starMatch = p, s
+			p++
+		case p < len(pattern) && pattern[p] == str[s]:
+			s++
+			p++
+		case star >= 0:
+			// Backtrack: let the last `*` match one more character.
+			starMatch++
+			s, p = starMatch, star+1
+		default:
+			return false
+		}
 	}
-
-	if pattern[0] == '*' {
-		// Match with no wildcard pattern, if it doesn't match, move to the next character.
-		return matchWildCard(str, pattern[1:]) ||
-			(len(str) > 0 && matchWildCard(str[1:], pattern))
+	for p < len(pattern) && pattern[p] == '*' {
+		p++
 	}
-
-	if len(str) == 0 || str[0] != pattern[0] {
-		return false
-	}
-
-	// Recurse with the rest of the string and the pattern.
-	return matchWildCard(str[1:], pattern[1:])
+	return p == len(pattern)
 }
 
-// CloseMemory Close closes the memory cache and frees up resources.
+// CloseMemory Close closes the memory cache and frees up resources. It can be called more than once.
 func (mem *memoryCache) CloseMemory() {
-	mem.done <- struct{}{}
+	mem.closeOnce.Do(func() { close(mem.done) })
 }

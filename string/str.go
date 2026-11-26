@@ -123,12 +123,13 @@ func Substring(str string, i, j int) string {
 
 	runes := []rune(str)
 
-	if i >= len(str) {
+	// i and j are rune indexes: compare them with the number of runes, not of bytes.
+	if i >= len(runes) {
 		return ""
 	}
 
-	if j > len(str) {
-		j = len(str)
+	if j > len(runes) {
+		j = len(runes)
 	}
 
 	ld := i >= 0
@@ -202,22 +203,34 @@ func Contains(s []string, str string) bool {
 
 // This function will add extra `padStr` on the left of `s`. FYI, If `overallLen` is 20 and the actual length of
 // `s` is 25 then this function will remove first 5 characters from the left side of `s` to make the size equal to 20.
+// Lengths are in bytes. An overallLen <= 0 returns "", and an empty padStr cannot pad (s is only truncated).
 func LeftPadToLength(s string, padStr string, overallLen int) string {
-
-	padCountInt := int(1 + ((overallLen - len(padStr)) / len(padStr)))
-
-	var retStr = strings.Repeat(padStr, padCountInt) + s
-
-	return retStr[(len(retStr) - overallLen):]
+	if overallLen <= 0 {
+		return ""
+	}
+	if missing := overallLen - len(s); missing > 0 && padStr != "" {
+		s = strings.Repeat(padStr, (missing+len(padStr)-1)/len(padStr)) + s
+	}
+	if len(s) > overallLen {
+		s = s[len(s)-overallLen:]
+	}
+	return s
 }
 
+// RightPadToLength adds extra `padStr` on the right of `s`, and removes characters from the right side of `s` if it
+// is longer than `overallLen`. Lengths are in bytes. An overallLen <= 0 returns "", and an empty padStr cannot pad
+// (s is only truncated).
 func RightPadToLength(s string, padStr string, overallLen int) string {
-
-	padCountInt := int(1 + ((overallLen - len(padStr)) / len(padStr)))
-
-	var retStr = s + strings.Repeat(padStr, padCountInt)
-
-	return retStr[:overallLen]
+	if overallLen <= 0 {
+		return ""
+	}
+	if missing := overallLen - len(s); missing > 0 && padStr != "" {
+		s += strings.Repeat(padStr, (missing+len(padStr)-1)/len(padStr))
+	}
+	if len(s) > overallLen {
+		s = s[:overallLen]
+	}
+	return s
 }
 
 func AlphaNumericRandomString(length int) string {

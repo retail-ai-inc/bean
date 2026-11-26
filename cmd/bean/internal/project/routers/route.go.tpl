@@ -8,8 +8,8 @@ import (
 	"{{ .PkgPath }}/repositories"
 	"{{ .PkgPath }}/services"
 
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2"
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3"
 )
 
 type Repositories struct {
@@ -41,7 +41,7 @@ func Init(b *bean.Bean, ignoreInitFlag ...bool) error{
 	}
 
 	// Default index page goes to above JSON (/json) index page.
-	e.GET("/", func(c echo.Context) error {
+	e.GET("/", func(c *echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{
 			"message": `{{ .PkgName }} 🚀`,
 		})

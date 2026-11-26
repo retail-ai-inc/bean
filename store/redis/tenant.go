@@ -23,6 +23,7 @@
 package redis
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -30,8 +31,8 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
-	"github.com/retail-ai-inc/bean/v2/internal/dbdrivers"
-	"github.com/retail-ai-inc/bean/v2/trace"
+	"github.com/retail-ai-inc/bean/v3/internal/dbdrivers"
+	"github.com/retail-ai-inc/bean/v3/trace"
 )
 
 // TenantCache provides functions for tenant redis dbs
@@ -267,7 +268,11 @@ func (t *tenantCache) MSetJSON(c context.Context, tenantID uint64, keys []string
 		if t.prefix != "" {
 			key = t.prefix + t.sep + key
 		}
-		values = append(values, key, data[i])
+		jsonBytes, err := json.Marshal(data[i])
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		values = append(values, key, string(jsonBytes))
 	}
 
 	err := client.MSetWithTTL(c, ttl, values)
@@ -302,17 +307,21 @@ func (t *tenantCache) MGetJSON(c context.Context, tenantID uint64, dst interface
 		return errors.WithStack(err)
 	}
 
-	strValues := "["
+	// Build a JSON array of the existing values (missing keys are skipped).
+	var buf bytes.Buffer
+	buf.WriteByte('[')
 	for _, v := range values {
-		if v != nil {
-			strValues += v.(string) + ","
+		str, ok := v.(string)
+		if !ok {
+			continue
 		}
+		if buf.Len() > 1 {
+			buf.WriteByte(',')
+		}
+		buf.WriteString(str)
 	}
-	if len(strValues) > 1 {
-		strValues = strValues[:len(strValues)-1]
-	}
-	strValues += "]"
-	err = json.Unmarshal([]byte(strValues), &dst)
+	buf.WriteByte(']')
+	err = json.Unmarshal(buf.Bytes(), &dst)
 	if err != nil {
 		return errors.WithStack(err)
 	}

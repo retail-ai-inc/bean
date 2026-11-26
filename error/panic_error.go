@@ -20,31 +20,48 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package route
+package error
 
 import (
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/internal/url"
+	"fmt"
+	"io"
+
+	"github.com/retail-ai-inc/bean/v3/stacktrace"
 )
 
-// Route contains all the registered routes name, URI path, request method and URI path template.
-type Route struct {
-	Method      string
-	Path        string
-	Name        string
-	PathSegment url.Path
+// PanicError is returned by bean's recover middleware when a handler panics. It keeps the panic value and
+// the stack trace of the panic site. The stack is exposed through `StackTrace()`, so Sentry shows where the
+// panic happened (not where the error was reported).
+type PanicError struct {
+	Value any // the value passed to `panic`
+	*stacktrace.Stack
 }
 
-// Routes is a global variable to hold all necessary route information.
-var Routes = []Route{}
+func (e *PanicError) Error() string {
+	return fmt.Sprintf("[PANIC RECOVER] %v", e.Value)
+}
 
-func Init(e *echo.Echo) {
-	Routes = make([]Route, len(e.Routes()))
+// Unwrap returns the panic value if it is an error (e.g. `runtime.Error`), so `errors.Is` / `errors.As` work.
+func (e *PanicError) Unwrap() error {
+	err, _ := e.Value.(error)
+	return err
+}
 
-	for i, r := range e.Routes() {
-		Routes[i].Method = r.Method
-		Routes[i].Path = r.Path
-		Routes[i].Name = r.Name
-		Routes[i].PathSegment = url.New(r.Path)
+// Format prints the stack trace of the panic site with `%+v`.
+func (e *PanicError) Format(s fmt.State, verb rune) {
+	switch verb {
+	case 'v':
+		if s.Flag('+') {
+			_, _ = io.WriteString(s, e.Error())
+			if e.Stack != nil {
+				e.Stack.Format(s, verb)
+			}
+			return
+		}
+		fallthrough
+	case 's':
+		_, _ = io.WriteString(s, e.Error())
+	case 'q':
+		_, _ = fmt.Fprintf(s, "%q", e.Error())
 	}
 }

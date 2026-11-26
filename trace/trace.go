@@ -30,9 +30,9 @@ import (
 	sentryecho "github.com/getsentry/sentry-go/echo"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/labstack/echo/v4"
-	berror "github.com/retail-ai-inc/bean/v2/error"
-	"github.com/retail-ai-inc/bean/v2/internal/validator"
+	"github.com/labstack/echo/v5"
+	berror "github.com/retail-ai-inc/bean/v3/error"
+	"github.com/retail-ai-inc/bean/v3/internal/validator"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/metadata"
 )
@@ -40,7 +40,7 @@ import (
 // StartSpanWithEcho starts a span and returns context containing the span and a function to finish the corresponding span.
 // It also carries over the sentry hub from the echo context to child context.
 // Make sure to call the returned function to finish the span.
-func StartSpanWithEcho(c echo.Context, operation string, spanOpts ...sentry.SpanOption) (context.Context, func()) {
+func StartSpanWithEcho(c *echo.Context, operation string, spanOpts ...sentry.SpanOption) (context.Context, func()) {
 
 	ctx := c.Request().Context()
 
@@ -89,7 +89,8 @@ func defaultDescription(skip int) sentry.SpanOption {
 	return sentry.WithDescription(functionName)
 }
 
-// PropagateToHTTP propagates the Sentry tracing information to the outgoing HTTP/1.X request header.
+// PropagateToHTTP propagates the Sentry tracing information to the outgoing HTTP/1.X request header. Existing
+// tracing headers are replaced (e.g. when a request is retried with the same header); a nil header is allocated.
 // Refers to the following link for more information.
 // https://docs.sentry.io/platforms/go/tracing/trace-propagation/custom-instrumentation/#step-2-inject-tracing-information-to-outgoing-requests
 func PropagateToHTTP(ctx context.Context, header http.Header) http.Header {
@@ -99,13 +100,17 @@ func PropagateToHTTP(ctx context.Context, header http.Header) http.Header {
 		return header
 	}
 
-	header.Add(sentry.SentryTraceHeader, sentryTrace)
-	header.Add(sentry.SentryBaggageHeader, baggage)
+	if header == nil {
+		header = http.Header{}
+	}
+	header.Set(sentry.SentryTraceHeader, sentryTrace)
+	header.Set(sentry.SentryBaggageHeader, baggage)
 
 	return header
 }
 
-// PropagateToGRPC propagates the Sentry tracing information to the outgoing gRPC request metadata.
+// PropagateToGRPC propagates the Sentry tracing information to the outgoing gRPC request metadata. The metadata
+// already in ctx (e.g. authorization) is kept; existing tracing keys are replaced.
 // Refers to the following link for more information.
 // https://docs.sentry.io/platforms/go/tracing/trace-propagation/custom-instrumentation/#step-2-inject-tracing-information-to-outgoing-requests
 func PropagateToGRPC(ctx context.Context) context.Context {
@@ -115,13 +120,16 @@ func PropagateToGRPC(ctx context.Context) context.Context {
 		return ctx
 	}
 
-	md := metadata.Pairs(
-		sentry.SentryTraceHeader, sentryTrace,
-		sentry.SentryBaggageHeader, baggage,
-	)
-	ctx = metadata.NewOutgoingContext(ctx, md)
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if ok {
+		md = md.Copy() // the metadata in ctx must not be modified
+	} else {
+		md = metadata.MD{}
+	}
+	md.Set(sentry.SentryTraceHeader, sentryTrace)
+	md.Set(sentry.SentryBaggageHeader, baggage)
 
-	return ctx
+	return metadata.NewOutgoingContext(ctx, md)
 }
 
 func extractTracing(ctx context.Context) (sentryTrace, baggage string) {

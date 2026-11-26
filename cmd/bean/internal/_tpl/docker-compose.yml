@@ -1,14 +1,13 @@
-version: '3.7'
-
 services:
-  monaka:
+  {{.ServiceName}}:
     build:
       context: .
       dockerfile: Dockerfile
     init: true
     tty: true
-    hostname: {{.ProjectObject.PkgPath}}
-    container_name: {{.ProjectObject.PkgPath}}
+    hostname: {{.ServiceName}}
+    container_name: {{.ServiceName}}
+    # Live reload: rebuilds and restarts `app start` on changes (see .air.toml).
     command: air
     volumes:
       - .:/app:rw

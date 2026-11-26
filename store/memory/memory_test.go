@@ -25,9 +25,12 @@ package memory
 
 import (
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetSet(t *testing.T) {
@@ -265,4 +268,58 @@ func BenchmarkDeleteWithWildCard(b *testing.B) {
 			}
 		})
 	}
+}
+
+func TestCloseMemory_Idempotent(t *testing.T) {
+	cache := NewMemoryCache()
+	done := make(chan struct{})
+	go func() {
+		cache.CloseMemory()
+		cache.CloseMemory()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("CloseMemory blocked")
+	}
+
+	// A closed cache is replaced by a new one.
+	reopened := NewMemoryCache()
+	assert.NotSame(t, cache, reopened)
+	reopened.SetMemory("k", "v", 0)
+	v, ok := reopened.GetMemory("k")
+	assert.True(t, ok)
+	assert.Equal(t, "v", v)
+	assert.Same(t, reopened, NewMemoryCache())
+}
+
+func TestMatchWildCard(t *testing.T) {
+	tests := []struct {
+		str, pattern string
+		want         bool
+	}{
+		{"user:1", "user:*", true},
+		{"user:1", "*:1", true},
+		{"user:1", "u*r:*", true},
+		{"user:1", "cart:*", false},
+		{"user", "user*", true},
+		{"", "*", true},
+		{"", "", true},
+		{"a", "", false},
+		{"商品:日本", "商品:*", true},
+		{"商品:日本", "*日*", true},
+		{"商品:日本", "*中*", false},
+		{"abcab", "*ab", true},
+		{"aaa", "a*a*a", true},
+		{"aa", "a*a*a", false},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, matchWildCard(tt.str, tt.pattern), "%q %q", tt.str, tt.pattern)
+	}
+
+	// Exponential with the previous recursive matcher (29ms for one 30 character key).
+	start := time.Now()
+	assert.False(t, matchWildCard(strings.Repeat("a", 30), "*a*a*a*a*a*a*b"))
+	assert.Less(t, time.Since(start), 5*time.Millisecond)
 }

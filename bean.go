@@ -24,11 +24,13 @@ package bean
 
 import (
 	"context"
+	"crypto/subtle"
 	"crypto/tls"
 	"errors"
 	"fmt"
 	"html/template"
-	"log"
+	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -41,26 +43,25 @@ import (
 	sentryecho "github.com/getsentry/sentry-go/echo"
 	validatorV10 "github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/labstack/echo-contrib/echoprometheus"
-	"github.com/labstack/echo/v4"
-	echomiddleware "github.com/labstack/echo/v4/middleware"
-	elog "github.com/labstack/gommon/log"
+	"github.com/labstack/echo-contrib/v5/echoprometheus"
+	"github.com/labstack/echo/v5"
+	echomiddleware "github.com/labstack/echo/v5/middleware"
 	pkgerrors "github.com/pkg/errors"
-	"github.com/retail-ai-inc/bean/v2/config"
-	"github.com/retail-ai-inc/bean/v2/echoview"
-	berror "github.com/retail-ai-inc/bean/v2/error"
-	"github.com/retail-ai-inc/bean/v2/goview"
-	"github.com/retail-ai-inc/bean/v2/helpers"
-	"github.com/retail-ai-inc/bean/v2/internal/binder"
-	"github.com/retail-ai-inc/bean/v2/internal/dbdrivers"
-	"github.com/retail-ai-inc/bean/v2/internal/gopool"
-	"github.com/retail-ai-inc/bean/v2/internal/middleware"
-	"github.com/retail-ai-inc/bean/v2/internal/regex"
-	broute "github.com/retail-ai-inc/bean/v2/internal/route"
-	"github.com/retail-ai-inc/bean/v2/internal/validator"
-	blog "github.com/retail-ai-inc/bean/v2/log"
-	"github.com/retail-ai-inc/bean/v2/store/memory"
-	"github.com/retail-ai-inc/bean/v2/trace"
+	"github.com/retail-ai-inc/bean/v3/config"
+	"github.com/retail-ai-inc/bean/v3/echoview"
+	berror "github.com/retail-ai-inc/bean/v3/error"
+	"github.com/retail-ai-inc/bean/v3/goview"
+	"github.com/retail-ai-inc/bean/v3/helpers"
+	"github.com/retail-ai-inc/bean/v3/internal/binder"
+	"github.com/retail-ai-inc/bean/v3/internal/dbdrivers"
+	"github.com/retail-ai-inc/bean/v3/internal/gopool"
+	"github.com/retail-ai-inc/bean/v3/internal/middleware"
+	"github.com/retail-ai-inc/bean/v3/internal/regex"
+	"github.com/retail-ai-inc/bean/v3/internal/router"
+	"github.com/retail-ai-inc/bean/v3/internal/validator"
+	blog "github.com/retail-ai-inc/bean/v3/log"
+	"github.com/retail-ai-inc/bean/v3/store/memory"
+	"github.com/retail-ai-inc/bean/v3/trace"
 	"github.com/rs/dnscache"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
@@ -156,13 +157,20 @@ func valueOr[T any](value *T, fallback T) T {
 	return *value
 }
 
-func New() *Bean {
+// ErrConfigNotLoaded is returned by `New` and `NewEcho` when `config.Bean` is not loaded.
+var ErrConfigNotLoaded = errors.New("config is not loaded")
+
+// New creates a bean instance from `config.Bean`. On error, everything already initialized is cleaned up.
+func New() (*Bean, error) {
 	if config.Bean == nil {
-		log.Fatal("config is not loaded")
+		return nil, ErrConfigNotLoaded
 	}
 
 	// Create a new echo instance
-	e, closeEcho := NewEcho()
+	e, closeEcho, err := NewEcho()
+	if err != nil {
+		return nil, err
+	}
 
 	b := &Bean{
 		Echo:     e,
@@ -177,11 +185,11 @@ func New() *Bean {
 
 	// If `memory` database is on and `delKeyAPI` end point along with bearer token are properly set.
 	if config.Bean.Database.Memory.On && config.Bean.Database.Memory.DelKeyAPI.EndPoint != "" {
-		e.DELETE(config.Bean.Database.Memory.DelKeyAPI.EndPoint, func(c echo.Context) error {
+		e.DELETE(config.Bean.Database.Memory.DelKeyAPI.EndPoint, func(c *echo.Context) error {
 			// If you set empty `authBearerToken` string in env.json then bean will not check the `Authorization` header.
 			if config.Bean.Database.Memory.DelKeyAPI.AuthBearerToken != "" {
 				tokenString := helpers.ExtractJWTFromHeader(c)
-				if tokenString != config.Bean.Database.Memory.DelKeyAPI.AuthBearerToken {
+				if subtle.ConstantTimeCompare([]byte(tokenString), []byte(config.Bean.Database.Memory.DelKeyAPI.AuthBearerToken)) != 1 {
 					return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 						"message": "Unauthorized!",
 					})
@@ -198,19 +206,59 @@ func New() *Bean {
 
 	b.ShutdownSrv = append(b.ShutdownSrv, closeEcho)
 
-	return b
+	return b, nil
 }
 
-func NewEcho() (*echo.Echo, func() error) {
+// NewEcho creates the echo instance with bean's middlewares from `config.Bean`. The returned function
+// releases the resources (Sentry, goroutine pools). On error, everything already initialized is cleaned up.
+func NewEcho() (*echo.Echo, func() error, error) {
 	if config.Bean == nil {
-		log.Fatal("config is not loaded")
+		return nil, nil, ErrConfigNotLoaded
+	}
+	// Projects may load env.json with viper directly instead of `config.LoadConfig`; check here as well so an
+	// unmigrated config (e.g. `accessLog.bodyDumpMaskParam`) cannot silently turn log masking off.
+	if err := config.CheckRemovedKeys(); err != nil {
+		return nil, nil, err
 	}
 
-	e := echo.New()
-	closes := []func() error{}
+	// IMPORTANT: Configure the logger. Application logs go to `debugLogPath` (stdout if empty), the access log
+	// to `accessLog.path` (the same output if empty). `log.Logger()`, echo's logger and `c.Logger()` are the
+	// same slog logger, so every log has the same format.
+	var logOut io.Writer = os.Stdout
+	if config.Bean.DebugLogPath != "" {
+		file, err := helpers.OpenFile(config.Bean.DebugLogPath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to open debug log file: %w", err)
+		}
+		logOut = file
+	}
+	blogger, err := blog.Init(logOut)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to initialize logger: %w", err)
+	}
+	slogger := blogger.Logger
 
-	// Hide default `Echo` banner during startup.
-	e.HideBanner = true
+	// The router keeps bean's routing conventions (handler named routes, `http.allowedMethod`). Requests to
+	// unknown paths or methods are answered by the echo router with `echo.ErrNotFound` / `echo.ErrMethodNotAllowed`
+	// and rendered by the HTTP error handler.
+	e := echo.NewWithConfig(echo.Config{
+		Logger: slogger,
+		// Do not let `Group.Use` register catch-all 404 routes, otherwise a wrong method on a grouped route
+		// would get 404 instead of 405. Unknown paths are handled by the router's 404 instead.
+		NoGroupAutoRegister404Routes: true,
+		Router: router.New(
+			echo.NewRouter(echo.RouterConfig{AllowOverwritingRoute: true}),
+			config.Bean.HTTP.AllowedMethod,
+			slogger,
+		),
+	})
+	closes := []func() error{}
+	fail := func(err error) (*echo.Echo, func() error, error) {
+		if cErr := closer(closes)(); cErr != nil {
+			err = errors.Join(err, cErr)
+		}
+		return nil, nil, err
+	}
 
 	// Set custom request binder
 	e.Binder = &binder.CustomBinder{}
@@ -227,32 +275,27 @@ func NewEcho() (*echo.Echo, func() error) {
 		Delims:       goview.Delims{Left: "{{", Right: "}}"},
 	})
 
-	// IMPORTANT: Configure debug log.
-	if config.Bean.DebugLogPath != "" {
-		if file, err := helpers.OpenFile(config.Bean.DebugLogPath); err != nil {
-			e.Logger.Fatalf("Unable to open log file: %v Server 🚀  crash landed. Exiting...\n", err)
-		} else {
-			e.Logger.SetOutput(file)
-		}
-	}
-	e.Logger.SetLevel(elog.DEBUG)
-
 	extractor, err := middleware.NewIPExtractor(config.Bean.HTTP.TrustIPRange)
 	if err != nil {
-		e.Logger.Fatalf("Invalid http.trustIPRange: %v Server 🚀  crash landed. Exiting...\n", err)
+		return fail(fmt.Errorf("invalid http.trustIPRange: %w", err))
 	}
 	if extractor != nil {
 		e.IPExtractor = extractor
 	}
 
-	// Initialize `BeanLogger` global variable using `e.Logger`.
-	_ = blog.Init(e.Logger)
-
 	// Adds a `Server` header to the response.
 	e.Use(middleware.ServerHeader(config.Bean.ProjectName, helpers.CurrVersion()))
 
 	// Sets the maximum allowed size for a request body, return `413 - Request Entity Too Large` if the size exceeds the limit.
-	e.Use(echomiddleware.BodyLimit(config.Bean.HTTP.BodyLimit))
+	bodyLimitStr := config.Bean.HTTP.BodyLimit
+	if bodyLimitStr == "" { // config.Bean built without viper (its defaults do not apply)
+		bodyLimitStr = config.DefaultHTTPBodyLimit
+	}
+	bodyLimit, err := helpers.ParseByteSize(bodyLimitStr)
+	if err != nil {
+		return fail(fmt.Errorf("invalid http.bodyLimit: %w", err))
+	}
+	e.Use(echomiddleware.BodyLimit(bodyLimit))
 
 	// CORS initialization and support only HTTP methods which are configured under `http.allowedMethod` parameters in `env.json`.
 	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
@@ -270,10 +313,6 @@ func NewEcho() (*echo.Echo, func() error) {
 		ReferrerPolicy:        config.Bean.Security.HTTP.Header.ReferrerPolicy,        // To determine how your service share information about the source page (referrer URL) when users click on links or visit new pages. Optional. Default value "".
 	}))
 
-	// Return `405 Method Not Allowed` if a wrong HTTP method been called for an API route.
-	// Return `404 Not Found` if a wrong API route been called.
-	e.Use(middleware.MethodNotAllowedAndRouteNotFound())
-
 	// Add context timeout.
 	// If no timeout is set or timeout=0, skip adding the timeout middleware.
 	timeoutDur := config.Bean.HTTP.Timeout
@@ -287,14 +326,14 @@ func NewEcho() (*echo.Echo, func() error) {
 	if config.Bean.Sentry.On {
 		// Check the sentry client options is not nil
 		if config.Bean.Sentry.ClientOptions == nil {
-			e.Logger.Error("Sentry initialization failed: client options is empty")
+			slogger.Error("Sentry initialization failed: client options is empty")
 		} else {
 			clientOption := config.Bean.Sentry.ClientOptions
 			if clientOption.TracesSampleRate > 0 {
 				clientOption.EnableTracing = true
 			}
 			if err := sentry.Init(*clientOption); err != nil {
-				e.Logger.Fatal("Sentry initialization failed: ", err, ". Server 🚀  crash landed. Exiting...")
+				return fail(fmt.Errorf("sentry initialization failed: %w", err))
 			}
 			flushSentry = func() error {
 				notTimeout := sentry.Flush(config.Bean.Sentry.Timeout)
@@ -317,7 +356,9 @@ func NewEcho() (*echo.Echo, func() error) {
 			e.Use(middleware.SetHubToContext)
 
 			if helpers.FloatInRange(config.Bean.Sentry.TracesSampleRate, 0.0, 1.0) > 0.0 {
-				regex.SetSamplingPathSkipper(config.Bean.Sentry.SkipTracesEndpoints)
+				if err := regex.SetSamplingPathSkipper(config.Bean.Sentry.SkipTracesEndpoints); err != nil {
+					return fail(err)
+				}
 				e.Use(middleware.SkipSampling)
 			}
 		}
@@ -328,7 +369,7 @@ func NewEcho() (*echo.Echo, func() error) {
 	// Set the `X-Request-ID` header field if it doesn't exist.
 	e.Use(echomiddleware.RequestIDWithConfig(echomiddleware.RequestIDConfig{
 		// Whether to skip it depends on whether the `AccessLog.ReqHeaderParam` parameter contains `X-Request-Id`.
-		Skipper: func(c echo.Context) bool {
+		Skipper: func(c *echo.Context) bool {
 			return !slices.Contains(config.Bean.AccessLog.ReqHeaderParam, echo.HeaderXRequestID)
 		},
 		Generator:        uuid.NewString,
@@ -338,12 +379,17 @@ func NewEcho() (*echo.Echo, func() error) {
 
 	// IMPORTANT: Configure access log and body dumper. (can be turn off)
 	if config.Bean.AccessLog.On {
+		skipper, err := regex.InitAccessLogPathSkipper(config.Bean.AccessLog.SkipEndpoints)
+		if err != nil {
+			return fail(err)
+		}
 		accessLogConfig := middleware.LoggerConfig{
-			Skipper:        regex.InitAccessLogPathSkipper(config.Bean.AccessLog.SkipEndpoints),
+			Skipper:        skipper,
 			BodyDump:       config.Bean.AccessLog.BodyDump,
 			RequestHeader:  config.Bean.AccessLog.ReqHeaderParam,
 			ResponseHeader: config.Bean.AccessLog.ResHeaderParam,
 			Logger:         blog.Logger(),
+			BodyLimit:      config.Bean.AccessLog.BodyLimit,
 		}
 
 		accessLogger := middleware.AccessLoggerWithConfig(accessLogConfig)
@@ -355,18 +401,19 @@ func NewEcho() (*echo.Echo, func() error) {
 	if config.Bean.HTTP.IsHttpsRedirect {
 		e.Pre(echomiddleware.HTTPSRedirect())
 	}
-	e.Use(echomiddleware.Recover())
-
 	// Enable prometheus metrics middleware. Metrics data should be accessed via `/metrics` endpoint.
 	// This will help us to integrate `bean's` health into `k8s`.
 	if config.Bean.Prometheus.On {
 		const metricsPath = "/metrics" // fixed path
 		skipper, err := regex.InitPrometheusPathSkipper(config.Bean.Prometheus.SkipEndpoints, metricsPath)
 		if err != nil {
-			e.Logger.Fatalf("Prometheus initialization failed: %v. Server 🚀  crash landed. Exiting...\n", err)
+			return fail(fmt.Errorf("prometheus initialization failed: %w", err))
 		}
 		conf := echoprometheus.MiddlewareConfig{
 			Skipper: skipper,
+			// 404 requests (unknown routes) now pass through the middleware chain; use one `url` label for
+			// all of them instead of the request path to avoid unbounded label cardinality.
+			DoNotUseRequestPathFor404: true,
 		}
 		if config.Bean.Prometheus.Subsystem != "" {
 			conf.Subsystem = config.Bean.Prometheus.Subsystem
@@ -375,7 +422,15 @@ func NewEcho() (*echo.Echo, func() error) {
 		e.GET(metricsPath, echoprometheus.NewHandler())
 	}
 
-	// Register goroutine pool
+	// IMPORTANT: Register `Recover` after (= inside) the middlewares above, so that a panic is turned into an
+	// error before it reaches them. Otherwise the panic unwinds through e.g. the Prometheus middleware and the
+	// request is not counted in the metrics at all.
+	e.Use(middleware.Recover())
+
+	// Register goroutine pool. Register the release first so the pools are released on error too.
+	// The default pool is released on shutdown: reopen it if a previous instance released it.
+	gopool.RebootDefaultPool()
+	closes = append(closes, gopool.ReleaseAllPools(config.Bean.AsyncPoolReleaseTimeout))
 	if len(config.Bean.AsyncPool) > 0 {
 		for _, asyncPool := range config.Bean.AsyncPool {
 			if asyncPool.Name == "" {
@@ -384,20 +439,23 @@ func NewEcho() (*echo.Echo, func() error) {
 
 			pool, err := gopool.NewPool(asyncPool.Size, asyncPool.BlockAfter)
 			if err != nil {
-				e.Logger.Fatal(err, ". Server 🚀  crash landed. Exiting...")
+				return fail(fmt.Errorf("failed to create goroutine pool %q: %w", asyncPool.Name, err))
 			}
 
 			if err := gopool.Register(asyncPool.Name, pool); err != nil {
-				e.Logger.Fatal(err, ". Server 🚀  crash landed. Exiting...")
+				pool.Release()
+				return fail(fmt.Errorf("failed to register goroutine pool %q: %w", asyncPool.Name, err))
 			}
 		}
 	}
-	closes = append(closes, gopool.ReleaseAllPools(config.Bean.AsyncPoolReleaseTimeout))
 
-	return e, closer(closes)
+	return e, closer(closes), nil
 }
 
 func (b *Bean) ServeAt(host, port string) error {
+	if port == "" { // an empty port would listen on a random port
+		port = config.DefaultHTTPPort
+	}
 	b.Echo.Logger.Info("Starting " + b.Config.Environment + " " + b.Config.ProjectName + " at " + host + ":" + port + "...🚀")
 
 	b.UseErrorHandlerFuncs(berror.DefaultErrorHandlerFunc)
@@ -409,88 +467,101 @@ func (b *Bean) ServeAt(host, port string) error {
 	}
 	b.Echo.Validator = v
 
-	s := http.Server{
-		Addr:    host + ":" + port,
-		Handler: b.Echo,
+	gracefulTimeout := b.Config.HTTP.ShutdownTimeout
+	if gracefulTimeout <= 0 {
+		gracefulTimeout = 30 * time.Second
 	}
 
-	// IMPORTANT: Keep-alive is default true but I kept this here to let you guys no that there is a settings
-	// for it :)
-	s.SetKeepAlivesEnabled(b.Config.HTTP.KeepAlive)
+	var shutdownErr error
+	sc := echo.StartConfig{
+		Address:         host + ":" + port,
+		HideBanner:      true,
+		HidePort:        true,
+		GracefulTimeout: gracefulTimeout,
+		// Even after timeout, shutdown keeps handling ongoing requests in the background
+		// while returning timeout error until main goroutine exits.
+		OnShutdownError: func(err error) { shutdownErr = err },
+		BeforeServeFunc: func(s *http.Server) error {
+			// echo sets a 30s read timeout by default, which would break long uploads. Keep the
+			// `net/http` default (no timeout) as before.
+			s.ReadTimeout = 0
+			// IMPORTANT: Keep-alive is default true but I kept this here to let you guys no that there is a settings
+			// for it :)
+			s.SetKeepAlivesEnabled(b.Config.HTTP.KeepAlive)
+			return nil
+		},
+	}
 
-	// before bean bootstrap
+	start := func(ctx context.Context) error { return sc.Start(ctx, b.Echo) }
+	if b.Config.HTTP.SSL.On {
+		// Read the files here: `StartTLS` reads file paths relative to the working directory only.
+		cert, err := os.ReadFile(b.Config.HTTP.SSL.CertFile)
+		if err != nil {
+			return pkgerrors.Wrapf(err, "error during server startup")
+		}
+		key, err := os.ReadFile(b.Config.HTTP.SSL.PrivFile)
+		if err != nil {
+			return pkgerrors.Wrapf(err, "error during server startup")
+		}
+		sc.TLSConfig = &tls.Config{
+			MinVersion: b.Config.HTTP.SSL.MinTLSVersion,
+			NextProtos: []string{"h2", "http/1.1"}, // keep HTTP/2 support as `ListenAndServeTLS` did.
+		}
+		start = func(ctx context.Context) error { return sc.StartTLS(ctx, b.Echo, cert, key) }
+	}
+
+	// The server stops (gracefully) when `srvCtx` is canceled. `Start` returns once the graceful
+	// shutdown is finished.
+	srvCtx, stopSrv := context.WithCancel(context.Background())
+	defer stopSrv()
+
+	var srvErr error
+	srvDone := make(chan struct{})
+
+	b.ShutdownSrv = append(b.ShutdownSrv, func() error {
+		stopSrv()
+		<-srvDone
+		if shutdownErr != nil {
+			return pkgerrors.Wrapf(shutdownErr, "failed to gracefully shutdown")
+		}
+		return nil
+	})
+
+	// before bean bootstrap. The server shutdown is already registered, so `Shutdown` can be called from here on.
 	if b.BeforeServe != nil {
 		b.BeforeServe()
 	}
 
-	// Keep all the route information in route.Routes
-	broute.Init(b.Echo)
-
-	// Start the server
+	// Listen for the interrupt signal or termination signal before the server starts.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	errCh := make(chan error, 1)
 	go func() {
-		var err error
-		if b.Config.HTTP.SSL.On {
-			s.TLSConfig = &tls.Config{
-				MinVersion: b.Config.HTTP.SSL.MinTLSVersion,
-			}
-			err = s.ListenAndServeTLS(b.Config.HTTP.SSL.CertFile, b.Config.HTTP.SSL.PrivFile)
-		} else {
-			err = s.ListenAndServe()
-		}
-		// If shutdown is called, the server will return `http.ErrServerClosed` immediately.
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errCh <- err
-		}
-		close(errCh)
+		defer close(srvDone)
+		srvErr = start(srvCtx)
 	}()
 
-	b.ShutdownSrv = append(b.ShutdownSrv, func() error {
-		var timeout time.Duration
-		if b.Config.HTTP.ShutdownTimeout > 0 {
-			timeout = b.Config.HTTP.ShutdownTimeout
-		} else {
-			timeout = 30 * time.Second
-		}
-		sdnCtx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		err = s.Shutdown(sdnCtx)
-		if err != nil {
-			// Even after timeout, shutdown keeps handling ongoing requests in the background
-			// while returning timeout error until main goroutine exits.
-			err = pkgerrors.Wrapf(err, "failed to gracefully shutdown")
-			return err
-		}
-
-		return nil
-	})
-
 	select {
-	case srvErr := <-errCh:
+	case <-srvDone: // The server failed to start / serve, or was shut down by calling `Shutdown`.
 		if srvErr != nil {
 			return pkgerrors.Wrapf(srvErr, "error during server startup")
 		}
-	case <-ctx.Done(): // Wait for the interrupt signal or termination signal.
+		return nil
+	case <-ctx.Done():
 		err = b.ShutdownAll()
 	}
 
 	// Check if there might be any other error than `http.ErrServerClosed`
-	// occurred during the server startup or shutdown.
-	if srvErr := <-errCh; srvErr != nil {
+	// occurred during the server shutdown.
+	<-srvDone
+	if srvErr != nil {
 		if err != nil {
 			return errors.Join(err, srvErr)
 		}
 		return pkgerrors.Wrapf(srvErr, "error during server shutdown")
 	}
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (b *Bean) UseMiddlewares(middlewares ...echo.MiddlewareFunc) {
@@ -507,14 +578,14 @@ func (b *Bean) UseErrorHandlerFuncs(errHdlrFuncs ...berror.ErrorHandlerFunc) {
 func (b *Bean) UseValidation(validateFuncs ...validator.ValidatorFunc) {
 	for _, validateFunc := range validateFuncs {
 		if err := validateFunc(b.Validate); err != nil {
-			b.Echo.Logger.Error(err)
+			b.Echo.Logger.Error(err.Error())
 		}
 	}
 }
 
 func (b *Bean) DefaultHTTPErrorHandler() echo.HTTPErrorHandler {
-	return func(err error, c echo.Context) {
-		if c.Response().Committed {
+	return func(c *echo.Context, err error) {
+		if r, _ := echo.UnwrapResponse(c.Response()); r != nil && r.Committed {
 			return
 		}
 
@@ -545,43 +616,44 @@ func (b *Bean) InitDB() error {
 	var masterMemoryDB memory.Cache
 	var cleanups []func() error
 
-	masterMySQLDB, masterMySQLDBName, close, err := dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL, blog.Logger())
+	// On error, close the connections already opened.
+	masterMySQLDB, masterMySQLDBName, close, err := dbdrivers.InitMysqlMasterConn(b.Config.Database.MySQL, appLogger())
 	if err != nil {
-		return fmt.Errorf("failed to initialize master mysql db: %w", err)
+		return errors.Join(fmt.Errorf("failed to initialize master mysql db: %w", err), closer(cleanups)())
 	}
 	cleanups = append(cleanups, close)
 
-	masterMongoDB, masterMongoDBName, close, err = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo, blog.Logger())
+	masterMongoDB, masterMongoDBName, close, err = dbdrivers.InitMongoMasterConn(b.Config.Database.Mongo, appLogger())
 	if err != nil {
-		return fmt.Errorf("failed to initialize master mongo db: %w", err)
+		return errors.Join(fmt.Errorf("failed to initialize master mongo db: %w", err), closer(cleanups)())
 	}
 	cleanups = append(cleanups, close)
 
 	var redisCloses []func() error
 	masterRedisDB, redisCloses, err = dbdrivers.InitRedisMasterConn(b.Config.Database.Redis)
 	if err != nil {
-		return fmt.Errorf("failed to initialize master redis db: %w", err)
+		return errors.Join(fmt.Errorf("failed to initialize master redis db: %w", err), closer(cleanups)())
 	}
 	cleanups = append(cleanups, redisCloses...)
 
 	if b.Config.Database.Tenant.On {
 		var closeDBs []func() error
 
-		tenantMySQLDBs, tenantMySQLDBNames, closeDBs, err = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, blog.Logger())
+		tenantMySQLDBs, tenantMySQLDBNames, closeDBs, err = dbdrivers.InitMysqlTenantConns(b.Config.Database.MySQL, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, appLogger())
 		if err != nil {
-			return fmt.Errorf("failed to initialize tenant mysql dbs: %w", err)
+			return errors.Join(fmt.Errorf("failed to initialize tenant mysql dbs: %w", err), closer(cleanups)())
 		}
 		cleanups = append(cleanups, closeDBs...)
 
-		tenantMongoDBs, tenantMongoDBNames, closeDBs, err = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, blog.Logger())
+		tenantMongoDBs, tenantMongoDBNames, closeDBs, err = dbdrivers.InitMongoTenantConns(b.Config.Database.Mongo, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret, appLogger())
 		if err != nil {
-			return fmt.Errorf("failed to initialize tenant mongo dbs: %w", err)
+			return errors.Join(fmt.Errorf("failed to initialize tenant mongo dbs: %w", err), closer(cleanups)())
 		}
 		cleanups = append(cleanups, closeDBs...)
 
 		tenantRedisDBs, closeDBs, err = dbdrivers.InitRedisTenantConns(b.Config.Database.Redis, masterMySQLDB, TenantAlterDbHostParam, b.Config.Secret)
 		if err != nil {
-			return fmt.Errorf("failed to initialize tenant redis dbs: %w", err)
+			return errors.Join(fmt.Errorf("failed to initialize tenant redis dbs: %w", err), closer(cleanups)())
 		}
 		cleanups = append(cleanups, closeDBs...)
 	}
@@ -706,14 +778,10 @@ func closer(closers []func() error) func() error {
 
 // ContextTimeout return custom context timeout middleware
 func ContextTimeout(timeout time.Duration) echo.MiddlewareFunc {
-	timeoutErrorHandler := func(err error, c echo.Context) error {
+	timeoutErrorHandler := func(c *echo.Context, err error) error {
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
-				return &echo.HTTPError{
-					Code:     http.StatusGatewayTimeout,
-					Message:  "gateway timeout",
-					Internal: err,
-				}
+				return echo.NewHTTPError(http.StatusGatewayTimeout, "gateway timeout").Wrap(err)
 			}
 			return err
 		}
@@ -730,4 +798,12 @@ func ContextTimeout(timeout time.Duration) echo.MiddlewareFunc {
 // Currently, it only supports a default validator.
 func NewValidator(v *validatorV10.Validate) (*validator.DefaultValidator, error) {
 	return validator.NewDefaultValidator(v)
+}
+
+// appLogger returns the application logger, or slog's default logger if bean's logger is not initialized.
+func appLogger() *slog.Logger {
+	if l := blog.Logger(); l != nil {
+		return l.Logger
+	}
+	return slog.Default()
 }

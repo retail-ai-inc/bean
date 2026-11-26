@@ -23,22 +23,24 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
-	"io"
 	"io/fs"
-	"log"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"text/template"
 
+	"github.com/retail-ai-inc/bean/v3/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // dockerCmd represents the docker command
 var dockerfileCmd = &cobra.Command{
 	Use:   "dockerfile",
-	Short: "Create a docker-compose.yml and Dockerfile to run your bean application locally",
+	Short: "Create a Dockerfile, docker-compose.yml and .air.toml to run your bean application locally",
 	Long: `This command will create a Dockerfile and docker-compose.yml to help you run and test your application locally.
 Example :- "bean create dockerfile".`,
 	Args: cobra.ExactArgs(0),
@@ -48,12 +50,13 @@ Example :- "bean create dockerfile".`,
 type Dockerfile struct {
 	ProjectObject Project
 	GoVersion     string
-	AppPort       int
+	AppPort       string
 }
 
 type DockerComposefile struct {
 	ProjectObject Project
-	AppPort       int
+	ServiceName   string // service, container and host name
+	AppPort       string
 }
 
 func init() {
@@ -99,104 +102,89 @@ func docker(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// Reading the base Dockerfile.
-	file, err := p.RootFS.Open("Dockerfile")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	appPort := viper.GetString("http.port") // env.json was read by getPackagePathNameFromEnv
+	if appPort == "" {
+		appPort = config.DefaultHTTPPort
 	}
 
-	fileData, err := io.ReadAll(file)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	files := []struct {
+		tpl, path string
+		data      any
+	}{
+		{"Dockerfile", dockerfilePath, Dockerfile{ProjectObject: *p, GoVersion: projectGoVersion(wd), AppPort: appPort}},
+		{"docker-compose.yml", filepath.Join(wd, "docker-compose.yml"), DockerComposefile{ProjectObject: *p, ServiceName: dockerName(p.PkgPath), AppPort: appPort}},
+		{"air.toml", filepath.Join(wd, ".air.toml"), nil},
 	}
-
-	tmpl, err := template.New("").Parse(string(fileData))
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	for _, f := range files {
+		if _, err := os.Stat(f.path); err == nil {
+			fmt.Printf("%s already exists, not overwritten.\n", filepath.Base(f.path))
+			continue
+		}
+		if err := renderTemplateFile(p.RootFS, f.tpl, f.path, f.data); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		fmt.Printf("Your %s has been created.\n", filepath.Base(f.path))
 	}
+}
 
-	// Setting the go version in the Dockerfile
-	version := runtime.Version()
-	version = strings.TrimPrefix(version, "go")
+// renderTemplateFile renders the template tpl of fsys to the file path.
+func renderTemplateFile(fsys fs.FS, tpl, path string, data any) error {
+	content, err := fs.ReadFile(fsys, tpl)
+	if err != nil {
+		return err
+	}
+	tmpl, err := template.New(tpl).Parse(string(content))
+	if err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return err
+	}
+	return os.WriteFile(path, buf.Bytes(), 0o644)
+}
+
+// projectGoVersion returns the `major.minor` Go version of the project's go.mod (the golang image tag), or of the
+// running Go if go.mod cannot be read.
+func projectGoVersion(dir string) string {
+	version := ""
+	if data, err := os.ReadFile(filepath.Join(dir, "go.mod")); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			if v, ok := strings.CutPrefix(strings.TrimSpace(line), "go "); ok {
+				version = strings.TrimSpace(v)
+				break
+			}
+		}
+	}
 	if version == "" {
-		// Set a default version
-		version = "1.20.5"
+		version = strings.TrimPrefix(runtime.Version(), "go")
 	}
-
-	var dockerFile Dockerfile
-	dockerFile.ProjectObject = *p
-	dockerFile.GoVersion = strings.ToLower(version)
-	dockerFile.AppPort = 8888
-
-	dockerFileCreate, err := os.Create(dockerfilePath)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	// Keep `major.minor`: patch tags of the image lag behind, and a development toolchain has no image.
+	parts := strings.SplitN(version, ".", 3)
+	if len(parts) < 2 || !isDigits(parts[0]) || !isDigits(parts[1]) {
+		return "1"
 	}
-	defer func(f *os.File) {
-		if err := f.Close(); err != nil {
-			log.Printf("Failed to close dockerfile:%v", err)
+	return parts[0] + "." + parts[1]
+}
+
+func isDigits(s string) bool {
+	return s != "" && strings.Trim(s, "0123456789") == ""
+}
+
+// dockerName returns a valid container / host name for the module path: its last element, lower case, with any
+// character other than [a-z0-9-] replaced by "-".
+func dockerName(pkgPath string) string {
+	name := strings.ToLower(pkgPath[strings.LastIndex(pkgPath, "/")+1:])
+	name = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			return r
 		}
-	}(dockerFileCreate)
-
-	err = tmpl.Execute(dockerFileCreate, dockerFile)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return '-'
+	}, name)
+	name = strings.Trim(name, "-")
+	if name == "" {
+		return "app"
 	}
-
-	fmt.Println("Your Dockerfile has been created.")
-
-	dockerComposefilePath := wd + "/docker-compose.yml"
-	// Check if docker-compose.yml file already exists or not.
-	_, err = os.Stat(dockerComposefilePath)
-	if err == nil {
-		fmt.Println("docker-compose.yml file already exists!")
-		os.Exit(1)
-	}
-
-	// Reading the base docker-compose.yml.
-	file, err = p.RootFS.Open("docker-compose.yml")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	fileData, err = io.ReadAll(file)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	tmpl, err = template.New("").Parse(string(fileData))
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	var dockerComposeFile DockerComposefile
-	dockerComposeFile.ProjectObject = *p
-	dockerComposeFile.AppPort = 8888
-
-	dockerComposeFileCreate, err := os.Create(dockerComposefilePath)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	defer func(f *os.File) {
-		if err := f.Close(); err != nil {
-			log.Printf("Failed to close docker-compose.yml:%v", err)
-		}
-	}(dockerFileCreate)
-
-	err = tmpl.Execute(dockerComposeFileCreate, dockerComposeFile)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	fmt.Println("Your docker-compose.yml file has been created.")
+	return name
 }

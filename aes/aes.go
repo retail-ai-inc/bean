@@ -32,6 +32,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -76,12 +77,7 @@ func BeanAESEncrypt(key, plainText string) (string, error) {
 	data := ivTextBase64 + encryptedTextBase64
 	mac := ComputeHmacSha256(data, string(keyInByte))
 
-	ticket := make(map[string]interface{})
-	ticket["iv"] = ivTextBase64
-	ticket["mac"] = mac
-	ticket["value"] = encryptedTextBase64
-
-	resTicket, err := json.Marshal(ticket)
+	resTicket, err := json.Marshal(beanAESTicket{IV: ivTextBase64, Value: encryptedTextBase64, MAC: mac})
 	if err != nil {
 		return "", err
 	}
@@ -91,33 +87,64 @@ func BeanAESEncrypt(key, plainText string) (string, error) {
 	return ticketR, nil
 }
 
+// ErrInvalidMAC is returned by `BeanAESDecrypt` when the MAC of the encrypted text does not match: the text was
+// not encrypted with this key, or it was modified.
+var ErrInvalidMAC = errors.New("aes: invalid MAC")
+
+// beanAESTicket is the JSON payload of an encrypted text (the same format as Laravel's `Encrypter`).
+type beanAESTicket struct {
+	IV    string `json:"iv"`
+	MAC   string `json:"mac"`
+	Value string `json:"value"`
+}
+
 // This function will decrypt an AES encrypted text in base64. The `key` a.k.a passphrase is also encoded using base64.
+//
+// The MAC is verified (in constant time) before decrypting, so a modified or forged text is rejected with
+// `ErrInvalidMAC` instead of being decrypted. A malformed text returns an error.
 func BeanAESDecrypt(key, encryptedText string) (string, error) {
+
+	keyInByte, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		return "", err
+	}
 
 	base64DecodedByteText, err := base64.StdEncoding.DecodeString(encryptedText)
 	if err != nil {
 		return "", err
 	}
 
-	var p map[string]interface{}
-
-	if err := json.Unmarshal(base64DecodedByteText, &p); err != nil {
+	var ticket beanAESTicket
+	if err := json.Unmarshal(base64DecodedByteText, &ticket); err != nil {
 		return "", err
 	}
+	if ticket.IV == "" || ticket.Value == "" || ticket.MAC == "" {
+		return "", errors.New("aes: invalid encrypted text: iv, value and mac are required")
+	}
 
-	iv, err := base64.StdEncoding.DecodeString(p["iv"].(string))
+	// Encrypt-then-MAC: authenticate before touching the ciphertext.
+	gotMAC, err := hex.DecodeString(ticket.MAC)
+	if err != nil {
+		return "", ErrInvalidMAC
+	}
+	if !hmac.Equal(gotMAC, computeHmacSha256(ticket.IV+ticket.Value, keyInByte)) {
+		return "", ErrInvalidMAC
+	}
+
+	iv, err := base64.StdEncoding.DecodeString(ticket.IV)
 	if err != nil {
 		return "", err
 	}
+	if len(iv) != aes.BlockSize {
+		return "", fmt.Errorf("aes: invalid iv length %d", len(iv))
+	}
 
-	encryptedValue, err := base64.StdEncoding.DecodeString(p["value"].(string))
+	encryptedValue, err := base64.StdEncoding.DecodeString(ticket.Value)
 	if err != nil {
 		return "", err
 	}
-
-	keyInByte, err := base64.StdEncoding.DecodeString(key)
-	if err != nil {
-		return "", err
+	if len(encryptedValue) == 0 || len(encryptedValue)%aes.BlockSize != 0 {
+		return "", fmt.Errorf("aes: invalid encrypted value length %d", len(encryptedValue))
 	}
 
 	cipherBlock, err := aes.NewCipher(keyInByte)
@@ -137,15 +164,11 @@ func BeanAESDecrypt(key, encryptedText string) (string, error) {
 
 // Pkcs7Pad right-pads the given byte slice with 1 to n bytes, where
 // n is the block size. The size of the result is x times n, where x
-// is at least 1.
+// is at least 1 (empty data is padded to one full block).
 func Pkcs7Pad(data []byte, blocklen int) ([]byte, error) {
 
 	if blocklen <= 0 {
 		return nil, fmt.Errorf("invalid blocklen %d", blocklen)
-	}
-
-	if len(data) == 0 {
-		return nil, fmt.Errorf("invalid data len %d", len(data))
 	}
 
 	n := blocklen - (len(data) % blocklen)
@@ -184,12 +207,13 @@ func Pkcs7Unpad(data []byte, blocklen int) ([]byte, error) {
 	return data[:len(data)-padlen], nil
 }
 
+// ComputeHmacSha256 returns the hex encoded HMAC-SHA256 of message.
 func ComputeHmacSha256(message string, secret string) string {
+	return hex.EncodeToString(computeHmacSha256(message, []byte(secret)))
+}
 
-	key := []byte(secret)
+func computeHmacSha256(message string, key []byte) []byte {
 	h := hmac.New(sha256.New, key)
 	h.Write([]byte(message))
-	sha := hex.EncodeToString(h.Sum(nil))
-
-	return sha
+	return h.Sum(nil)
 }

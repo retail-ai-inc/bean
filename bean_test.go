@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/config"
-	"github.com/retail-ai-inc/bean/v2/internal/route"
+	"github.com/labstack/echo/v5"
+	"github.com/retail-ai-inc/bean/v3/config"
+	berror "github.com/retail-ai-inc/bean/v3/error"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
@@ -27,7 +27,7 @@ func TestBean_UseErrorHandlerFuncs(t *testing.T) {
 	b := &Bean{}
 	assert.Empty(t, b.errorHandlerFuncs)
 
-	b.UseErrorHandlerFuncs(func(err error, c echo.Context) (bool, error) {
+	b.UseErrorHandlerFuncs(func(err error, c *echo.Context) (bool, error) {
 		return true, nil
 	})
 	assert.Equal(t, 1, len(b.errorHandlerFuncs))
@@ -38,7 +38,7 @@ func TestDefaultHTTPErrorHandler(t *testing.T) {
 	b.Echo = echo.New()
 
 	b.UseErrorHandlerFuncs(
-		func(err error, c echo.Context) (bool, error) {
+		func(err error, c *echo.Context) (bool, error) {
 			he, ok := err.(*fakeError)
 			if !ok {
 				return false, nil
@@ -49,7 +49,7 @@ func TestDefaultHTTPErrorHandler(t *testing.T) {
 			})
 			return ok, err
 		},
-		func(_ error, c echo.Context) (bool, error) {
+		func(_ error, c *echo.Context) (bool, error) {
 			err := c.JSON(http.StatusInternalServerError, map[string]interface{}{
 				"errorCode": "default code",
 				"errors":    "default catched!",
@@ -60,10 +60,10 @@ func TestDefaultHTTPErrorHandler(t *testing.T) {
 
 	b.Echo.HTTPErrorHandler = b.DefaultHTTPErrorHandler()
 
-	b.Echo.Any("/fake", func(c echo.Context) error {
+	b.Echo.Any("/fake", func(c *echo.Context) error {
 		return newFakeError("fake error")
 	})
-	b.Echo.Any("/default", func(c echo.Context) error {
+	b.Echo.Any("/default", func(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "default error")
 	})
 
@@ -145,7 +145,7 @@ func TestBean_ServeAt(t *testing.T) {
 			b.Config.HTTP.ShutdownTimeout = tt.fields.sdTimeout
 
 			sleepDur := 3 * time.Second
-			b.Echo.GET("/fake", func(c echo.Context) error {
+			b.Echo.GET("/fake", func(c *echo.Context) error {
 				ctx := c.Request().Context()
 				t.Logf("Sleeping for %v\n", sleepDur)
 				select {
@@ -160,7 +160,7 @@ func TestBean_ServeAt(t *testing.T) {
 			})
 
 			// for ping
-			b.Echo.GET("/", func(c echo.Context) error {
+			b.Echo.GET("/", func(c *echo.Context) error {
 				return c.String(http.StatusOK, "Pong")
 			})
 
@@ -335,11 +335,14 @@ func Test_NewEcho(t *testing.T) {
 			rec := httptest.NewRecorder()
 
 			// Act
-			e, closeEcho := NewEcho()
+			e, closeEcho, err := NewEcho()
+			if err != nil {
+				t.Fatal(err)
+			}
 			defer func() {
 				_ = closeEcho()
 			}()
-			e.GET("/", func(c echo.Context) error {
+			e.GET("/", func(c *echo.Context) error {
 				if err := c.Request().Context().Err(); err != nil {
 					return c.String(http.StatusInternalServerError, "unexpected error before sleep")
 				}
@@ -349,7 +352,6 @@ func Test_NewEcho(t *testing.T) {
 				}
 				return c.String(http.StatusOK, "success")
 			})
-			route.Init(e)
 			e.ServeHTTP(rec, req)
 
 			// Assert
@@ -385,5 +387,52 @@ func setConf(t *testing.T, timeout time.Duration) func() {
 
 	return func() {
 		config.Bean = originalConf
+	}
+}
+
+func TestNewEcho_RouterNotFoundAndMethodNotAllowed(t *testing.T) {
+	reset := setConf(t, 0) // allowedMethod: ["GET"]
+	defer reset()
+
+	e, closeEcho, err := NewEcho()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = closeEcho() }()
+
+	b := &Bean{Echo: e}
+	// Same as `ServeAt`: only the default error handler is registered.
+	b.UseErrorHandlerFuncs(berror.DefaultErrorHandlerFunc)
+	e.HTTPErrorHandler = b.DefaultHTTPErrorHandler()
+
+	ok := func(c *echo.Context) error { return c.String(http.StatusOK, "ok") }
+	e.GET("/users", ok)
+	e.POST("/users", ok) // POST is not in allowedMethod: not registered
+	g := e.Group("/api", func(next echo.HandlerFunc) echo.HandlerFunc { return next })
+	g.GET("/items", ok)
+
+	tests := []struct {
+		method, path string
+		wantCode     int
+		wantErrCode  berror.ErrorCode
+	}{
+		{http.MethodGet, "/users", http.StatusOK, ""},
+		{http.MethodGet, "/unknown", http.StatusNotFound, berror.RESOURCE_NOT_FOUND},
+		{http.MethodPost, "/users", http.StatusMethodNotAllowed, berror.METHOD_NOT_ALLOWED},
+		{http.MethodPost, "/api/items", http.StatusMethodNotAllowed, berror.METHOD_NOT_ALLOWED},
+		{http.MethodGet, "/api/unknown", http.StatusNotFound, berror.RESOURCE_NOT_FOUND},
+	}
+	for _, tt := range tests {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.wantCode, rec.Code)
+			if tt.wantErrCode != "" {
+				assert.Contains(t, rec.Body.String(), `"errorCode":"`+string(tt.wantErrCode)+`"`)
+			}
+		})
 	}
 }

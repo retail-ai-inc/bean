@@ -24,21 +24,24 @@ package goview
 
 import (
 	"net/http"
+	"sync/atomic"
 )
 
-var instance *ViewEngine
+var instance atomic.Pointer[ViewEngine]
 
 // Use setting default instance engine
 func Use(engine *ViewEngine) {
-	instance = engine
+	instance.Store(engine)
 }
 
 // Render render view template with default instance
 func Render(w http.ResponseWriter, status int, name string, data interface{}) error {
 
-	if instance == nil {
-		instance = Default()
+	engine := instance.Load()
+	if engine == nil {
+		instance.CompareAndSwap(nil, Default())
+		engine = instance.Load()
 	}
 
-	return instance.Render(w, status, name, data)
+	return engine.Render(w, status, name, data)
 }

@@ -5,7 +5,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // NewIPExtractor builds an X-Forwarded-For extractor for the given proxy addresses.

@@ -25,11 +25,14 @@ package dbdrivers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
+	"net"
+	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"github.com/retail-ai-inc/bean/v2/aes"
+	"github.com/retail-ai-inc/bean/v3/aes"
 	"go.mongodb.org/mongo-driver/event"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -53,7 +56,7 @@ type MongoConfig struct {
 }
 
 // Init the mongo database connection map.
-func InitMongoTenantConns(config MongoConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger echo.Logger,
+func InitMongoTenantConns(config MongoConfig, master *gorm.DB, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger *slog.Logger,
 ) (map[uint64]*mongo.Client, map[uint64]string, []func() error, error) {
 
 	tenantCfgs, err := GetAllTenantCfgs(master)
@@ -64,7 +67,7 @@ func InitMongoTenantConns(config MongoConfig, master *gorm.DB, tenantAlterDbHost
 	return getAllMongoTenantDB(config, tenantCfgs, tenantAlterDbHostParam, tenantDBPassPhraseKey, logger)
 }
 
-func InitMongoMasterConn(config MongoConfig, logger echo.Logger) (*mongo.Client, string, func() error, error) {
+func InitMongoMasterConn(config MongoConfig, logger *slog.Logger) (*mongo.Client, string, func() error, error) {
 
 	masterCfg := config.Master
 	if masterCfg != nil && masterCfg.Database != "" {
@@ -78,20 +81,25 @@ func InitMongoMasterConn(config MongoConfig, logger echo.Logger) (*mongo.Client,
 	return nil, "", noClose, nil
 }
 
-func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger echo.Logger,
+// getAllMongoTenantDB returns all tenant db connections. On error, the connections already opened are closed.
+func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, tenantAlterDbHostParam, tenantDBPassPhraseKey string, logger *slog.Logger,
 ) (map[uint64]*mongo.Client, map[uint64]string, []func() error, error) {
 
 	mongoConns := make(map[uint64]*mongo.Client, len(tenantCfgs))
 	mongoDBNames := make(map[uint64]string, len(tenantCfgs))
 
 	closers := make([]func() error, 0, len(tenantCfgs))
+	fail := func(t *TenantConnections, msg string, err error) (map[uint64]*mongo.Client, map[uint64]string, []func() error, error) {
+		return nil, nil, noClosers, errors.Join(
+			fmt.Errorf("%s (%d:%s): %w", msg, t.TenantID, t.Code, err), closeAll(closers))
+	}
+
 	for _, t := range tenantCfgs {
 
 		var cfgsMap map[string]map[string]interface{}
-		var err error
 		if t.Connections != nil {
-			if err = json.Unmarshal(t.Connections, &cfgsMap); err != nil {
-				return nil, nil, noClosers, fmt.Errorf("failed to unmarshal tenant connections: %w", err)
+			if err := json.Unmarshal(t.Connections, &cfgsMap); err != nil {
+				return fail(t, "failed to unmarshal tenant connections", err)
 			}
 		}
 
@@ -101,28 +109,34 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 			mongoConns[t.TenantID], mongoDBNames[t.TenantID] = nil, ""
 			continue
 		}
-		userName := mongoCfg["username"].(string)
-		password := mongoCfg["password"].(string)
+
+		var userName, password, port, dbName string
+		var err error
+		for _, f := range []struct {
+			dst *string
+			key string
+		}{{&userName, "username"}, {&password, "password"}, {&port, "port"}, {&dbName, "database"}} {
+			if *f.dst, err = requiredTenantString(mongoCfg, f.key); err != nil {
+				return fail(t, "invalid mongo tenant config", err)
+			}
+		}
 
 		// IMPORTANT: If tenant database password is encrypted in master db config.
 		if tenantDBPassPhraseKey != "" {
 			password, err = aes.BeanAESDecrypt(tenantDBPassPhraseKey, password)
 			if err != nil {
-				return nil, nil, noClosers, fmt.Errorf("failed to decrypt mongo tenant password: %w", err)
+				return fail(t, "failed to decrypt mongo tenant password", err)
 			}
 		}
-
-		host := mongoCfg["host"].(string)
 
 		// IMPORTANT - If a command or service wants to use a different `host` parameter for tenant database connection
 		// then it's easy to do just by passing that parameter string name using `bean.TenantAlterDbHostParam`.
 		// Therfore, `bean` will overwrite all host string in `TenantConnections`.`Connections` JSON.
-		if tenantAlterDbHostParam != "" && mongoCfg[tenantAlterDbHostParam] != nil {
-			host = mongoCfg[tenantAlterDbHostParam].(string)
+		host, err := tenantHost(mongoCfg, tenantAlterDbHostParam)
+		if err != nil {
+			return fail(t, "invalid mongo tenant config", err)
 		}
 
-		port := mongoCfg["port"].(string)
-		dbName := mongoCfg["database"].(string)
 		ssl := sslConfigFromMap(mongoCfg)
 
 		var closeDB func() error
@@ -133,7 +147,7 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 			config.Debug, ssl, logger,
 		)
 		if err != nil {
-			return nil, nil, noClosers, fmt.Errorf("failed to connect mongo tenant database: %w", err)
+			return fail(t, "failed to connect mongo tenant database", err)
 		}
 		closers = append(closers, closeDB)
 	}
@@ -141,15 +155,44 @@ func getAllMongoTenantDB(config MongoConfig, tenantCfgs []*TenantConnections, te
 	return mongoConns, mongoDBNames, closers, nil
 }
 
+// mongoDefaultConnectTimeout is used when `connectTimeout` is not set.
+const mongoDefaultConnectTimeout = 10 * time.Second
+
+// mongoDisconnectTimeout bounds the graceful disconnection (ending the sessions) on shutdown.
+const mongoDisconnectTimeout = 10 * time.Second
+
+// mongoConnString returns the connection string of the comma separated hosts, each with the default port unless it
+// has its own (e.g. a replica set `a,b:27018`).
+func mongoConnString(hostList, port string) string {
+	var hosts []string
+	for _, h := range strings.Split(hostList, ",") {
+		h = strings.TrimSpace(h)
+		if h == "" {
+			continue
+		}
+		if _, _, err := net.SplitHostPort(h); err != nil && port != "" {
+			h = net.JoinHostPort(strings.Trim(h, "[]"), port)
+		}
+		hosts = append(hosts, h)
+	}
+	return "mongodb://" + strings.Join(hosts, ",")
+}
+
 func connectMongoDB(userName, password, host, port, dbName string,
 	maxPoolSize, minPoolSize uint64,
+	// maxConnIdleTime is `mongo.maxConnectionLifeTime` in env.json: the mongo driver has no maximum connection
+	// lifetime, the closest option is the maximum idle time of a pooled connection.
 	connectTimeout, maxConnIdleTime time.Duration,
-	debug bool, ssl SSLConfig, logger echo.Logger,
+	debug bool, ssl SSLConfig, logger *slog.Logger,
 ) (*mongo.Client, string, func() error, error) {
 
-	connStr := "mongodb://" + host + ":" + port
+	connStr := mongoConnString(host, port)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	timeout := connectTimeout
+	if timeout <= 0 {
+		timeout = mongoDefaultConnectTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	opts := options.Client().
@@ -159,11 +202,13 @@ func connectMongoDB(userName, password, host, port, dbName string,
 		SetMinPoolSize(minPoolSize).
 		SetMaxConnIdleTime(maxConnIdleTime)
 
+	releaseTLS := noRelease
 	if ssl.On {
-		tlsConfig, err := newTLSConfig(ssl)
+		tlsConfig, release, err := newTLSConfig(ssl, hostsWithoutPort(host))
 		if err != nil {
 			return nil, "", noClose, err
 		}
+		releaseTLS = release
 		opts.SetTLSConfig(tlsConfig)
 	}
 
@@ -172,19 +217,23 @@ func connectMongoDB(userName, password, host, port, dbName string,
 		opts.SetAuth(credential)
 	}
 
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	// log monitor
 	var logMonitor = event.CommandMonitor{
 		Started: func(ctx context.Context, startedEvent *event.CommandStartedEvent) {
-			logger.Debugf("mongo reqId:%d start on db:%s cmd:%s sql:%+v", startedEvent.RequestID, startedEvent.DatabaseName,
-				startedEvent.CommandName, startedEvent.Command)
+			logger.DebugContext(ctx, "mongo command started", "mongo_request_id", startedEvent.RequestID,
+				"db", startedEvent.DatabaseName, "command", startedEvent.CommandName, "sql", startedEvent.Command.String())
 		},
 		Succeeded: func(ctx context.Context, succeededEvent *event.CommandSucceededEvent) {
-			logger.Debugf("mongo reqId:%d exec cmd:%s success duration %d ns", succeededEvent.RequestID,
-				succeededEvent.CommandName, succeededEvent.Duration)
+			logger.DebugContext(ctx, "mongo command succeeded", "mongo_request_id", succeededEvent.RequestID,
+				"command", succeededEvent.CommandName, "duration", succeededEvent.Duration)
 		},
 		Failed: func(ctx context.Context, failedEvent *event.CommandFailedEvent) {
-			logger.Debugf("mongo reqId:%d exec cmd:%s failed duration %d ns", failedEvent.RequestID,
-				failedEvent.CommandName, failedEvent.Duration)
+			logger.DebugContext(ctx, "mongo command failed", "mongo_request_id", failedEvent.RequestID,
+				"command", failedEvent.CommandName, "duration", failedEvent.Duration, "error", failedEvent.Failure)
 		},
 	}
 	if debug {
@@ -194,14 +243,23 @@ func connectMongoDB(userName, password, host, port, dbName string,
 
 	mdb, err := mongo.Connect(ctx, opts)
 	if err != nil {
+		releaseTLS()
 		return nil, "", noClose, fmt.Errorf("failed to connect mongo database: %w", err)
+	}
+
+	disconnect := func() error {
+		defer releaseTLS()
+		// Not the connect ctx: it is canceled when this function returns.
+		ctx, cancel := context.WithTimeout(context.Background(), mongoDisconnectTimeout)
+		defer cancel()
+		return mdb.Disconnect(ctx)
 	}
 
 	// Check the connection
 	err = mdb.Ping(ctx, nil)
 	if err != nil {
-		return nil, "", noClose, fmt.Errorf("failed to ping mongo database: %w", err)
+		return nil, "", noClose, errors.Join(fmt.Errorf("failed to ping mongo database: %w", err), disconnect())
 	}
 
-	return mdb, dbName, func() error { return mdb.Disconnect(ctx) }, nil
+	return mdb, dbName, disconnect, nil
 }
